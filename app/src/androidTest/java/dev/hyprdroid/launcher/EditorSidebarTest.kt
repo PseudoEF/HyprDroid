@@ -105,13 +105,15 @@ class EditorSidebarTest {
         val initial = Workspace(0, apps.map { WorkspaceItem.AppShortcut(it.componentId) }, WorkspaceAppearance(gridLayout = false))
         var saved by mutableStateOf(initial)
         var drops = 0
+        var active = false
         lateinit var grid: LazyGridState
         val scenario = ActivityScenario.launch(MainActivity::class.java)
         try {
             scenario.onActivity { it.setContent { ShellTheme {
                 grid = rememberLazyGridState()
                 WorkspaceCanvas(saved, apps.associateBy { app -> app.componentId }, true, true, {}, {}, {}, {}, {}, { emptyList() },
-                    Modifier.fillMaxSize(), onDrop = { id, before -> drops++; saved = saved.copy(items = placeItemBefore(saved.items, id, before)) }, gridState = grid)
+                    Modifier.fillMaxSize(), onDrop = { id, before -> drops++; saved = saved.copy(items = placeItemBefore(saved.items, id, before)) },
+                    onDragging = { active = it }, gridState = grid)
             } } }
             awaitTag("workspace-app-${apps.first().componentId}")
             val canvas = compose.onNodeWithTag("workspace-canvas-0")
@@ -120,16 +122,18 @@ class EditorSidebarTest {
             compose.mainClock.autoAdvance = false
             canvas.performTouchInput { down(start) }
             compose.mainClock.advanceTimeBy(1_000)
+            compose.runOnIdle { assertTrue("Long hold must activate editor drag", active) }
             canvas.performTouchInput { moveTo(Offset(start.x, height - 60f), 500) }
             // Leave the real pointer stationary while frame-driven autoscroll advances.
             compose.mainClock.advanceTimeBy(2_500)
-            compose.runOnIdle { assertTrue("Auto-scroll must advance the viewport", grid.firstVisibleItemIndex > 0) }
+            captureShellScreen("v05-autoscroll")
+            compose.runOnIdle { assertTrue("Auto-scroll must advance viewport: active=$active count=${grid.layoutInfo.totalItemsCount} offset=${grid.firstVisibleItemScrollOffset}", grid.firstVisibleItemIndex > 0) }
             canvas.performTouchInput { cancel() }
             compose.mainClock.autoAdvance = true
             compose.waitForIdle()
             assertEquals(0, drops)
             assertEquals(initial, saved)
             // Later rows were reached without releasing/restarting the drag.
-        } finally { scenario.close() }
+        } finally { compose.mainClock.autoAdvance = true; scenario.close() }
     }
 }
