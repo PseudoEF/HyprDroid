@@ -8,7 +8,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.preferencesDataStore
 import dev.hyprdroid.launcher.model.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOn
 
 private val Context.workspaceStore by preferencesDataStore(
     name = "workspaces",
@@ -18,7 +20,7 @@ private val Context.workspaceStore by preferencesDataStore(
 
 class WorkspaceRepository(private val store: DataStore<Preferences>) {
     constructor(context: Context) : this(context.applicationContext.workspaceStore)
-    val settings = store.data.map(WorkspaceCodec::decode)
+    val settings = store.data.map(WorkspaceCodec::decode).flowOn(Dispatchers.Default)
 
     suspend fun setPinned(workspaceId: Int, componentId: String, pinned: Boolean) = update { it.withPinned(workspaceId, componentId, pinned) }
     suspend fun removePackages(packages: Set<String>) = update { it.withoutPackages(packages) }
