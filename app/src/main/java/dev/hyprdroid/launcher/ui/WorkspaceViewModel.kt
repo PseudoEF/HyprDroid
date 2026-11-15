@@ -1,11 +1,16 @@
 package dev.hyprdroid.launcher.ui
 
 import android.app.Application
+import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import dev.hyprdroid.launcher.data.DockFullException
 import dev.hyprdroid.launcher.data.LauncherApp
 import dev.hyprdroid.launcher.data.LauncherCatalog
+import dev.hyprdroid.launcher.data.ShellRepository
 import dev.hyprdroid.launcher.data.WorkspaceRepository
+import dev.hyprdroid.launcher.model.ShellSettings
 import dev.hyprdroid.launcher.model.WorkspaceSettings
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
@@ -20,27 +25,32 @@ import kotlinx.coroutines.withContext
 
 data class WorkspaceUiState(
     val settings: WorkspaceSettings? = null,
+    val shell: ShellSettings? = null,
     val apps: List<LauncherApp> = emptyList(),
     val loadingApps: Boolean = true,
     val catalogError: Boolean = false,
     val storageError: Boolean = false,
+    val shellError: Boolean = false,
     val message: String? = null,
 )
 
 class WorkspaceViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = WorkspaceRepository(application)
+    private val shellRepository = ShellRepository(application)
     private val catalog = LauncherCatalog(application)
     private val mutableState = MutableStateFlow(WorkspaceUiState())
     val state = mutableState.asStateFlow()
     private var refreshJob: Job? = null
     private var storageJob: Job? = null
+    private var shellJob: Job? = null
     private var stopObserving: (() -> Unit)? = null
 
     init {
         retryStorage()
+        retryShellStorage()
         try {
             stopObserving = catalog.observe(::refreshApps) { packageName ->
-                save { repository.removePackages(setOf(packageName)) }
+                removePackages(setOf(packageName))
                 refreshApps()
             }
         } catch (_: RuntimeException) {
@@ -57,9 +67,25 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
                     mutableState.update { it.copy(settings = settings, storageError = false) }
                     if (firstLoad) refreshApps()
                 }
-            } catch (error: IOException) {
+            } catch (_: IOException) {
                 mutableState.update { it.copy(storageError = true) }
-                showMessage("Не удалось прочитать настройки. Проверьте свободное место и повторите попытку.")
+                showMessage("Не удалось прочитать пространства. Повторите чтение через меню панели.")
+            }
+        }
+    }
+
+    fun retryShellStorage() {
+        shellJob?.cancel()
+        shellJob = viewModelScope.launch {
+            try {
+                shellRepository.settings.collect { shell ->
+                    val firstLoad = mutableState.value.shell == null
+                    mutableState.update { it.copy(shell = shell, shellError = false) }
+                    if (firstLoad) refreshApps()
+                }
+            } catch (_: IOException) {
+                mutableState.update { it.copy(shellError = true) }
+                showMessage("Не удалось прочитать dock и обои. Повторите чтение через меню панели.")
             }
         }
     }
@@ -69,19 +95,27 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
         refreshJob = viewModelScope.launch {
             mutableState.update { it.copy(loadingApps = true) }
             try {
-                val pins = mutableState.value.settings?.workspaces?.flatMap { it.pinnedApps }?.toSet().orEmpty()
+                val pins = mutableState.value.settings?.workspaces?.flatMap { it.pinnedApps }?.toSet().orEmpty() +
+                    mutableState.value.shell?.favorites.orEmpty()
                 val (apps, missing) = withContext(Dispatchers.IO) {
-                    catalog.load() to catalog.missingPackages(pins)
+                    val apps = catalog.load()
+                    val visiblePackages = apps.map { it.componentId.substringBefore('/') }.toSet()
+                    apps to catalog.missingPackages(pins.filterNot { it.substringBefore('/') in visiblePackages }.toSet())
                 }
                 mutableState.update { it.copy(apps = apps, loadingApps = false, catalogError = false) }
-                if (missing.isNotEmpty()) save { repository.removePackages(missing) }
+                if (missing.isNotEmpty()) removePackages(missing)
             } catch (error: CancellationException) {
                 throw error
             } catch (_: RuntimeException) {
                 mutableState.update { it.copy(loadingApps = false, catalogError = true) }
-                showMessage("Не удалось загрузить приложения. Повторите попытку.")
+                showMessage("Не удалось загрузить приложения. Повторите попытку через меню панели.")
             }
         }
+    }
+
+    private fun removePackages(packages: Set<String>) {
+        save { repository.removePackages(packages) }
+        save { shellRepository.removePackages(packages) }
     }
 
     fun setPinned(workspace: Int, component: String, pinned: Boolean) = save {
@@ -89,11 +123,53 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
     }
     fun selectWorkspace(id: Int) = save { repository.selectWorkspace(id) }
     fun setGridLayout(enabled: Boolean) = save { repository.setGridLayout(enabled) }
+    fun setFavorite(component: String, enabled: Boolean) = save { shellRepository.setFavorite(component, enabled) }
+
+    fun chooseWallpaper(uri: Uri) {
+        viewModelScope.launch {
+            val previous = mutableState.value.shell?.wallpaperUri
+            var saved = false
+            try {
+                withContext(Dispatchers.IO) {
+                    getApplication<Application>().contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    decodeWallpaper(getApplication(), uri, maxDimension = 64).recycle()
+                }
+                changeWallpaper(uri.toString())
+                saved = true
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: IOException) {
+                showMessage("Не удалось открыть или сохранить изображение. Предыдущий фон сохранён.")
+            } catch (_: RuntimeException) {
+                showMessage("Изображение недоступно. Выберите другой файл.")
+            } finally {
+                if (!saved && uri.toString() != previous) releaseImagePermission(uri)
+            }
+        }
+    }
+
+    fun useSystemWallpaper() = save { changeWallpaper(null) }
+
+    private suspend fun changeWallpaper(uri: String?) {
+        val previous = mutableState.value.shell?.wallpaperUri
+        shellRepository.setWallpaper(uri)
+        if (previous != null && previous != uri) {
+            releaseImagePermission(Uri.parse(previous))
+        }
+    }
+
+    private fun releaseImagePermission(uri: Uri) {
+        try {
+            getApplication<Application>().contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (_: RuntimeException) { /* The provider may have already revoked access. */ }
+    }
 
     private fun save(action: suspend () -> Unit) {
         viewModelScope.launch {
             try {
                 action()
+            } catch (_: DockFullException) {
+                showMessage("В dock помещаются четыре избранных приложения. Сначала уберите одно из них.")
             } catch (_: IOException) {
                 showMessage("Изменения не сохранены. Проверьте свободное место и повторите попытку.")
             }
@@ -104,7 +180,7 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
         try {
             catalog.launch(component)
         } catch (_: RuntimeException) {
-            showMessage("Приложение недоступно или его запуск запрещён. Можно удалить закрепление.")
+            showMessage("Приложение недоступно или его запуск запрещён. Закрепление можно убрать через меню приложения.")
             refreshApps()
         }
     }

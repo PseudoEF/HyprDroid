@@ -7,7 +7,7 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
     </queries>
-    <application android:allowBackup="false" android:label="HyprDroid" android:theme="@android:style/Theme.Material.NoActionBar" android:supportsRtl="true">
+    <application android:allowBackup="false" android:label="HyprDroid" android:theme="@style/Theme.HyprDroid" android:supportsRtl="true">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
