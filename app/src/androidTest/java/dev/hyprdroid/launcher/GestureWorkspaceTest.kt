@@ -9,6 +9,9 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.Until
 import dev.hyprdroid.launcher.data.LauncherCatalog
 import dev.hyprdroid.launcher.data.WorkspaceRepository
 import dev.hyprdroid.launcher.model.*
@@ -108,7 +111,8 @@ class GestureWorkspaceTest {
             runBlocking { repo.setPinned(0, settingsApp.componentId, true) }
             awaitTag("workspace-app-${settingsApp.componentId}")
             compose.onNodeWithTag("workspace-app-${settingsApp.componentId}").performTouchInput { click() }
-            compose.waitUntil(10_000) { instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString() == "com.android.settings" }
+            assertTrue("Settings must open after a regular icon tap",
+                UiDevice.getInstance(instrumentation).wait(Until.hasObject(By.pkg("com.android.settings")), 15_000))
         } finally { scenario.close() }
     }
 

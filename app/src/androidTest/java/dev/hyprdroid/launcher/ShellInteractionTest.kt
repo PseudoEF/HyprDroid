@@ -10,6 +10,10 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.Until
+import java.util.regex.Pattern
 import dev.hyprdroid.launcher.data.LauncherCatalog
 import dev.hyprdroid.launcher.data.ShellRepository
 import dev.hyprdroid.launcher.data.WorkspaceRepository
@@ -103,11 +107,9 @@ class ShellInteractionTest {
 
             compose.onNodeWithContentDescription("Меню оболочки").performClick()
             compose.onNodeWithText("Другой лаунчер").performClick()
-            compose.waitUntil(10_000) {
-                instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString() in setOf(
-                    "com.android.settings", "com.android.permissioncontroller", "com.google.android.permissioncontroller",
-                )
-            }
+            val packages = listOf("com.android.settings", "com.android.permissioncontroller", "com.google.android.permissioncontroller")
+            org.junit.Assert.assertTrue("Android HOME chooser must be visible", UiDevice.getInstance(instrumentation).wait(
+                Until.hasObject(By.pkg(Pattern.compile(packages.joinToString("|") { Pattern.quote(it) }))), 15_000))
             screenshot("home-settings")
         } finally { scenario.close() }
     }
