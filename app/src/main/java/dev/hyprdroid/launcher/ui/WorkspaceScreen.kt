@@ -141,13 +141,15 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
             }
         }
     }
-    val appMenu: (String) -> List<AppMenuAction> = { component ->
-        val workspace = selectingWorkspace ?: pager.currentPage
+    val appMenuForWorkspace: (Int, String) -> List<AppMenuAction> = { workspace, component ->
         val pinned = component in settings.workspaces[workspace].pinnedApps
         listOf(
             AppMenuAction(if (pinned) "Убрать из пространства" else "Закрепить в пространстве 0${workspace + 1}", workspaceReady) { actions.pin(workspace, component, !pinned) },
             AppMenuAction(if (component in favorites) "Убрать из dock" else "Добавить в dock", shellReady) { actions.favorite(component, component !in favorites) },
         ) + itemMenu(workspace, WorkspaceItem.App(component))
+    }
+    val appMenu: (String) -> List<AppMenuAction> = { component ->
+        appMenuForWorkspace(selectingWorkspace ?: pager.currentPage, component)
     }
     LaunchedEffect(pager, workspaceReady) {
         if (workspaceReady) snapshotFlow { pager.settledPage }.distinctUntilChanged().collect(actions.selectWorkspace)
@@ -188,7 +190,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
                 gesturesEnabled = !overlayOpen, onEdit = enterEdit, onSwipeUp = openDrawer, onSwipeDown = openControl,
                 onLaunch = launchApp,
                 onRemove = { if (workspaceReady) actions.removeItem(page, it) },
-                menu = { item -> if (item is WorkspaceItem.App) appMenu(item.componentId) else
+                menu = { item -> if (item is WorkspaceItem.App) appMenuForWorkspace(page, item.componentId) else
                     listOf(AppMenuAction("Убрать элемент", workspaceReady) { actions.removeItem(page, item.id) }) + itemMenu(page, item) },
                 modifier = Modifier.fillMaxSize(),
             )

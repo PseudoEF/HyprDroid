@@ -37,7 +37,8 @@ fun ControlCenter(onClose: () -> Unit, onSettings: (String) -> Unit) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (isActive) {
                 value = withContext(Dispatchers.IO) {
-                    val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                    val intent = try { context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) }
+                    catch (_: RuntimeException) { null }
                     val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
                     val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
                     val state = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
