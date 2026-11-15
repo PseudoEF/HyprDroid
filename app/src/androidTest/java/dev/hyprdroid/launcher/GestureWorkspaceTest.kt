@@ -55,7 +55,8 @@ class GestureWorkspaceTest {
             awaitTag("workspace-app-$a")
             compose.onNodeWithTag("workspace-canvas-0").performTouchInput { swipe(Offset(width * .7f, height * .85f), Offset(width * .7f, height * .3f)) }
             awaitTag("app-drawer")
-            compose.onNodeWithTag("app-drawer").performTouchInput { swipeDown() }
+            // Start in the empty lower area, not in the search field near the top.
+            compose.onNodeWithTag("app-drawer").performTouchInput { swipe(Offset(width * .7f, height * .65f), Offset(width * .7f, height * .9f)) }
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("app-drawer").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithTag("control-center").assertDoesNotExist()
             compose.onNodeWithContentDescription("Все приложения").performClick()
