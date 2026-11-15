@@ -14,6 +14,8 @@
 | Compose UI / Foundation (из BOM) | 1.7.5 |
 | Material 3 (из BOM) | 1.3.1 |
 | Activity Compose | 1.9.3 |
+| Preferences DataStore | 1.1.1 |
+| Lifecycle ViewModel / Runtime Compose | 2.8.7 |
 | compileSdk / targetSdk / minSdk | 35 / 35 / 29 |
 | SDK Build Tools (по умолчанию AGP 8.7) | 34.0.0 |
 
@@ -39,15 +41,25 @@ sdkmanager "platform-tools" "platforms;android-35" "build-tools;34.0.0"
 
 В Windows используйте `gradlew.bat`. Готовый APK: `app/build/outputs/apk/debug/app-debug.apk`. Для debug-сборки не нужны собственные ключи подписи или секреты GitHub.
 
+Проверка хранения рабочих пространств:
+
+```sh
+./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
+```
+
+Тесты проверяют сохранение при пересоздании DataStore, конкурентные изменения, независимое удаление закреплений и очистку удалённых пакетов. Проверка запуска приложений, свайпов, выбора HOME и перезапуска на устройстве выполняется отдельно.
+
 Gradle Wrapper хранится в репозитории и загружает Gradle самостоятельно. Установка системного Gradle не требуется. Для загрузки инструментов и зависимостей нужен доступ к сети. Если JDK или SDK отсутствуют, сборку необходимо выполнить в подготовленном окружении или через GitHub Actions.
 
 ## GitHub Actions
 
-[Workflow Android debug APK](https://github.com/PseudoEF/HyprDroid/actions/workflows/android.yml) запускается при push в `main`, для pull request и вручную. Он устанавливает JDK 17 и пакеты SDK, настраивает Gradle, выполняет `:app:assembleDebug` через Wrapper и загружает APK.
+[Workflow Android debug APK](https://github.com/PseudoEF/HyprDroid/actions/workflows/android.yml) запускается при push в `main`, для pull request и вручную. Он устанавливает JDK 17 и пакеты SDK, настраивает Gradle, выполняет `:app:testDebugUnitTest` и `:app:assembleDebug` через Wrapper и загружает APK.
 
 Artifact называется `HyprDroid-debug-apk`, содержит `app-debug.apk` и хранится 14 дней. Отсутствие APK считается ошибкой job. Это отладочная сборка с debug-подписью, не release-публикация.
 
-[Запуск 43699829017](https://github.com/PseudoEF/HyprDroid/actions/runs/43699829017) для коммита `64d83e1` от 15 ноября 2026 года успешно завершил сборку и публикацию artifact. Установка и работа на реальном устройстве пока не подтверждены; соответствующие пункты [ROADMAP](ROADMAP.md) остаются открытыми.
+[Запуск 43710111534](https://github.com/PseudoEF/HyprDroid/actions/runs/43710111534) для коммита `09a15b0` с Workspace Manager от 15 ноября 2026 года успешно завершил unit-тесты, сборку и публикацию artifact. Установка и работа на реальном устройстве пока не подтверждены; соответствующие пункты [ROADMAP](ROADMAP.md) остаются открытыми.
+
+В локальной среде разработки запуск Wrapper остановился из-за отсутствия Java и Android SDK. Результат сборки этой версии подтверждён в CI, а не локально.
 
 Для просмотра запусков и загрузки доступного artifact можно использовать GitHub CLI, заменив `RUN_ID` идентификатором нужного запуска:
 
