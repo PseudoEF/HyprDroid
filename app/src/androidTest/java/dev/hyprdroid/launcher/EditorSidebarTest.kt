@@ -56,6 +56,7 @@ class EditorSidebarTest {
             }
             val expected = listOf(apps[1], apps[2], apps[0]).map { "app:${it.componentId}" }
             compose.waitUntil(5_000) { runBlocking { repo.settings.first().workspaces[0].items.map { it.id } == expected } }
+            captureShellScreen("v05-editor")
             compose.onNodeWithText("Готово").performClick()
             scenario.recreate()
             awaitTag("workspace-canvas-0")
@@ -63,6 +64,7 @@ class EditorSidebarTest {
             // Opening begins well inside the display, away from Android's Back edge.
             compose.onNodeWithTag("sidebar-handle").performTouchInput { swipe(center, center - Offset(200f, 0f)) }
             awaitTag("sidebar")
+            compose.onNodeWithText("Панель пуста", substring = true).assertExists()
             compose.onNodeWithText("Редактировать", substring = false).performClick()
             compose.onNodeWithText("Добавить ярлык").performClick()
             for (app in apps.take(2)) compose.onNodeWithTag("sidebar-choice-app:${app.componentId}").performScrollTo().performClick()
@@ -80,6 +82,10 @@ class EditorSidebarTest {
             compose.onNodeWithTag("sidebar-handle").performClick()
             awaitTag("sidebar")
             compose.onNodeWithTag("sidebar-item-$second").assertExists()
+            captureShellScreen("v05-sidebar")
+            compose.onNodeWithText("Редактировать", substring = false).performClick()
+            for (app in apps.take(2)) compose.onNodeWithTag("sidebar-remove-app:${app.componentId}").performClick()
+            compose.onNodeWithText("Панель пуста", substring = true).assertExists()
             compose.onNodeWithTag("sidebar-header").performTouchInput { swipe(center, center + Offset(250f, 0f)) }
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("sidebar").fetchSemanticsNodes().isEmpty() }
             // Horizontal paging still works outside editor drags and the handle.

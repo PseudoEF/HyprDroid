@@ -13,7 +13,6 @@ import androidx.datastore.preferences.preferencesDataStore
 import dev.hyprdroid.launcher.model.MAX_DOCK_APPS
 import dev.hyprdroid.launcher.model.ShellSettings
 import dev.hyprdroid.launcher.model.WorkspaceItem
-import dev.hyprdroid.launcher.model.placeItemBefore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOn
 import org.json.JSONException

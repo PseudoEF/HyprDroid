@@ -68,7 +68,8 @@ class LauncherCatalog(private val context: Context) {
                 val item = WorkspaceItem.AppShortcut(component, info.id)
                 val icon = try { launcher.getShortcutIconDrawable(info, context.resources.displayMetrics.densityDpi)?.toBitmap(size, size) }
                     catch (_: RuntimeException) { null }
-                SidebarEntry(item, LauncherApp(component, info.shortLabel?.toString() ?: info.id,
+                val application = apps.firstOrNull { it.componentId.substringBefore('/') == info.`package` }?.label ?: info.`package`
+                SidebarEntry(item, LauncherApp(component, "${info.shortLabel ?: info.id} · $application",
                     icon ?: context.packageManager.defaultActivityIcon.toBitmap(size, size)))
             }
         } catch (_: RuntimeException) { emptyList() }

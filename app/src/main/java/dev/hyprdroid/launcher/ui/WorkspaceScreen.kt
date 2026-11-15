@@ -224,7 +224,8 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
         Spacer(Modifier.height(12.dp))
         FavoriteDock(favorites.sortedBy { appsById[it]?.label ?: it }, appsById, launchApp, appMenu, openDrawer)
     }
-    if (!overlayOpen && !editing) Box(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = Alignment.CenterEnd) {
+    if (!overlayOpen && !editing) Box(Modifier.fillMaxSize().safeDrawingPadding()
+        .windowInsetsPadding(WindowInsets.systemGestures.only(WindowInsetsSides.Horizontal)), contentAlignment = Alignment.CenterEnd) {
         SidebarHandle({ sidebarOpen = true }, Modifier.padding(end = 32.dp))
     }
     AnimatedVisibility(visible = sidebarOpen, enter = slideInHorizontally { it } + fadeIn(), exit = slideOutHorizontally { it } + fadeOut()) {

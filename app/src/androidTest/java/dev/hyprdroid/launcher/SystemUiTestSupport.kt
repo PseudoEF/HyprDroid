@@ -16,3 +16,12 @@ fun dismissBackgroundPixelLauncherAnr() {
         check(device.wait(Until.gone(title), 5_000)) { "Pixel Launcher ANR remains visible" }
     }
 }
+
+fun captureShellScreen(name: String) {
+    require(name.matches(Regex("[a-z0-9-]+")))
+    dismissBackgroundPixelLauncherAnr()
+    val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+    for (command in listOf("mkdir -p /sdcard/Download/hyprdroid-shell", "screencap -p /sdcard/Download/hyprdroid-shell/$name.png")) {
+        android.os.ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand(command)).use { it.readBytes() }
+    }
+}
