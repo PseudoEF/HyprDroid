@@ -131,7 +131,7 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
     fun setGridLayout(workspace: Int, enabled: Boolean) = save { repository.setGridLayout(workspace, enabled) }
     fun setAppearance(workspace: Int, appearance: WorkspaceAppearance) = save { repository.setAppearance(workspace, appearance) }
     fun reorder(workspace: Int, id: String, delta: Int) = save { repository.reorder(workspace, id, delta) }
-    fun placeBefore(workspace: Int, id: String, before: String?) = save { repository.placeBefore(workspace, id, before) }
+    fun placeBefore(workspace: Int, id: String, before: String?, onComplete: () -> Unit) = save(onComplete) { repository.placeBefore(workspace, id, before) }
     fun setSidebarItem(item: WorkspaceItem.AppShortcut, pinned: Boolean) = save { shellRepository.setSidebarItem(item, pinned) }
     fun removeSidebarItem(id: String) = save { shellRepository.removeSidebarItem(id) }
     fun reorderSidebar(id: String, delta: Int) = save { shellRepository.reorderSidebar(id, delta) }
@@ -182,7 +182,7 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
         } catch (_: RuntimeException) { /* The provider may have already revoked access. */ }
     }
 
-    private fun save(action: suspend () -> Unit) {
+    private fun save(onComplete: () -> Unit = {}, action: suspend () -> Unit) {
         viewModelScope.launch {
             try {
                 action()
@@ -192,7 +192,7 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
                 showMessage("В целевом пространстве есть другой элемент с тем же ID. Перенос отменён; данные сохранены.")
             } catch (_: IOException) {
                 showMessage("Изменения не сохранены. Проверьте свободное место и повторите попытку.")
-            }
+            } finally { onComplete() }
         }
     }
 

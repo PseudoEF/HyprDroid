@@ -31,6 +31,7 @@ fun WorkspaceCanvas(
     onLaunch: (String) -> Unit, onRemove: (String) -> Unit,
     menu: (WorkspaceItem) -> List<AppMenuAction>, modifier: Modifier = Modifier,
     onDrop: (String, String?) -> Unit = { _, _ -> }, onDragging: (Boolean) -> Unit = {},
+    resetToken: Int = 0,
 ) {
     val appearance = workspace.appearance
     val grid = rememberLazyGridState()
@@ -41,7 +42,7 @@ fun WorkspaceCanvas(
     drag.gridDensity = LocalDensity.current.density
     drag.onActive = { activeCallback(it); if (it) haptics.performHapticFeedback(HapticFeedbackType.LongPress) }
     drag.onDrop = { id, before -> dropCallback(id, before) }
-    LaunchedEffect(workspace.items) {
+    LaunchedEffect(workspace.items, resetToken) {
         if (drag.draggedId != null) drag.finish(false)
         drag.items = workspace.items
     }

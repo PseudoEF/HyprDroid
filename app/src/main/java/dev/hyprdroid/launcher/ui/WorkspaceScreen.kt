@@ -94,7 +94,7 @@ data class ShellActions(
     val removeItem: (Int, String) -> Unit,
     val appearance: (Int, WorkspaceAppearance) -> Unit,
     val systemSettings: (String) -> Unit,
-    val placeBefore: (Int, String, String?) -> Unit,
+    val placeBefore: (Int, String, String?, () -> Unit) -> Unit,
     val sidebarPin: (WorkspaceItem.AppShortcut, Boolean) -> Unit,
     val sidebarRemove: (String) -> Unit,
     val sidebarReorder: (String, Int) -> Unit,
@@ -123,6 +123,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     var controlOpen by rememberSaveable { mutableStateOf(false) }
     var sidebarOpen by rememberSaveable { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
+    var dragRevision by remember { mutableIntStateOf(0) }
     var appearanceWorkspace by rememberSaveable { mutableStateOf<Int?>(null) }
     var orderWorkspace by rememberSaveable { mutableStateOf<Int?>(null) }
     var selectingWorkspace by rememberSaveable { mutableStateOf<Int?>(null) }
@@ -207,8 +208,9 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
                 menu = { item -> if (item is WorkspaceItem.AppShortcut) appMenuForWorkspace(page, item.componentId) else
                     listOf(AppMenuAction("Убрать элемент", workspaceReady) { actions.removeItem(page, item.id) }) + itemMenu(page, item) },
                 modifier = Modifier.fillMaxSize(),
-                onDrop = { id, before -> if (workspaceReady) actions.placeBefore(page, id, before) },
+                onDrop = { id, before -> if (workspaceReady) actions.placeBefore(page, id, before) { dragRevision++ } },
                 onDragging = { dragging = it },
+                resetToken = dragRevision,
             )
         }
         if (editing && workspaceReady) {

@@ -16,19 +16,25 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.hyprdroid.launcher.model.WorkspaceItem
 
-private fun Modifier.sidebarSwipe(left: Boolean, threshold: Float, action: () -> Unit): Modifier = pointerInput(left, threshold, action) {
+private fun Modifier.sidebarSwipe(left: Boolean, threshold: Float, action: () -> Unit): Modifier = composed {
+    val currentAction by rememberUpdatedState(action)
+    pointerInput(left, threshold) {
     var distance = 0f
     detectHorizontalDragGestures(onDragStart = { distance = 0f }, onDragCancel = { distance = 0f },
-        onDragEnd = { if (distance * (if (left) -1 else 1) >= threshold) action() },
+        onDragEnd = { if (distance * (if (left) -1 else 1) >= threshold) currentAction() },
         onHorizontalDrag = { change, amount -> change.consume(); distance += amount })
+}
 }
 
 /** A visible internal handle, inset from Android's Back edge; no gesture exclusion regions. */
@@ -54,10 +60,14 @@ fun ModularSidebar(
     val entries = remember(state.sidebarEntries) { state.sidebarEntries.associateBy { it.item.id } }
     val items = state.shell?.sidebar.orEmpty()
     val enabled = state.shell != null && !state.shellError
-    val close by rememberUpdatedState(onClose)
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focus = LocalFocusManager.current
+    val dismiss = { keyboard?.hide(); focus.clearFocus(force = true); onClose() }
+    val close by rememberUpdatedState(dismiss)
+    DisposableEffect(Unit) { onDispose { keyboard?.hide() } }
     val threshold = with(LocalDensity.current) { 48.dp.toPx() }
-    Box(Modifier.fillMaxSize().testTag("sidebar-overlay")) {
-        Box(Modifier.fillMaxSize().background(Mocha.Base.copy(alpha = .35f)).clickable(onClickLabel = "Закрыть Sidebar", onClick = onClose))
+    Box(Modifier.fillMaxSize().imePadding().testTag("sidebar-overlay")) {
+        Box(Modifier.fillMaxSize().background(Mocha.Base.copy(alpha = .35f)).clickable(onClickLabel = "Закрыть Sidebar", onClick = dismiss))
         Surface(color = Mocha.Mantle.copy(alpha = .97f), contentColor = Mocha.Text,
             shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, Mocha.Mauve.copy(alpha = .5f)),
             modifier = Modifier.align(Alignment.CenterEnd).safeDrawingPadding().padding(12.dp)
@@ -66,7 +76,7 @@ fun ModularSidebar(
             Column(Modifier.padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.testTag("sidebar-header")) {
                     Text("Sidebar", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                    IconButton(onClick = onClose) { Icon(Icons.Default.Close, "Закрыть Sidebar") }
+                    IconButton(onClick = dismiss) { Icon(Icons.Default.Close, "Закрыть Sidebar") }
                 }
                 Row {
                     TextButton(onClick = { editing = !editing; adding = false }, enabled = enabled) { Text(if (editing) "Готово" else "Редактировать") }
