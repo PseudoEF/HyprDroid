@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.graphicsLayer
@@ -32,9 +33,10 @@ fun WorkspaceCanvas(
     menu: (WorkspaceItem) -> List<AppMenuAction>, modifier: Modifier = Modifier,
     onDrop: (String, String?) -> Unit = { _, _ -> }, onDragging: (Boolean) -> Unit = {},
     resetToken: Int = 0,
+    gridState: LazyGridState = rememberLazyGridState(),
 ) {
     val appearance = workspace.appearance
-    val grid = rememberLazyGridState()
+    val grid = gridState
     val drag = remember(workspace.id) { WorkspaceDragState(grid) }
     val activeCallback by rememberUpdatedState(onDragging)
     val dropCallback by rememberUpdatedState(onDrop)

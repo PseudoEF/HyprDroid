@@ -49,7 +49,11 @@ internal class WorkspaceDragState(val grid: LazyGridState) {
         } ?: return
         val from = items.indexOfFirst { it.id == id }
         val to = items.indexOfFirst { it.id == target.key }
-        if (from >= 0 && to >= 0) items = items.toMutableList().apply { add(to, removeAt(from)) }
+        if (from >= 0 && to >= 0) {
+            // Keep the viewport fixed instead of following the first visible key as it moves.
+            grid.requestScrollToItem(grid.firstVisibleItemIndex, grid.firstVisibleItemScrollOffset)
+            items = items.toMutableList().apply { add(to, removeAt(from)) }
+        }
     }
 
     fun translation(id: String): IntOffset {

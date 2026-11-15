@@ -2,6 +2,8 @@ package dev.hyprdroid.launcher
 
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -57,7 +59,7 @@ class EditorSidebarTest {
             val expected = listOf(apps[1], apps[2], apps[0]).map { "app:${it.componentId}" }
             compose.waitUntil(5_000) { runBlocking { repo.settings.first().workspaces[0].items.map { it.id } == expected } }
             captureShellScreen("v05-editor")
-            compose.onNodeWithText("Готово").performClick()
+            compose.onNodeWithContentDescription("Готово, завершить редактирование").performClick()
             scenario.recreate()
             awaitTag("workspace-canvas-0")
             assertEquals(expected, runBlocking { repo.settings.first().workspaces[0].items.map { it.id } })
@@ -101,25 +103,31 @@ class EditorSidebarTest {
         val initial = Workspace(0, apps.map { WorkspaceItem.AppShortcut(it.componentId) }, WorkspaceAppearance(gridLayout = false))
         var saved by mutableStateOf(initial)
         var drops = 0
+        lateinit var grid: LazyGridState
         val scenario = ActivityScenario.launch(MainActivity::class.java)
         try {
             scenario.onActivity { it.setContent { ShellTheme {
+                grid = rememberLazyGridState()
                 WorkspaceCanvas(saved, apps.associateBy { app -> app.componentId }, true, true, {}, {}, {}, {}, {}, { emptyList() },
-                    Modifier.fillMaxSize(), onDrop = { id, before -> drops++; saved = saved.copy(items = placeItemBefore(saved.items, id, before)) })
+                    Modifier.fillMaxSize(), onDrop = { id, before -> drops++; saved = saved.copy(items = placeItemBefore(saved.items, id, before)) }, gridState = grid)
             } } }
             awaitTag("workspace-app-${apps.first().componentId}")
             val canvas = compose.onNodeWithTag("workspace-canvas-0")
             val node = compose.onNodeWithTag("workspace-app-${apps.first().componentId}")
             val start = node.fetchSemanticsNode().boundsInRoot.center - canvas.fetchSemanticsNode().boundsInRoot.topLeft
-            canvas.performTouchInput { down(start); advanceEventTime(900); moveTo(Offset(start.x, height - 60f), 500) }
+            compose.mainClock.autoAdvance = false
+            canvas.performTouchInput { down(start) }
+            compose.mainClock.advanceTimeBy(1_000)
+            canvas.performTouchInput { moveTo(Offset(start.x, height - 60f), 500) }
             // Leave the real pointer stationary while frame-driven autoscroll advances.
             compose.mainClock.advanceTimeBy(2_500)
+            compose.runOnIdle { assertTrue("Auto-scroll must advance the viewport", grid.firstVisibleItemIndex > 0) }
             canvas.performTouchInput { cancel() }
+            compose.mainClock.autoAdvance = true
             compose.waitForIdle()
             assertEquals(0, drops)
             assertEquals(initial, saved)
             // Later rows were reached without releasing/restarting the drag.
-            compose.onNodeWithTag("workspace-app-${apps.first().componentId}").assertDoesNotExist()
         } finally { scenario.close() }
     }
 }
