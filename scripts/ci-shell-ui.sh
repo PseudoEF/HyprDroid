@@ -6,7 +6,8 @@ collect_artifacts() {
     adb pull /sdcard/Download/hyprdroid-shell .local/shell-ui/ || true
 }
 trap collect_artifacts EXIT
-./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
+# Keep seeded workspaces installed for the font-size and orientation previews.
+./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true --no-daemon --stacktrace
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell settings put system font_scale 1.6
 adb shell am force-stop dev.hyprdroid.launcher
