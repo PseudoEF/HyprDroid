@@ -1,14 +1,24 @@
-# Codex instructions — HyprDroid
+# Правила для AI-разработчиков HyprDroid
 
-Read `docs/PROJECT.md` and `docs/ROADMAP.md` before changing code.
+## Контекст и архитектура
 
-- Android launcher, Kotlin + Jetpack Compose, no root/Shizuku/ADB required for end users.
-- Never claim arbitrary third-party apps can be tiled without privileged Android window APIs.
-- Keep standard Android HOME activity behavior; preserve a safe way to switch back to another launcher.
-- Work in small verifiable increments; update ROADMAP and CHANGELOG after completed features.
-- Do not add QUERY_ALL_PACKAGES or AccessibilityService without explicit justification and approval.
-- Imported dotfiles are DATA only; never execute scripts or arbitrary code from them.
-- Validate configs, provide preview and rollback, version config schemas.
-- Run `gradle :app:assembleDebug` when possible. If environment lacks Android SDK or network, report unverified build honestly.
-- Keep user-facing UI touch-friendly and responsive on phone displays.
-- First task: verify the build and fix any dependency/API errors before adding features.
+- Перед изменением кода изучать [техническое описание](docs/PROJECT.md) и [дорожную карту](docs/ROADMAP.md).
+- Сохранять архитектуру Android HOME-лаунчера на Kotlin и Jetpack Compose. Базовая работа для конечного пользователя не должна требовать root, Shizuku, ADB или разблокировки загрузчика.
+- Сохранять стандартное поведение HOME activity и возможность выбрать другой лаунчер через настройки Android.
+- Делать интерфейс удобным для касаний и адаптировать его к небольшим экранам телефонов.
+
+## Ограничения Android и безопасность
+
+- Не обещать произвольное управление окнами сторонних приложений без привилегированных оконных API. Тайлинг относится к собственным компонентам оболочки; системные оконные режимы требуют отдельной проверки поддержки.
+- Не добавлять `QUERY_ALL_PACKAGES` или `AccessibilityService` без явного обоснования и одобрения пользователя.
+- Считать импортированные dotfiles только данными. Не исполнять содержащиеся в них скрипты или произвольный код.
+- При реализации конфигураций версионировать схемы, валидировать данные и обеспечивать предпросмотр и откат. Проверять архивы и ограничивать объём импортируемых данных.
+- Не коммитить секреты, локальные пути SDK и ключи подписи.
+
+## Проверка изменений
+
+- Работать небольшими проверяемыми изменениями. После завершения функций обновлять [ROADMAP](docs/ROADMAP.md) и [CHANGELOG](CHANGELOG.md).
+- Для изменений кода или конфигурации сборки запускать `./gradlew :app:assembleDebug` (в Windows — `gradlew.bat :app:assembleDebug`), когда позволяет окружение. Использовать закреплённый Wrapper.
+- Если отсутствуют JDK, Android SDK или доступ к зависимостям, явно сообщать, что локальная сборка не проверена. Подтверждать результат CI ссылкой на соответствующий запуск.
+- Для изменений только документации проверять ссылки, соответствие исходникам и согласованность статусов. Не выдавать сборку APK за проверку установки или поведения на устройстве.
+- Не объявлять функции, поддержку устройств или лицензию без подтверждения в репозитории и результатах проверок.

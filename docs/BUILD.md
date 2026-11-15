@@ -1,6 +1,8 @@
 # Сборка и проверка CI
 
-## Закреплённые версии
+Инструкции установки APK и быстрого запуска сборки находятся в [README](../README.md).
+
+## Версии инструментов
 
 | Компонент | Версия |
 | --- | --- |
@@ -15,39 +17,39 @@
 | compileSdk / targetSdk / minSdk | 35 / 35 / 29 |
 | SDK Build Tools (по умолчанию AGP 8.7) | 34.0.0 |
 
-[AGP 8.7](https://developer.android.com/build/releases/agp-8-7-0-release-notes) требует Gradle 8.9 и JDK 17, поддерживает API 35. Версии Wrapper и CI соответствуют этим требованиям. Java и Kotlin компилируются в JVM 17.
+[AGP 8.7](https://developer.android.com/build/releases/agp-8-7-0-release-notes) требует Gradle 8.9 и JDK 17, поддерживает API 35. Версии Wrapper и CI соответствуют этим требованиям.
 
-Версии Kotlin и [Compose Compiler plugin](https://kotlinlang.org/docs/compose-compiler-migration-guide.html) совпадают; при Kotlin 2.x не требуется старый `kotlinCompilerExtensionVersion`. BOM управляет версиями библиотек UI, а не компилятором. Состав BOM проверен по [POM в Google Maven](https://dl.google.com/dl/android/maven2/androidx/compose/compose-bom/2024.10.01/compose-bom-2024.10.01.pom).
+Версии Kotlin и [Compose Compiler plugin](https://kotlinlang.org/docs/compose-compiler-migration-guide.html) совпадают. BOM управляет версиями библиотек UI, а не компилятором. Состав BOM опубликован в [Google Maven](https://dl.google.com/dl/android/maven2/androidx/compose/compose-bom/2024.10.01/compose-bom-2024.10.01.pom).
 
-Ограничение проверки: [матрица Kotlin Gradle plugin](https://kotlinlang.org/docs/gradle-configure-project.html) указывает для Kotlin 2.0.21 полностью протестированный диапазон AGP до 8.5; более новые AGP могут использоваться, но выходят за этот диапазон. Gradle 8.9 поддерживается согласно примечанию о Gradle 8.7–8.10 для обычного Android-проекта. Само по себе это не доказывает ошибку сборки. Исходные версии зависимостей сохранены; окончательная проверка этой комбинации — успешная компиляция в CI.
+[Матрица Kotlin Gradle plugin](https://kotlinlang.org/docs/gradle-configure-project.html) указывает для Kotlin 2.0.21 полностью протестированный диапазон AGP до 8.5; используемый AGP выходит за этот диапазон. Gradle 8.9 поддерживается согласно примечанию о Gradle 8.7–8.10 для обычного Android-проекта. Практическая сборка закреплённой комбинации подтверждена указанным ниже запуском CI; это не означает официальной проверки всей комбинации разработчиками Kotlin.
 
-## Исправленная ошибка GitHub Actions
+## Локальная сборка
 
-В [run 43698100026](https://github.com/PseudoEF/HyprDroid/actions/runs/43698100026) сборка остановилась до запуска Gradle на `android-actions/setup-android@v3`:
+Установите JDK 17 и Android SDK, примите лицензии SDK и установите пакеты:
 
-```text
-Warning: Failed to find package 'tools'
+```sh
+sdkmanager "platform-tools" "platforms;android-35" "build-tools;34.0.0"
 ```
 
-У action по умолчанию указаны `tools platform-tools`. Параметр `packages` теперь переопределён значением `platform-tools platforms;android-35 build-tools;34.0.0`, поэтому удалённый пакет `tools` не запрашивается. См. [документацию setup-android](https://github.com/android-actions/setup-android/tree/v3#additional-packages).
-
-CI устанавливает JDK 17 и SDK, настраивает Gradle через `gradle/actions/setup-gradle@v4` и выполняет:
+Задайте `ANDROID_HOME` или `sdk.dir` в `local.properties`, затем из корня репозитория выполните:
 
 ```sh
 ./gradlew :app:assembleDebug --no-daemon --stacktrace
 ```
 
-Затем `actions/upload-artifact@v4` загружает ровно `app/build/outputs/apk/debug/app-debug.apk`. При отсутствии файла job падает. Artifact `HyprDroid-debug-apk` хранится 14 дней. Не нужны signing secrets для debug-сборки.
+В Windows используйте `gradlew.bat`. Готовый APK: `app/build/outputs/apk/debug/app-debug.apk`. Для debug-сборки не нужны собственные ключи подписи или секреты GitHub.
 
-## Что проверено локально
+Gradle Wrapper хранится в репозитории и загружает Gradle самостоятельно. Установка системного Gradle не требуется. Для загрузки инструментов и зависимостей нужен доступ к сети. Если JDK или SDK отсутствуют, сборку необходимо выполнить в подготовленном окружении или через GitHub Actions.
 
-- `sh -n gradlew`: синтаксис корректен.
-- `unzip -t gradle/wrapper/gradle-wrapper.jar`: ошибок архива нет.
-- SHA-256 JAR совпадает с [официальной контрольной суммой Gradle](https://services.gradle.org/distributions/gradle-8.9-wrapper.jar.sha256): `498495120a03b9a6ab5d155f5de3c8f0d986a449153702fb80fc80e134484f17`.
-- В properties закреплена [контрольная сумма дистрибутива](https://services.gradle.org/distributions/gradle-8.9-bin.zip.sha256): `d725d707bfabd4dfdc958c624003b3c80accc03f7037b5122c4b1d0ef15cecab`.
-- Запуск `./gradlew :app:assembleDebug --no-daemon --stacktrace` останавливается с `JAVA_HOME is not set and no 'java' command could be found`. Java, Gradle и Android SDK в локальной среде не установлены.
+## GitHub Actions
 
-Успешная сборка APK и публикация artifact обновлённого workflow пока не подтверждены. После отправки коммита в GitHub необходимо проверить новый run, наличие artifact и установку APK на устройстве; этап проверки CI в ROADMAP остаётся открытым.
+[Workflow Android debug APK](https://github.com/PseudoEF/HyprDroid/actions/workflows/android.yml) запускается при push в `main`, для pull request и вручную. Он устанавливает JDK 17 и пакеты SDK, настраивает Gradle, выполняет `:app:assembleDebug` через Wrapper и загружает APK.
+
+Artifact называется `HyprDroid-debug-apk`, содержит `app-debug.apk` и хранится 14 дней. Отсутствие APK считается ошибкой job. Это отладочная сборка с debug-подписью, не release-публикация.
+
+[Запуск 43699829017](https://github.com/PseudoEF/HyprDroid/actions/runs/43699829017) для коммита `64d83e1` от 15 ноября 2026 года успешно завершил сборку и публикацию artifact. Установка и работа на реальном устройстве пока не подтверждены; соответствующие пункты [ROADMAP](ROADMAP.md) остаются открытыми.
+
+Для просмотра запусков и загрузки доступного artifact можно использовать GitHub CLI, заменив `RUN_ID` идентификатором нужного запуска:
 
 ```sh
 gh run list --workflow android.yml --limit 5
@@ -55,4 +57,13 @@ gh run view RUN_ID --log-failed
 gh run download RUN_ID --name HyprDroid-debug-apk --dir .local/apk
 ```
 
-Wrapper взят из официального тега Gradle `v8.9.0`, включая Windows-скрипт и JAR. Его файлы должны храниться в Git; системный Gradle не требуется. Право исполнения `gradlew` и окончания строк задаются в репозитории.
+## Целостность Wrapper
+
+Файлы Wrapper взяты из официального тега Gradle `v8.9.0`. `gradlew` хранится в Git с правом исполнения; окончания строк определяются `.gitattributes`.
+
+- [SHA-256 Wrapper JAR](https://services.gradle.org/distributions/gradle-8.9-wrapper.jar.sha256): `498495120a03b9a6ab5d155f5de3c8f0d986a449153702fb80fc80e134484f17`.
+- [SHA-256 дистрибутива](https://services.gradle.org/distributions/gradle-8.9-bin.zip.sha256), закреплённая в `gradle-wrapper.properties`: `d725d707bfabd4dfdc958c624003b3c80accc03f7037b5122c4b1d0ef15cecab`.
+
+## Устранённая ошибка настройки SDK
+
+[Первоначальный запуск CI](https://github.com/PseudoEF/HyprDroid/actions/runs/43698100026) завершился до Gradle с сообщением `Failed to find package 'tools'`. Параметр `packages` у `setup-android` теперь явно задаёт необходимые пакеты вместо значения по умолчанию с удалённым `tools`. Поведение параметра описано в [документации setup-android](https://github.com/android-actions/setup-android/tree/v3#additional-packages).
