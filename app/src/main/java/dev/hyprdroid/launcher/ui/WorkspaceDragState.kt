@@ -1,12 +1,15 @@
 package dev.hyprdroid.launcher.ui
 
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.unit.IntOffset
 import dev.hyprdroid.launcher.model.WorkspaceItem
 import kotlinx.coroutines.isActive
@@ -76,11 +79,24 @@ internal class WorkspaceDragState(val grid: LazyGridState) {
 
 internal fun Modifier.workspaceDrag(state: WorkspaceDragState, enabled: Boolean): Modifier =
     if (!enabled) this else pointerInput(state) {
-        detectDragGesturesAfterLongPress(
-            onDragStart = state::start,
-            onDragEnd = { state.finish(true) }, onDragCancel = { state.finish(false) },
-            onDrag = { change, delta -> if (state.draggedId != null) { change.consume(); state.move(delta) } },
-        )
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val held = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
+            state.start(held.position)
+            if (state.draggedId == null) return@awaitEachGesture
+            held.consume()
+            try {
+                while (true) {
+                    // Once held, claim movement before the grid's ordinary scrolling sees it.
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    val change = event.changes.find { it.id == held.id }
+                    if (event.changes.size != 1 || change == null || change.isConsumed) break
+                    if (!change.pressed) { change.consume(); state.finish(true); break }
+                    state.move(change.position - change.previousPosition)
+                    change.consume()
+                }
+            } finally { state.finish(false) }
+        }
     }
 
 @Composable
