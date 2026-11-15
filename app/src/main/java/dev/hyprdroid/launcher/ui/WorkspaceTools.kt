@@ -71,7 +71,7 @@ fun WorkspaceOrderScreen(workspace: Workspace, apps: Map<String, LauncherApp>, o
             LazyColumn(Modifier.widthIn(max = 760.dp).fillMaxWidth().weight(1f)) {
                 if (workspace.items.isEmpty()) item { Text("В пространстве пока нет элементов", Modifier.padding(16.dp)) }
                 itemsIndexed(workspace.items, key = { _, item -> item.id }) { index, item ->
-                    val app = (item as? WorkspaceItem.App)?.let { apps[it.componentId] }
+                    val app = (item as? WorkspaceItem.AppShortcut)?.let { apps[it.componentId] }
                     val label = app?.label ?: "Недоступный элемент"
                     ListItem(
                         headlineContent = { Text(label) }, supportingContent = { Text("Позиция ${index + 1}") },

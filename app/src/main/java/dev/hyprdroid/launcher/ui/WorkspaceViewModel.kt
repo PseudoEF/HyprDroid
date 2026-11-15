@@ -10,6 +10,8 @@ import dev.hyprdroid.launcher.data.LauncherApp
 import dev.hyprdroid.launcher.data.LauncherCatalog
 import dev.hyprdroid.launcher.data.ShellRepository
 import dev.hyprdroid.launcher.data.WorkspaceRepository
+import dev.hyprdroid.launcher.data.SidebarEntry
+import dev.hyprdroid.launcher.model.WorkspaceItem
 import dev.hyprdroid.launcher.model.ShellSettings
 import dev.hyprdroid.launcher.model.WorkspaceSettings
 import dev.hyprdroid.launcher.model.WorkspaceAppearance
@@ -29,6 +31,7 @@ data class WorkspaceUiState(
     val settings: WorkspaceSettings? = null,
     val shell: ShellSettings? = null,
     val apps: List<LauncherApp> = emptyList(),
+    val sidebarEntries: List<SidebarEntry> = emptyList(),
     val loadingApps: Boolean = true,
     val catalogError: Boolean = false,
     val storageError: Boolean = false,
@@ -98,13 +101,14 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
             mutableState.update { it.copy(loadingApps = true) }
             try {
                 val pins = mutableState.value.settings?.workspaces?.flatMap { it.pinnedApps }?.toSet().orEmpty() +
-                    mutableState.value.shell?.favorites.orEmpty()
-                val (apps, missing) = withContext(Dispatchers.IO) {
+                    mutableState.value.shell?.favorites.orEmpty() + mutableState.value.shell?.sidebar.orEmpty()
+                        .filterIsInstance<WorkspaceItem.AppShortcut>().map { it.componentId }
+                val (apps, entries, missing) = withContext(Dispatchers.IO) {
                     val apps = catalog.load()
                     val visiblePackages = apps.map { it.componentId.substringBefore('/') }.toSet()
-                    apps to catalog.missingPackages(pins.filterNot { it.substringBefore('/') in visiblePackages }.toSet())
+                    Triple(apps, catalog.loadSidebarEntries(apps), catalog.missingPackages(pins.filterNot { it.substringBefore('/') in visiblePackages }.toSet()))
                 }
-                mutableState.update { it.copy(apps = apps, loadingApps = false, catalogError = false) }
+                mutableState.update { it.copy(apps = apps, sidebarEntries = entries, loadingApps = false, catalogError = false) }
                 if (missing.isNotEmpty()) removePackages(missing)
             } catch (error: CancellationException) {
                 throw error
@@ -127,6 +131,14 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
     fun setGridLayout(workspace: Int, enabled: Boolean) = save { repository.setGridLayout(workspace, enabled) }
     fun setAppearance(workspace: Int, appearance: WorkspaceAppearance) = save { repository.setAppearance(workspace, appearance) }
     fun reorder(workspace: Int, id: String, delta: Int) = save { repository.reorder(workspace, id, delta) }
+    fun placeBefore(workspace: Int, id: String, before: String?) = save { repository.placeBefore(workspace, id, before) }
+    fun setSidebarItem(item: WorkspaceItem.AppShortcut, pinned: Boolean) = save { shellRepository.setSidebarItem(item, pinned) }
+    fun removeSidebarItem(id: String) = save { shellRepository.removeSidebarItem(id) }
+    fun reorderSidebar(id: String, delta: Int) = save { shellRepository.reorderSidebar(id, delta) }
+    fun launchSidebar(item: WorkspaceItem.AppShortcut) {
+        try { catalog.launch(item) }
+        catch (_: RuntimeException) { showMessage("Ярлык недоступен. Обновите каталог или уберите его из Sidebar."); refreshApps() }
+    }
     fun moveItem(from: Int, to: Int, id: String) = save { repository.moveItem(from, to, id) }
     fun removeItem(workspace: Int, id: String) = save { repository.removeItem(workspace, id) }
     fun setFavorite(component: String, enabled: Boolean) = save { shellRepository.setFavorite(component, enabled) }

@@ -23,7 +23,7 @@ internal object WorkspaceCodec {
                 workspaces = List(WORKSPACE_COUNT) { id ->
                     if (version == 1) Workspace(
                         id, data[stringSetPreferencesKey(key(id, "apps"))].orEmpty()
-                            .filter(::validComponent).sorted().map { WorkspaceItem.App(it) },
+                            .filter(::validComponent).sorted().map { WorkspaceItem.AppShortcut(it) },
                         WorkspaceAppearance(gridLayout = data[legacyGrid] ?: true),
                     ) else Workspace(
                         id, decodeItems(data[stringPreferencesKey(key(id, "items"))] ?: "[]"),
@@ -45,12 +45,7 @@ internal object WorkspaceCodec {
         data[selected] = settings.selectedWorkspace
         settings.workspaces.forEach { workspace ->
             val id = workspace.id
-            val array = JSONArray()
-            workspace.items.forEach { item -> array.put(when (item) {
-                is WorkspaceItem.App -> JSONObject().put("type", "app").put("id", item.id).put("component", item.componentId)
-                is WorkspaceItem.Unsupported -> JSONObject(item.record)
-            }) }
-            data[stringPreferencesKey(key(id, "items"))] = array.toString()
+            data[stringPreferencesKey(key(id, "items"))] = encodeItems(workspace.items)
             data[booleanPreferencesKey(key(id, "grid"))] = workspace.appearance.gridLayout
             data[intPreferencesKey(key(id, "icon_size"))] = workspace.appearance.iconSizeDp
             data[stringPreferencesKey(key(id, "density"))] = workspace.appearance.density.name
@@ -58,16 +53,30 @@ internal object WorkspaceCodec {
         }
     }
 
-    private fun decodeItems(raw: String): List<WorkspaceItem> {
+    fun encodeItems(items: List<WorkspaceItem>): String = JSONArray().also { array ->
+        items.forEach { item -> array.put(when (item) {
+            is WorkspaceItem.AppShortcut -> JSONObject().put("type", if (item.shortcutId == null) "app" else "shortcut")
+                .put("id", item.id).put("component", item.componentId).apply { item.shortcutId?.let { put("shortcut_id", it) } }
+            is WorkspaceItem.WidgetPlaceholder -> JSONObject().put("type", "widget_placeholder").put("id", item.id).put("title", item.title)
+            is WorkspaceItem.Unsupported -> JSONObject(item.record)
+        }) }
+    }.toString()
+
+    fun decodeItems(raw: String): List<WorkspaceItem> {
         val array = JSONArray(raw)
         val items = List(array.length()) { index ->
             val record = array.getJSONObject(index)
             val id = record.getString("id")
             if (id.isBlank()) throw IOException("Blank workspace item ID")
-            if (record.getString("type") == "app") {
+            val type = record.getString("type")
+            if (type == "app" || type == "shortcut") {
                 val component = record.getString("component")
-                if (!validComponent(component) || id != "app:$component") throw IOException("Invalid application identity")
-                WorkspaceItem.App(component)
+                val shortcut = if (type == "shortcut") record.getString("shortcut_id") else null
+                val item = WorkspaceItem.AppShortcut(component, shortcut)
+                if (!validComponent(component) || id != item.id || shortcut?.isBlank() == true) throw IOException("Invalid application identity")
+                item
+            } else if (type == "widget_placeholder") {
+                WorkspaceItem.WidgetPlaceholder(id, record.getString("title"))
             } else WorkspaceItem.Unsupported(id, record.toString())
         }
         if (items.map { it.id }.distinct().size != items.size) throw IOException("Duplicate workspace item IDs")

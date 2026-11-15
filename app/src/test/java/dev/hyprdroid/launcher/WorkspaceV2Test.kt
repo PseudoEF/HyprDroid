@@ -38,7 +38,7 @@ class WorkspaceV2Test {
             val store = PreferenceDataStoreFactory.create(migrations = listOf(WorkspaceV2Migration()), scope = scope, produceFile = { file })
             val state = WorkspaceRepository(store).settings.first()
             assertEquals(2, state.selectedWorkspace)
-            assertEquals(listOf(a, b), state.workspaces[0].items.filterIsInstance<WorkspaceItem.App>().map { it.componentId })
+            assertEquals(listOf(a, b), state.workspaces[0].items.filterIsInstance<WorkspaceItem.AppShortcut>().map { it.componentId })
             assertEquals(setOf(c), state.workspaces[1].pinnedApps)
             assertTrue(state.workspaces[2].items.isEmpty())
             assertTrue(state.workspaces.all { !it.appearance.gridLayout })

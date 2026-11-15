@@ -6,4 +6,5 @@ const val MAX_DOCK_APPS = 4
 data class ShellSettings(
     val favorites: Set<String> = emptySet(),
     val wallpaperUri: String? = null,
+    val sidebar: List<WorkspaceItem> = emptyList(),
 )

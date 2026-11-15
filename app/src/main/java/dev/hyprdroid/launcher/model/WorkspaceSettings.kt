@@ -7,7 +7,10 @@ const val WORKSPACE_COUNT = 3
 /** Stable identity and ordered placement are separate from the installed-app catalogue. */
 sealed interface WorkspaceItem {
     val id: String
-    data class App(val componentId: String) : WorkspaceItem { override val id = "app:$componentId" }
+    data class AppShortcut(val componentId: String, val shortcutId: String? = null) : WorkspaceItem {
+        override val id = if (shortcutId == null) "app:$componentId" else "shortcut:$componentId:$shortcutId"
+    }
+    data class WidgetPlaceholder(override val id: String, val title: String) : WorkspaceItem
     /** Round-trip future item types without rendering or executing their payload. */
     data class Unsupported(override val id: String, val record: String) : WorkspaceItem
 }
@@ -30,7 +33,7 @@ data class Workspace(
     val items: List<WorkspaceItem> = emptyList(),
     val appearance: WorkspaceAppearance = WorkspaceAppearance(),
 ) {
-    val pinnedApps: Set<String> get() = items.filterIsInstance<WorkspaceItem.App>().map { it.componentId }.toSet()
+    val pinnedApps: Set<String> get() = items.filterIsInstance<WorkspaceItem.AppShortcut>().map { it.componentId }.toSet()
 }
 
 class WorkspaceMoveConflictException : IOException("Target has a different item with the same identity")
@@ -45,7 +48,7 @@ data class WorkspaceSettings(
         require(workspaceId in 0 until WORKSPACE_COUNT)
         require(validComponent(componentId))
         return updateWorkspace(workspaceId) { workspace ->
-            val app = WorkspaceItem.App(componentId)
+            val app = WorkspaceItem.AppShortcut(componentId)
             workspace.copy(items = when {
                 !pinned -> workspace.items.filterNot { it.id == app.id }
                 workspace.items.any { it.id == app.id } -> workspace.items
@@ -62,6 +65,11 @@ data class WorkspaceSettings(
             result.add(target, result.removeAt(index))
             workspace.copy(items = result)
         }
+    }
+
+    /** Apply one drag to the latest transaction; concurrent inserts/removals are retained. */
+    fun placeBefore(workspaceId: Int, itemId: String, beforeId: String?) = updateWorkspace(workspaceId) {
+        it.copy(items = placeItemBefore(it.items, itemId, beforeId))
     }
 
     fun moveItem(from: Int, to: Int, itemId: String): WorkspaceSettings {
@@ -86,7 +94,7 @@ data class WorkspaceSettings(
     }
 
     fun withoutPackages(packages: Set<String>) = copy(workspaces = workspaces.map { workspace ->
-        workspace.copy(items = workspace.items.filterNot { it is WorkspaceItem.App && it.componentId.substringBefore('/') in packages })
+        workspace.copy(items = workspace.items.filterNot { it is WorkspaceItem.AppShortcut && it.componentId.substringBefore('/') in packages })
     })
 
     private fun updateWorkspace(id: Int, transform: (Workspace) -> Workspace): WorkspaceSettings {
@@ -98,3 +106,12 @@ data class WorkspaceSettings(
 fun validComponent(component: String): Boolean = component.count { it == '/' } == 1 &&
     component.substringBefore('/').isNotBlank() && component.substringAfter('/').isNotBlank() &&
     component.none { it.isISOControl() }
+
+fun placeItemBefore(items: List<WorkspaceItem>, id: String, before: String?): List<WorkspaceItem> {
+    if (id == before) return items
+    val item = items.find { it.id == id } ?: return items
+    if (before != null && items.none { it.id == before }) return items
+    return items.filterNot { it.id == id }.toMutableList().apply {
+        add(if (before == null) size else indexOfFirst { it.id == before }, item)
+    }
+}

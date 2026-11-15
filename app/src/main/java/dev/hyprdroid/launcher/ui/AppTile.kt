@@ -5,6 +5,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -35,15 +36,16 @@ fun AppTile(
     modifier: Modifier = Modifier, list: Boolean = false, compact: Boolean = false,
     selected: Boolean = false, onRemove: (() -> Unit)? = null,
     iconSizeDp: Int = 48,
+    dragEditing: Boolean = false,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val label = app?.label ?: component.substringBefore('/')
     Box(modifier) {
         val clickModifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
-            .combinedClickable(
+            .then(if (dragEditing) Modifier.clickable(role = Role.Button, onClick = {}) else Modifier.combinedClickable(
                 role = Role.Button, onClick = onClick, onClickLabel = label,
                 onLongClick = { menuOpen = true }, onLongClickLabel = "Действия: $label",
-            )
+            ))
         if (list) {
             Surface(color = Mocha.Mantle.copy(alpha = .86f), shape = RoundedCornerShape(18.dp), border = BorderStroke(1.dp, Mocha.Outline.copy(alpha = .5f))) {
                 Row(clickModifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {

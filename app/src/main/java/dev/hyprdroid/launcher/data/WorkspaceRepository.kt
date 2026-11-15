@@ -26,6 +26,7 @@ class WorkspaceRepository(private val store: DataStore<Preferences>) {
     suspend fun removePackages(packages: Set<String>) = update { it.withoutPackages(packages) }
     suspend fun removeItem(workspace: Int, id: String) = update { it.removeItem(workspace, id) }
     suspend fun reorder(workspace: Int, id: String, delta: Int) = update { it.reorder(workspace, id, delta) }
+    suspend fun placeBefore(workspace: Int, id: String, before: String?) = update { it.placeBefore(workspace, id, before) }
     suspend fun moveItem(from: Int, to: Int, id: String) = update { it.moveItem(from, to, id) }
     suspend fun setAppearance(workspace: Int, appearance: WorkspaceAppearance) = update { it.withAppearance(workspace, appearance) }
     suspend fun selectWorkspace(id: Int) {

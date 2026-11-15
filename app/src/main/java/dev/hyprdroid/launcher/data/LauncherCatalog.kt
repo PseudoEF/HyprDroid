@@ -11,9 +11,11 @@ import android.os.Process
 import android.os.UserHandle
 import androidx.core.graphics.drawable.toBitmap
 import java.util.Locale
+import dev.hyprdroid.launcher.model.WorkspaceItem
 
 /** Icons and labels belong to the current catalogue, never to persisted preferences. */
 data class LauncherApp(val componentId: String, val label: String, val icon: Bitmap)
+data class SidebarEntry(val item: WorkspaceItem.AppShortcut, val app: LauncherApp)
 
 class LauncherCatalog(private val context: Context) {
     private val launcher = context.getSystemService(LauncherApps::class.java)
@@ -53,6 +55,32 @@ class LauncherCatalog(private val context: Context) {
         launcher.startMainActivity(component, user, null, null)
     }
 
+    /** Public Android shortcuts are visible only while Android grants HOME shortcut-host access. */
+    fun loadSidebarEntries(apps: List<LauncherApp>): List<SidebarEntry> {
+        val activities = apps.map { SidebarEntry(WorkspaceItem.AppShortcut(it.componentId), it) }
+        if (!launcher.hasShortcutHostPermission()) return activities
+        val size = (48 * context.resources.displayMetrics.density).toInt().coerceIn(48, 192)
+        val shortcuts = try {
+            launcher.getShortcuts(LauncherApps.ShortcutQuery().setQueryFlags(
+                LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED,
+            ), user).orEmpty().filter { it.isEnabled && it.`package` != context.packageName }.map { info ->
+                val component = info.activity?.flattenToString() ?: "${info.`package`}/.Shortcut"
+                val item = WorkspaceItem.AppShortcut(component, info.id)
+                val icon = try { launcher.getShortcutIconDrawable(info, context.resources.displayMetrics.densityDpi)?.toBitmap(size, size) }
+                    catch (_: RuntimeException) { null }
+                SidebarEntry(item, LauncherApp(component, info.shortLabel?.toString() ?: info.id,
+                    icon ?: context.packageManager.defaultActivityIcon.toBitmap(size, size)))
+            }
+        } catch (_: SecurityException) { emptyList() }
+        return (activities + shortcuts).distinctBy { it.item.id }.sortedBy { it.app.label.lowercase(Locale.ROOT) }
+    }
+
+    fun launch(item: WorkspaceItem.AppShortcut) {
+        val shortcut = item.shortcutId
+        if (shortcut == null) launch(item.componentId)
+        else launcher.startShortcut(item.componentId.substringBefore('/'), shortcut, null, null, user)
+    }
+
     fun observe(onChanged: () -> Unit, onRemoved: (String) -> Unit): () -> Unit {
         val callback = object : LauncherApps.Callback() {
             override fun onPackageAdded(packageName: String, user: UserHandle) = changed(user)
@@ -62,6 +90,7 @@ class LauncherCatalog(private val context: Context) {
             }
             override fun onPackagesAvailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = changed(user)
             override fun onPackagesUnavailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = changed(user)
+            override fun onShortcutsChanged(packageName: String, shortcuts: MutableList<android.content.pm.ShortcutInfo>, user: UserHandle) = changed(user)
             private fun changed(profile: UserHandle) {
                 if (profile == this@LauncherCatalog.user) onChanged()
             }

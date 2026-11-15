@@ -8,6 +8,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -65,6 +67,9 @@ fun WorkspaceScreen(model: WorkspaceViewModel) {
                 retryApps = model::refreshApps, retryWorkspace = model::retryStorage, retryShell = model::retryShellStorage,
                 reorder = model::reorder, moveItem = model::moveItem, removeItem = model::removeItem,
                 appearance = model::setAppearance,
+                placeBefore = model::placeBefore, sidebarPin = model::setSidebarItem,
+                sidebarRemove = model::removeSidebarItem, sidebarReorder = model::reorderSidebar,
+                sidebarLaunch = model::launchSidebar,
                 systemSettings = { action -> if (!openSystemSettings(context, action)) model.showMessage("Системные настройки недоступны.") },
             ))
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).safeDrawingPadding().imePadding().padding(12.dp))
@@ -89,6 +94,11 @@ data class ShellActions(
     val removeItem: (Int, String) -> Unit,
     val appearance: (Int, WorkspaceAppearance) -> Unit,
     val systemSettings: (String) -> Unit,
+    val placeBefore: (Int, String, String?) -> Unit,
+    val sidebarPin: (WorkspaceItem.AppShortcut, Boolean) -> Unit,
+    val sidebarRemove: (String) -> Unit,
+    val sidebarReorder: (String, Int) -> Unit,
+    val sidebarLaunch: (WorkspaceItem.AppShortcut) -> Unit,
 )
 
 @Composable
@@ -111,6 +121,8 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     var editing by rememberSaveable { mutableStateOf(false) }
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
     var controlOpen by rememberSaveable { mutableStateOf(false) }
+    var sidebarOpen by rememberSaveable { mutableStateOf(false) }
+    var dragging by remember { mutableStateOf(false) }
     var appearanceWorkspace by rememberSaveable { mutableStateOf<Int?>(null) }
     var orderWorkspace by rememberSaveable { mutableStateOf<Int?>(null) }
     var selectingWorkspace by rememberSaveable { mutableStateOf<Int?>(null) }
@@ -146,7 +158,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
         listOf(
             AppMenuAction(if (pinned) "Убрать из пространства" else "Закрепить в пространстве 0${workspace + 1}", workspaceReady) { actions.pin(workspace, component, !pinned) },
             AppMenuAction(if (component in favorites) "Убрать из dock" else "Добавить в dock", shellReady) { actions.favorite(component, component !in favorites) },
-        ) + itemMenu(workspace, WorkspaceItem.App(component))
+        ) + itemMenu(workspace, WorkspaceItem.AppShortcut(component))
     }
     val appMenu: (String) -> List<AppMenuAction> = { component ->
         appMenuForWorkspace(selectingWorkspace ?: pager.currentPage, component)
@@ -154,9 +166,10 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     LaunchedEffect(pager, workspaceReady) {
         if (workspaceReady) snapshotFlow { pager.settledPage }.distinctUntilChanged().collect(actions.selectWorkspace)
     }
-    val overlayOpen = drawerOpen || controlOpen || appearanceWorkspace != null || orderWorkspace != null
+    val overlayOpen = drawerOpen || controlOpen || sidebarOpen || appearanceWorkspace != null || orderWorkspace != null
     BackHandler(enabled = overlayOpen || editing) {
         when {
+            sidebarOpen -> sidebarOpen = false
             drawerOpen -> closeDrawer()
             controlOpen -> controlOpen = false
             appearanceWorkspace != null -> appearanceWorkspace = null
@@ -172,6 +185,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
         val panelMenu = buildList {
             add(AppMenuAction("Все приложения", onClick = openDrawer))
             add(AppMenuAction("Control Center", onClick = openControl))
+            add(AppMenuAction("Sidebar") { sidebarOpen = true })
             add(AppMenuAction("Редактировать пространство", workspaceReady, enterEdit))
             add(AppMenuAction("Вид пространства", workspaceReady) { appearanceWorkspace = pager.currentPage })
             add(AppMenuAction("Порядок элементов", workspaceReady) { orderWorkspace = pager.currentPage })
@@ -184,15 +198,17 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
         }
         Waybar(pager.currentPage, { index -> scope.launch { pager.animateScrollToPage(index) }; Unit }, panelMenu, Modifier.widthIn(max = 760.dp).fillMaxWidth())
         Spacer(Modifier.height(12.dp))
-        HorizontalPager(state = pager, modifier = Modifier.weight(1f).widthIn(max = 960.dp).fillMaxWidth(), userScrollEnabled = !overlayOpen) { page ->
+        HorizontalPager(state = pager, modifier = Modifier.weight(1f).widthIn(max = 960.dp).fillMaxWidth(), userScrollEnabled = !overlayOpen && !dragging) { page ->
             WorkspaceCanvas(
                 settings.workspaces[page], appsById, editing && workspaceReady,
                 gesturesEnabled = !overlayOpen, onEdit = enterEdit, onSwipeUp = openDrawer, onSwipeDown = openControl,
                 onLaunch = launchApp,
                 onRemove = { if (workspaceReady) actions.removeItem(page, it) },
-                menu = { item -> if (item is WorkspaceItem.App) appMenuForWorkspace(page, item.componentId) else
+                menu = { item -> if (item is WorkspaceItem.AppShortcut) appMenuForWorkspace(page, item.componentId) else
                     listOf(AppMenuAction("Убрать элемент", workspaceReady) { actions.removeItem(page, item.id) }) + itemMenu(page, item) },
                 modifier = Modifier.fillMaxSize(),
+                onDrop = { id, before -> if (workspaceReady) actions.placeBefore(page, id, before) },
+                onDragging = { dragging = it },
             )
         }
         if (editing && workspaceReady) {
@@ -205,6 +221,14 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
         }
         Spacer(Modifier.height(12.dp))
         FavoriteDock(favorites.sortedBy { appsById[it]?.label ?: it }, appsById, launchApp, appMenu, openDrawer)
+    }
+    if (!overlayOpen && !editing) Box(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = Alignment.CenterEnd) {
+        SidebarHandle({ sidebarOpen = true }, Modifier.padding(end = 32.dp))
+    }
+    AnimatedVisibility(visible = sidebarOpen, enter = slideInHorizontally { it } + fadeIn(), exit = slideOutHorizontally { it } + fadeOut()) {
+        ModularSidebar(state, onClose = { sidebarOpen = false },
+            onLaunch = { sidebarOpen = false; actions.sidebarLaunch(it) }, onPin = actions.sidebarPin,
+            onRemove = actions.sidebarRemove, onReorder = actions.sidebarReorder)
     }
     AnimatedVisibility(visible = drawerOpen, enter = slideInVertically { it / 3 } + fadeIn(), exit = slideOutVertically { it / 3 } + fadeOut()) {
         AppDrawer(state, selectingWorkspace, closeDrawer, launchApp,
