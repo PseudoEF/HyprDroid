@@ -7,3 +7,7 @@ build/
 *.iml
 .DS_Store
 *.apk
+*.jks
+*.keystore
+*.p12
+*.pfx
