@@ -103,10 +103,14 @@ data class ShellActions(
 
 @Composable
 fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
+    var aboutOpen by rememberSaveable { mutableStateOf(false) }
     // Construct the pager only after preferences load, so its initial page is the persisted one.
     if (state.settings == null) {
+        BackHandler(aboutOpen) { aboutOpen = false }
+        if (aboutOpen) { AboutScreen { aboutOpen = false }; return }
         Column(Modifier.fillMaxSize().safeDrawingPadding().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Waybar(0, {}, listOf(
+                AppMenuAction("О приложении") { aboutOpen = true },
                 AppMenuAction("Повторить чтение пространств", onClick = actions.retryWorkspace),
                 AppMenuAction("Другой лаунчер", onClick = actions.otherLauncher),
             ), Modifier.fillMaxWidth())
@@ -167,9 +171,10 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     LaunchedEffect(pager, workspaceReady) {
         if (workspaceReady) snapshotFlow { pager.settledPage }.distinctUntilChanged().collect(actions.selectWorkspace)
     }
-    val overlayOpen = drawerOpen || controlOpen || sidebarOpen || appearanceWorkspace != null || orderWorkspace != null
+    val overlayOpen = drawerOpen || controlOpen || sidebarOpen || aboutOpen || appearanceWorkspace != null || orderWorkspace != null
     BackHandler(enabled = overlayOpen || editing) {
         when {
+            aboutOpen -> aboutOpen = false
             sidebarOpen -> sidebarOpen = false
             drawerOpen -> closeDrawer()
             controlOpen -> controlOpen = false
@@ -184,6 +189,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         val panelMenu = buildList {
+            add(AppMenuAction("О приложении") { aboutOpen = true })
             add(AppMenuAction("Все приложения", onClick = openDrawer))
             add(AppMenuAction("Control Center", onClick = openControl))
             add(AppMenuAction("Sidebar") { sidebarOpen = true })
@@ -239,6 +245,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
             menu = appMenu, onRetry = actions.retryApps)
     }
     if (controlOpen) ControlCenter(onClose = { controlOpen = false }, onSettings = actions.systemSettings)
+    if (aboutOpen) AboutScreen { aboutOpen = false }
     appearanceWorkspace?.let { id ->
         val workspace = settings.workspaces[id]
         WorkspaceAppearanceScreen(workspace, workspace.pinnedApps.firstOrNull()?.let { appsById[it] },

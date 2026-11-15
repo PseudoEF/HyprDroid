@@ -21,13 +21,81 @@ jobs:
           packages: 'platform-tools platforms;android-35 build-tools;34.0.0'
           log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v4
-      - name: Test workspace persistence
-        run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
-      - name: Build APK
-        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+      - name: Verify code without distribution credentials
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace
+      # PR builds are checks, never distributed with an ephemeral signing key.
+  distribute:
+    if: github.event_name != 'pull_request'
+    needs: build
+    permissions:
+      contents: write # Reserve immutable ci/debug/<versionCode> tags; never modify main.
+    concurrency:
+      group: hyprdroid-debug-distribution
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      HYPRDROID_DISTRIBUTION: 'true'
+      HYPRDROID_BUILD_COMMIT: ${{ github.sha }}
+      HYPRDROID_KEYSTORE_FILE: ${{ runner.temp }}/hyprdroid-signing.p12
+      HYPRDROID_KEYSTORE_PASSWORD: ${{ secrets.HYPRDROID_KEYSTORE_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;34.0.0'
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Restore persistent signing key; fail closed
+        env:
+          HYPRDROID_KEYSTORE_BASE64: ${{ secrets.HYPRDROID_KEYSTORE_BASE64 }}
+        run: python3 scripts/restore-signing.py
+      - name: Reserve two global monotonic version codes
+        id: versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: python3 scripts/reserve-version-codes.py
+      - name: Build sequential APKs and verify provenance
+        env:
+          CODE_A: ${{ steps.versions.outputs.first }}
+          CODE_B: ${{ steps.versions.outputs.second }}
+        run: sh scripts/build-distribution.sh
+      - name: Enable emulator hardware acceleration on CI host
+        run: sudo chmod 666 /dev/kvm
+      - name: Verify in-place update on Android 15
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          CODE_A: ${{ steps.versions.outputs.first }}
+          CODE_B: ${{ steps.versions.outputs.second }}
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          ram-size: 2048M
+          disable-animations: true
+          emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: sh scripts/ci-upgrade.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: HyprDroid-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: HyprDroid-debug-${{ steps.versions.outputs.second }}-run${{ github.run_id }}-attempt${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hyprdroid-distribution/
           if-no-files-found: error
           retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: HyprDroid-update-report-run${{ github.run_id }}-attempt${{ github.run_attempt }}
+          path: .local/upgrade-report/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Remove temporary private key
+        if: always()
+        run: rm -f "$HYPRDROID_KEYSTORE_FILE"
