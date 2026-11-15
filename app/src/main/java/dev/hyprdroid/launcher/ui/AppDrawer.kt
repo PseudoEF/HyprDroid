@@ -42,7 +42,7 @@ fun AppDrawer(
             OutlinedTextField(
                 value = search, onValueChange = { search = it }, singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { focus.clearFocus(); keyboard?.hide() }),
+                keyboardActions = KeyboardActions(onSearch = { keyboard?.hide(); focus.clearFocus(force = true) }),
                 leadingIcon = { Icon(Icons.Default.Search, null) },
                 trailingIcon = if (search.isNotEmpty()) ({ IconButton(onClick = { search = "" }) { Icon(Icons.Default.Close, "Очистить поиск") } }) else null,
                 placeholder = { Text("Поиск приложений") }, shape = MaterialTheme.shapes.extraLarge,

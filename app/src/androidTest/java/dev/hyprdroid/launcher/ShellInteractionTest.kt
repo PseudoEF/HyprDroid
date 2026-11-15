@@ -5,6 +5,8 @@ import android.os.SystemClock
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -52,6 +54,13 @@ class ShellInteractionTest {
             screenshot("drawer-search")
             compose.onNodeWithContentDescription("Очистить поиск").performClick()
             compose.onNodeWithTag("app-search").performImeAction()
+            compose.waitUntil(10_000) {
+                var imeVisible = true
+                scenario.onActivity { activity ->
+                    imeVisible = ViewCompat.getRootWindowInsets(activity.window.decorView)?.isVisible(WindowInsetsCompat.Type.ime()) == true
+                }
+                !imeVisible
+            }
             screenshot("drawer")
             compose.onNodeWithContentDescription("Закрыть приложения").performClick()
 
