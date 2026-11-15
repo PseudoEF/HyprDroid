@@ -59,6 +59,7 @@ fun WorkspaceCanvas(
     ) {
         LazyVerticalGrid(
             state = grid,
+            userScrollEnabled = drag.draggedId == null,
             columns = if (appearance.gridLayout) GridCells.Adaptive(maxOf(appearance.density.cellDp, appearance.iconSizeDp + 24).dp) else GridCells.Fixed(1),
             modifier = Modifier.fillMaxSize().workspaceDrag(drag, editing && gesturesEnabled), contentPadding = PaddingValues(12.dp),
             horizontalArrangement = Arrangement.spacedBy(appearance.spacingDp.dp), verticalArrangement = Arrangement.spacedBy(appearance.spacingDp.dp),
