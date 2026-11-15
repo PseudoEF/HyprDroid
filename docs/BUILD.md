@@ -56,9 +56,9 @@ Gradle Wrapper хранится в репозитории и загружает 
 
 ## GitHub Actions
 
-[Workflow Android debug APK](https://github.com/PseudoEF/HyprDroid/actions/workflows/android.yml) запускается при push в `main`, для pull request и вручную. Он устанавливает JDK 17 и пакеты SDK, настраивает Gradle, выполняет `:app:testDebugUnitTest` и `:app:assembleDebug` через Wrapper и загружает APK.
+[Workflow Android debug APK](https://github.com/PseudoEF/HyprDroid/actions/workflows/android.yml) запускается при push в `main`, для pull request и вручную. Job build устанавливает JDK 17 и SDK, проверяет счётчик версий, выполняет `:app:testDebugUnitTest` и `:app:assembleDebug` через Wrapper без доступа к постоянному ключу. PR-проверка APK не публикует.
 
-Artifact называется `HyprDroid-debug-apk`, содержит `app-debug.apk` и хранится 14 дней. Отсутствие APK считается ошибкой job. Это отладочная сборка с debug-подписью, не release-публикация.
+Для push main и доверенного ручного запуска job distribute восстанавливает постоянный ключ, резервирует versionCode, собирает A/B и проверяет обновление в эмуляторе. После успешной проверки публикуется только конечный APK B: artifact `HyprDroid-debug-<versionCode>-run<runId>-attempt<attempt>` с APK, JSON и SHA-256, срок 14 дней. Отсутствие файла, неподходящая подпись или метаданные останавливают публикацию. Это debug-сборка, не release-публикация. Название `HyprDroid-debug-apk` далее относится к историческим запускам до v0.5.2.
 
 [Запуск 43731015485](https://github.com/PseudoEF/HyprDroid/actions/runs/43731015485) для коммита `4daeeac` с Mobile Shell v0.3 от 15 ноября 2026 года успешно завершил unit-тесты, сборку и публикацию artifact. Установка и работа на реальном телефоне пока не подтверждены; соответствующие пункты [ROADMAP](ROADMAP.md) остаются открытыми.
 

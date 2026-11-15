@@ -35,12 +35,12 @@
 
 ## Для разработчиков: adb
 
-При совпадении applicationId/сертификата и большем versionCode:
+При совпадении applicationId/сертификата и большем versionCode (замените имя примера именем скачанного APK):
 
 ```sh
-adb install -r HyprDroid-0.5.2-<versionCode>.apk
+adb install -r ./HyprDroid-0.5.2-10003.apk
 adb shell dumpsys package dev.hyprdroid.launcher
-apksigner verify --print-certs HyprDroid-0.5.2-<versionCode>.apk
+apksigner verify --print-certs ./HyprDroid-0.5.2-10003.apk
 ```
 
 `apksigner` находится в Android SDK Build Tools. Не используйте downgrade-флаг `-d`, `pm clear` или удаление приложения как обычный шаг обновления.
