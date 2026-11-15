@@ -100,3 +100,14 @@
 - [x] Типы AppShortcut/WidgetPlaceholder; неизвестные записи сохраняются как данные, Widget Engine отсутствует.
 - [x] Подтверждены [сборка APK и unit-тесты](https://github.com/PseudoEF/HyprDroid/actions/runs/43759169992), [сохранение и взаимодействия UI](https://github.com/PseudoEF/HyprDroid/actions/runs/43759169989) на Android 15.
 - [ ] Проверить на телефоне drag/autoscroll, системный Back и ярлыки AI/Lens (зависят от приложений и HOME-роли).
+
+## Update Reliability v0.5.2
+
+- [x] Аудит applicationId/версий и подтверждение разных сертификатов исторических CI APK.
+- [x] Постоянный ключ в Actions Secrets, публичный отпечаток в Git и отказ от случайной подписи при публикации.
+- [x] Общий счётчик versionCode с долговременными резервированиями и проверкой предела Android.
+- [x] About с установленной версией, кодом, коммитом, run ID и сертификатом.
+- [x] Проверка манифеста, подписи, provenance и SHA-256 перед upload артефакта текущего запуска.
+- [x] Инструкция обновления поверх, диагностика adb и отдельное предупреждение о старых ключах без автоматического удаления данных.
+- [x] Подтверждены обновления [10000 → 10001](https://github.com/PseudoEF/HyprDroid/actions/runs/43762462358) и [10002 → 10003](https://github.com/PseudoEF/HyprDroid/actions/runs/43762780473) на разных CI runners: постоянная подпись, установка поверх, сохранение DataStore и About на Android 15. [UI-регрессия успешна](https://github.com/PseudoEF/HyprDroid/actions/runs/43762785767).
+- [ ] Проверить установщик физического телефона и сохранение URI-разрешения реального выбранного изображения.
