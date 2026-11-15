@@ -24,7 +24,7 @@ import org.junit.runner.RunWith
 class UpgradePersistenceTest {
     @get:Rule val compose = createEmptyComposeRule()
 
-    @Test fun verifyInPlaceUpgrade() = runBlocking {
+    @Test fun verifyInPlaceUpgrade(): Unit = runBlocking {
         val arguments = InstrumentationRegistry.getArguments()
         val phase = arguments.getString("phase")
         assumeTrue("Run explicitly with seed/verify on an isolated emulator", phase == "seed" || phase == "verify")

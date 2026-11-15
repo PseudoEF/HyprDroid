@@ -19,7 +19,9 @@ fixture() {
   cat "$report/$phase.txt"
   grep -q 'OK (1 test)' "$report/$phase.txt"
 }
-adb install "$RUNNER_TEMP/hyprdroid-distribution/HyprDroid-0.5.2-update-test.1-$CODE_A.apk"
+cp "$RUNNER_TEMP/hyprdroid-upgrade/a.json" "$report/build-a.json"
+cp "$RUNNER_TEMP/hyprdroid-distribution/HyprDroid-0.5.2-$CODE_B.json" "$report/build-b.json"
+adb install "$RUNNER_TEMP/hyprdroid-upgrade/a.apk"
 adb install "$RUNNER_TEMP/hyprdroid-upgrade/test.apk"
 fixture seed "$CODE_A" 0.5.2-update-test.1
 adb shell am force-stop "$package"
