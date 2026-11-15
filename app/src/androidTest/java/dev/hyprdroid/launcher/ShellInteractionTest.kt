@@ -31,6 +31,7 @@ class ShellInteractionTest {
 
     @Test fun homeDrawerEditingContextMenuAndLauncherExit() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
+        dismissBackgroundPixelLauncherAnr()
         val context = instrumentation.targetContext
         val apps = LauncherCatalog(context).load()
         assertTrue("Emulator must provide at least three launchable apps", apps.size >= 3)
@@ -107,6 +108,7 @@ class ShellInteractionTest {
 
             compose.onNodeWithContentDescription("Меню оболочки").performClick()
             compose.onNodeWithText("Другой лаунчер").performClick()
+            dismissBackgroundPixelLauncherAnr()
             val packages = listOf("com.android.settings", "com.android.permissioncontroller", "com.google.android.permissioncontroller")
             org.junit.Assert.assertTrue("Android HOME chooser must be visible", UiDevice.getInstance(instrumentation).wait(
                 Until.hasObject(By.pkg(Pattern.compile(packages.joinToString("|") { Pattern.quote(it) }))), 15_000))
@@ -116,6 +118,7 @@ class ShellInteractionTest {
 
     private fun screenshot(name: String) {
         compose.waitForIdle()
+        dismissBackgroundPixelLauncherAnr()
         // Semantics can settle before SurfaceFlinger presents the last icon/text frame.
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
         SystemClock.sleep(350)

@@ -28,6 +28,7 @@ class GestureWorkspaceTest {
 
     @Test fun blankGesturesOrderMoveAppearanceAndRestart() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
+        dismissBackgroundPixelLauncherAnr()
         val context = instrumentation.targetContext
         val apps = LauncherCatalog(context).load()
         assertTrue(apps.size >= 3)
@@ -111,6 +112,7 @@ class GestureWorkspaceTest {
             runBlocking { repo.setPinned(0, settingsApp.componentId, true) }
             awaitTag("workspace-app-${settingsApp.componentId}")
             compose.onNodeWithTag("workspace-app-${settingsApp.componentId}").performTouchInput { click() }
+            dismissBackgroundPixelLauncherAnr()
             assertTrue("Settings must open after a regular icon tap",
                 UiDevice.getInstance(instrumentation).wait(Until.hasObject(By.pkg("com.android.settings")), 15_000))
         } finally { scenario.close() }
@@ -119,6 +121,7 @@ class GestureWorkspaceTest {
     private fun awaitTag(tag: String) { compose.waitUntil(20_000) { compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() } }
     private fun screenshot(name: String) {
         compose.waitForIdle()
+        dismissBackgroundPixelLauncherAnr()
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
         SystemClock.sleep(350)
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
