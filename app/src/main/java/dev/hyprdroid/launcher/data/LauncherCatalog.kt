@@ -71,7 +71,7 @@ class LauncherCatalog(private val context: Context) {
                 SidebarEntry(item, LauncherApp(component, info.shortLabel?.toString() ?: info.id,
                     icon ?: context.packageManager.defaultActivityIcon.toBitmap(size, size)))
             }
-        } catch (_: SecurityException) { emptyList() }
+        } catch (_: RuntimeException) { emptyList() }
         return (activities + shortcuts).distinctBy { it.item.id }.sortedBy { it.app.label.lowercase(Locale.ROOT) }
     }
 
