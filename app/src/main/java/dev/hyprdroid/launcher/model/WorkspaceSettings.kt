@@ -8,7 +8,7 @@ const val WORKSPACE_COUNT = 3
 sealed interface WorkspaceItem {
     val id: String
     data class AppShortcut(val componentId: String, val shortcutId: String? = null) : WorkspaceItem {
-        override val id = if (shortcutId == null) "app:$componentId" else "shortcut:$componentId:$shortcutId"
+        override val id = if (shortcutId == null) "app:$componentId" else "shortcut:${componentId.substringBefore('/')}:$shortcutId"
     }
     data class WidgetPlaceholder(override val id: String, val title: String) : WorkspaceItem
     /** Round-trip future item types without rendering or executing their payload. */

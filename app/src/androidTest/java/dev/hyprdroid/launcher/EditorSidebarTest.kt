@@ -70,6 +70,7 @@ class EditorSidebarTest {
             compose.onNodeWithText("Редактировать", substring = false).performClick()
             compose.onNodeWithText("Добавить ярлык").performClick()
             for (app in apps.take(2)) compose.onNodeWithTag("sidebar-choice-app:${app.componentId}").performScrollTo().performClick()
+            compose.waitUntil(5_000) { runBlocking { shell.settings.first().sidebar.size == 2 } }
             compose.onNodeWithText("К панели").performClick()
             val second = "app:${apps[1].componentId}"
             compose.onNodeWithTag("sidebar-earlier-$second").performClick()
@@ -87,6 +88,7 @@ class EditorSidebarTest {
             captureShellScreen("v05-sidebar")
             compose.onNodeWithText("Редактировать", substring = false).performClick()
             for (app in apps.take(2)) compose.onNodeWithTag("sidebar-remove-app:${app.componentId}").performClick()
+            compose.waitUntil(5_000) { runBlocking { shell.settings.first().sidebar.isEmpty() } }
             compose.onNodeWithText("Панель пуста", substring = true).assertExists()
             compose.onNodeWithTag("sidebar-header").performTouchInput { swipe(center, center + Offset(250f, 0f)) }
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("sidebar").fetchSemanticsNodes().isEmpty() }
