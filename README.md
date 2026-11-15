@@ -28,6 +28,14 @@ HyprDroid — экспериментальная Android HOME-оболочка, 
 
 При первом запуске пространства и избранное пусты. Системный статус-бар временно показывается жестом от верхнего края; системная навигация остаётся доступной.
 
+## Интерфейс
+
+| Домашний экран | Все приложения | Редактор |
+| --- | --- | --- |
+| <img src="docs/images/mobile-shell-home.png" width="220" alt="Домашний экран v0.3"> | <img src="docs/images/mobile-shell-drawer.png" width="220" alt="App drawer v0.3"> | <img src="docs/images/mobile-shell-edit.png" width="220" alt="Редактор пространства v0.3"> |
+
+Снимки с эмулятора Android 15; показаны стандартные приложения и обои эмулятора.
+
 ## Установка APK и смена лаунчера
 
 1. Откройте [Android debug APK в GitHub Actions](https://github.com/PseudoEF/HyprDroid/actions/workflows/android.yml) и выберите успешный запуск нужной ветки/коммита.
