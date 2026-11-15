@@ -56,14 +56,23 @@ class GestureWorkspaceTest {
             compose.onNodeWithTag("workspace-canvas-0").performTouchInput { swipe(Offset(width * .7f, height * .85f), Offset(width * .7f, height * .3f)) }
             awaitTag("app-drawer")
             compose.onNodeWithTag("app-drawer").performTouchInput { swipeDown() }
+            compose.waitUntil(5_000) { compose.onAllNodesWithTag("app-drawer").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithTag("control-center").assertDoesNotExist()
-            compose.onNodeWithContentDescription("Закрыть приложения").performClick()
+            compose.onNodeWithContentDescription("Все приложения").performClick()
+            awaitTag("drawer-dismiss-header")
+            compose.onNodeWithTag("drawer-dismiss-header").performTouchInput { swipe(center, center + Offset(0f, 300f)) }
+            compose.waitUntil(5_000) { compose.onAllNodesWithTag("app-drawer").fetchSemanticsNodes().isEmpty() }
 
             compose.onNodeWithTag("workspace-canvas-0").performTouchInput { swipe(Offset(width * .7f, height * .3f), Offset(width * .7f, height * .8f)) }
             awaitTag("control-center")
             compose.onNodeWithText("Батарея", substring = true).assertExists()
             screenshot("v04-control-center")
-            compose.onNodeWithContentDescription("Закрыть Control Center").performClick()
+            compose.onNodeWithTag("control-center").performTouchInput { swipeUp() }
+            compose.waitUntil(5_000) { compose.onAllNodesWithTag("control-center").fetchSemanticsNodes().isEmpty() }
+            compose.onNodeWithTag("workspace-canvas-0").performTouchInput { swipe(Offset(width * .7f, height * .3f), Offset(width * .7f, height * .8f)) }
+            awaitTag("control-dismiss-header")
+            compose.onNodeWithTag("control-dismiss-header").performTouchInput { swipe(center, center - Offset(0f, height * .65f)) }
+            compose.waitUntil(5_000) { compose.onAllNodesWithTag("control-center").fetchSemanticsNodes().isEmpty() }
 
             compose.onNodeWithTag("workspace-canvas-0").performTouchInput { swipeLeft() }
             compose.waitUntil(10_000) { runBlocking { repo.settings.first().selectedWorkspace == 1 } }

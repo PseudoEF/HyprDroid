@@ -33,6 +33,7 @@ private data class ControlStatus(val now: Long = System.currentTimeMillis(), val
 fun ControlCenter(onClose: () -> Unit, onSettings: (String) -> Unit) {
     val context = LocalContext.current.applicationContext
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val scrollState = rememberScrollState()
     val status by produceState(ControlStatus(), lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (isActive) {
@@ -49,9 +50,11 @@ fun ControlCenter(onClose: () -> Unit, onSettings: (String) -> Unit) {
             }
         }
     }
-    Surface(color = Mocha.Base, contentColor = Mocha.Text, modifier = Modifier.fillMaxSize().blockHomeBehind().testTag("control-center")) {
-        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(20.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(Modifier.widthIn(max = 640.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Surface(color = Mocha.Base, contentColor = Mocha.Text, modifier = Modifier.fillMaxSize()
+        .panelDismissGestures(PanelDismissDirection.UP, { !scrollState.canScrollForward }, onClose).testTag("control-center")) {
+        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(20.dp).verticalScroll(scrollState), horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(Modifier.widthIn(max = 640.dp).fillMaxWidth()
+                .panelDismissGestures(PanelDismissDirection.UP, onDismiss = onClose, header = true).testTag("control-dismiss-header"), verticalAlignment = Alignment.CenterVertically) {
                 Text("Control Center", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                 IconButton(onClick = onClose) { Icon(Icons.Default.Close, "Закрыть Control Center") }
             }
