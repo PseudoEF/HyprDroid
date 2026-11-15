@@ -7,7 +7,7 @@ collect_artifacts() {
 }
 trap collect_artifacts EXIT
 # Keep seeded workspaces installed for the font-size and orientation previews.
-./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true --no-daemon --stacktrace
+./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.notClass=dev.hyprdroid.launcher.UpgradePersistenceTest --no-daemon --stacktrace
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell settings put system font_scale 1.6
 adb shell am force-stop dev.hyprdroid.launcher

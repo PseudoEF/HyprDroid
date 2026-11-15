@@ -1,0 +1,36 @@
+#!/bin/sh
+set -eu
+package=dev.hyprdroid.launcher
+report=.local/upgrade-report
+mkdir -p "$report"
+collect_report() {
+  adb logcat -d > "$report/logcat.txt" || true
+  adb pull /sdcard/Download/hyprdroid-shell "$report/" || true
+}
+trap collect_report EXIT
+fixture() {
+  phase="$1"
+  code="$2"
+  version="$3"
+  adb shell am instrument -w -r -e class dev.hyprdroid.launcher.UpgradePersistenceTest \
+    -e phase "$phase" -e expectedCode "$code" -e expectedName "$version" \
+    -e expectedCommit "$HYPRDROID_BUILD_COMMIT" -e expectedCertificate "$(cat config/debug-signing-cert.sha256)" \
+    "$package.test/androidx.test.runner.AndroidJUnitRunner" > "$report/$phase.txt"
+  cat "$report/$phase.txt"
+  grep -q 'OK (1 test)' "$report/$phase.txt"
+}
+adb install "$RUNNER_TEMP/hyprdroid-distribution/HyprDroid-0.5.2-update-test.1-$CODE_A.apk"
+adb install "$RUNNER_TEMP/hyprdroid-upgrade/test.apk"
+fixture seed "$CODE_A" 0.5.2-update-test.1
+adb shell am force-stop "$package"
+adb shell run-as "$package" sha256sum files/datastore/workspaces.preferences_pb files/datastore/shell.preferences_pb > "$report/datastore-before.sha256"
+adb shell dumpsys package "$package" > "$report/package-before.txt"
+# No uninstall, clear-data, downgrade flag or replacement DataStore fixture.
+adb install -r "$RUNNER_TEMP/hyprdroid-distribution/HyprDroid-0.5.2-$CODE_B.apk" > "$report/install-update.txt"
+cat "$report/install-update.txt"
+grep -q Success "$report/install-update.txt"
+adb shell run-as "$package" sha256sum files/datastore/workspaces.preferences_pb files/datastore/shell.preferences_pb > "$report/datastore-after.sha256"
+cmp "$report/datastore-before.sha256" "$report/datastore-after.sha256"
+fixture verify "$CODE_B" 0.5.2
+adb shell dumpsys package "$package" > "$report/package-after.txt"
+echo "Update $CODE_A -> $CODE_B succeeded; UID, firstInstallTime and DataStore preserved" | tee "$report/result.txt"

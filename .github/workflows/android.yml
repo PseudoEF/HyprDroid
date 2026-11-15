@@ -37,7 +37,6 @@ jobs:
     env:
       HYPRDROID_DISTRIBUTION: 'true'
       HYPRDROID_BUILD_COMMIT: ${{ github.sha }}
-      HYPRDROID_KEYSTORE_FILE: ${{ runner.temp }}/hyprdroid-signing.p12
       HYPRDROID_KEYSTORE_PASSWORD: ${{ secrets.HYPRDROID_KEYSTORE_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
@@ -98,4 +97,4 @@ jobs:
           retention-days: 14
       - name: Remove temporary private key
         if: always()
-        run: rm -f "$HYPRDROID_KEYSTORE_FILE"
+        run: rm -f "$RUNNER_TEMP/hyprdroid-signing.p12"
