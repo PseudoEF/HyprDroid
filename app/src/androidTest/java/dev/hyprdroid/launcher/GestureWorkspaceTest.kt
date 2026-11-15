@@ -68,7 +68,8 @@ class GestureWorkspaceTest {
             awaitTag("control-center")
             compose.onNodeWithText("Батарея", substring = true).assertExists()
             screenshot("v04-control-center")
-            compose.onNodeWithTag("control-center").performTouchInput { swipeUp() }
+            // Stay clear of the system-navigation edge excluded by shell gesture policy.
+            compose.onNodeWithTag("control-center").performTouchInput { swipe(Offset(width * .7f, height * .85f), Offset(width * .7f, height * .35f)) }
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("control-center").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithTag("workspace-canvas-0").performTouchInput { swipe(Offset(width * .7f, height * .3f), Offset(width * .7f, height * .8f)) }
             awaitTag("control-dismiss-header")
