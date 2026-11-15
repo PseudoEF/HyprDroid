@@ -1,6 +1,6 @@
 package dev.hyprdroid.launcher
 
-import android.graphics.Bitmap
+import android.os.ParcelFileDescriptor
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -10,7 +10,6 @@ import androidx.test.platform.app.InstrumentationRegistry
 import dev.hyprdroid.launcher.data.LauncherCatalog
 import dev.hyprdroid.launcher.data.ShellRepository
 import dev.hyprdroid.launcher.data.WorkspaceRepository
-import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -80,18 +79,20 @@ class ShellInteractionTest {
             compose.onNodeWithContentDescription("Меню оболочки").performClick()
             compose.onNodeWithText("Другой лаунчер").performClick()
             compose.waitUntil(10_000) {
-                instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString() == "com.android.settings"
+                instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString() in setOf(
+                    "com.android.settings", "com.android.permissioncontroller", "com.google.android.permissioncontroller",
+                )
             }
+            screenshot("home-settings")
         } finally { scenario.close() }
     }
 
     private fun screenshot(name: String) {
         compose.waitForIdle()
-        val directory = File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), "shell-previews")
-        directory.mkdirs()
-        File(directory, "$name.png").outputStream().use {
-            requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
-                .compress(Bitmap.CompressFormat.PNG, 100, it)
+        // Test-only shell capture survives AGP uninstalling the instrumented package.
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        for (command in listOf("mkdir -p /sdcard/Download/hyprdroid-shell", "screencap -p /sdcard/Download/hyprdroid-shell/$name.png")) {
+            ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand(command)).use { it.readBytes() }
         }
     }
 
