@@ -12,19 +12,19 @@ HyprDroid — экспериментальный Android-лаунчер с ра�
 - Запуск доступных приложений
 - CI workflow для debug APK
 
-**Важно:** проект пока не проверен реальной Gradle-сборкой. Dotfiles и настоящий тайлинг сторонних окон пока не реализованы.
+**Статус сборки:** исправлена настройка SDK в CI и добавлен Gradle Wrapper. Успешная сборка обновлённой версии пока не подтверждена; подробности проверки — в [docs/BUILD.md](docs/BUILD.md). Dotfiles пока не реализованы.
 
 ## GitHub Actions
-Создай репозиторий, загрузи файлы в корень, открой **Actions → Android debug APK → Run workflow**. После успешной сборки APK будет в **Artifacts**. Push в `main` также запускает сборку.
+После коммита и push изменений открой **Actions → Android debug APK**. Workflow запускается при push в `main`, pull request и вручную через **Run workflow**. После успешной сборки скачай **Artifacts → HyprDroid-debug-apk**, распакуй архив и установи `app-debug.apk`. Artifact хранится 14 дней. Это debug APK с отладочной подписью, не release-сборка.
 
 ## Локальная сборка
-Требуются JDK 17, Android SDK 35 и Gradle 8.9. В стартовом архиве нет Gradle Wrapper (нет `gradlew`), поэтому первый запуск:
+Требуются JDK 17 и Android SDK с пакетами `platform-tools`, `platforms;android-35`, `build-tools;34.0.0`. Укажи путь SDK через `ANDROID_HOME` или `sdk.dir` в локальном `local.properties` (не коммитить). Отдельная установка Gradle не нужна: Wrapper загрузит закреплённую версию 8.9 с проверкой SHA-256. При первом запуске нужен доступ к серверам Gradle, Google Maven и Maven Central.
 
 ```bash
-gradle :app:assembleDebug
+./gradlew :app:assembleDebug --no-daemon --stacktrace
 ```
 
-После установки Gradle можно добавить wrapper: `gradle wrapper --gradle-version 8.9` и закоммитить `gradlew`, `gradlew.bat`, `gradle/wrapper/*`. Android Studio также может открыть проект.
+В Windows используй `gradlew.bat :app:assembleDebug --no-daemon --stacktrace`. Результат: `app/build/outputs/apk/debug/app-debug.apk`. Android Studio также может открыть проект; выбери Gradle JDK 17. Компоненты Android SDK используются для сборки и не требуют root, Shizuku или ADB от пользователей лаунчера.
 
 ## Codex CLI
 
