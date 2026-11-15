@@ -1,0 +1,13 @@
+# Концепт будущего формата. Импорт пока не реализован.
+schema_version = 1
+[appearance]
+theme = "catppuccin-mocha"
+rounding_dp = 14
+inner_gap_dp = 8
+outer_gap_dp = 12
+[workspace]
+count = 3
+layout = "grid"
+[gestures]
+swipe_left = "workspace_next"
+swipe_right = "workspace_previous"
