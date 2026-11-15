@@ -58,6 +58,7 @@ class EditorSidebarTest {
             }
             val expected = listOf(apps[1], apps[2], apps[0]).map { "app:${it.componentId}" }
             compose.waitUntil(5_000) { runBlocking { repo.settings.first().workspaces[0].items.map { it.id } == expected } }
+            compose.waitForIdle()
             captureShellScreen("v05-editor")
             compose.onNodeWithContentDescription("Готово, завершить редактирование").performClick()
             scenario.recreate()
@@ -85,6 +86,7 @@ class EditorSidebarTest {
             compose.onNodeWithTag("sidebar-handle").performClick()
             awaitTag("sidebar")
             compose.onNodeWithTag("sidebar-item-$second").assertExists()
+            compose.waitForIdle()
             captureShellScreen("v05-sidebar")
             compose.onNodeWithText("Редактировать", substring = false).performClick()
             for (app in apps.take(2)) compose.onNodeWithTag("sidebar-remove-app:${app.componentId}").performClick()
