@@ -1,5 +1,7 @@
 name: Prepare encrypted signing key
 on:
+  pull_request:
+    paths: ['.github/workflows/signing-bootstrap.yml', 'scripts/prepare-signing.py']
   workflow_dispatch:
     inputs:
       public_key:
@@ -13,6 +15,7 @@ permissions:
   actions: read
 jobs:
   prepare:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
