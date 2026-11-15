@@ -21,12 +21,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.hyprdroid.launcher.model.WORKSPACE_COUNT
+import dev.hyprdroid.launcher.model.WorkspaceAppearance
+import dev.hyprdroid.launcher.model.WorkspaceItem
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -60,6 +63,9 @@ fun WorkspaceScreen(model: WorkspaceViewModel) {
                 }, systemWallpaper = model::useSystemWallpaper,
                 otherLauncher = { if (!openHomeSettings(context)) model.showMessage("Откройте настройки Android и выберите другой домашний экран.") },
                 retryApps = model::refreshApps, retryWorkspace = model::retryStorage, retryShell = model::retryShellStorage,
+                reorder = model::reorder, moveItem = model::moveItem, removeItem = model::removeItem,
+                appearance = model::setAppearance,
+                systemSettings = { action -> if (!openSystemSettings(context, action)) model.showMessage("Системные настройки недоступны.") },
             ))
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).safeDrawingPadding().imePadding().padding(12.dp))
         }
@@ -71,13 +77,18 @@ data class ShellActions(
     val pin: (Int, String, Boolean) -> Unit,
     val favorite: (String, Boolean) -> Unit,
     val selectWorkspace: (Int) -> Unit,
-    val gridLayout: (Boolean) -> Unit,
+    val gridLayout: (Int, Boolean) -> Unit,
     val chooseWallpaper: () -> Unit,
     val systemWallpaper: () -> Unit,
     val otherLauncher: () -> Unit,
     val retryApps: () -> Unit,
     val retryWorkspace: () -> Unit,
     val retryShell: () -> Unit,
+    val reorder: (Int, String, Int) -> Unit,
+    val moveItem: (Int, Int, String) -> Unit,
+    val removeItem: (Int, String) -> Unit,
+    val appearance: (Int, WorkspaceAppearance) -> Unit,
+    val systemSettings: (String) -> Unit,
 )
 
 @Composable
@@ -99,6 +110,9 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     val haptics = LocalHapticFeedback.current
     var editing by rememberSaveable { mutableStateOf(false) }
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
+    var controlOpen by rememberSaveable { mutableStateOf(false) }
+    var appearanceWorkspace by rememberSaveable { mutableStateOf<Int?>(null) }
+    var orderWorkspace by rememberSaveable { mutableStateOf<Int?>(null) }
     var selectingWorkspace by rememberSaveable { mutableStateOf<Int?>(null) }
     val appsById = remember(state.apps) { state.apps.associateBy { it.componentId } }
     val favorites = state.shell?.favorites.orEmpty()
@@ -110,30 +124,55 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
             editing = true
         }
     }
-    val openDrawer = { selectingWorkspace = null; drawerOpen = true }
+    val openDrawer = { controlOpen = false; selectingWorkspace = null; drawerOpen = true }
+    val openControl = { selectingWorkspace = null; drawerOpen = false; controlOpen = true }
     val launchApp: (String) -> Unit = { component -> drawerOpen = false; actions.launch(component) }
     val closeDrawer = { drawerOpen = false; selectingWorkspace = null }
+    val itemMenu: (Int, WorkspaceItem) -> List<AppMenuAction> = { workspace, item ->
+        val items = settings.workspaces[workspace].items
+        val index = items.indexOfFirst { it.id == item.id }
+        buildList {
+            if (index >= 0) {
+                add(AppMenuAction("Раньше", workspaceReady && index > 0) { actions.reorder(workspace, item.id, -1) })
+                add(AppMenuAction("Позже", workspaceReady && index < items.lastIndex) { actions.reorder(workspace, item.id, 1) })
+                repeat(WORKSPACE_COUNT) { target ->
+                    if (target != workspace) add(AppMenuAction("Переместить в пространство 0${target + 1}", workspaceReady) { actions.moveItem(workspace, target, item.id) })
+                }
+            }
+        }
+    }
     val appMenu: (String) -> List<AppMenuAction> = { component ->
         val workspace = selectingWorkspace ?: pager.currentPage
         val pinned = component in settings.workspaces[workspace].pinnedApps
         listOf(
             AppMenuAction(if (pinned) "Убрать из пространства" else "Закрепить в пространстве 0${workspace + 1}", workspaceReady) { actions.pin(workspace, component, !pinned) },
             AppMenuAction(if (component in favorites) "Убрать из dock" else "Добавить в dock", shellReady) { actions.favorite(component, component !in favorites) },
-        )
+        ) + itemMenu(workspace, WorkspaceItem.App(component))
     }
     LaunchedEffect(pager, workspaceReady) {
         if (workspaceReady) snapshotFlow { pager.settledPage }.distinctUntilChanged().collect(actions.selectWorkspace)
     }
-    BackHandler(enabled = drawerOpen || editing) {
-        if (drawerOpen) closeDrawer() else editing = false
+    val overlayOpen = drawerOpen || controlOpen || appearanceWorkspace != null || orderWorkspace != null
+    BackHandler(enabled = overlayOpen || editing) {
+        when {
+            drawerOpen -> closeDrawer()
+            controlOpen -> controlOpen = false
+            appearanceWorkspace != null -> appearanceWorkspace = null
+            orderWorkspace != null -> orderWorkspace = null
+            else -> editing = false
+        }
     }
     Column(
-        Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 12.dp, vertical = 8.dp),
+        Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 12.dp, vertical = 8.dp)
+            .then(if (overlayOpen) Modifier.clearAndSetSemantics {} else Modifier),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         val panelMenu = buildList {
             add(AppMenuAction("Все приложения", onClick = openDrawer))
+            add(AppMenuAction("Control Center", onClick = openControl))
             add(AppMenuAction("Редактировать пространство", workspaceReady, enterEdit))
+            add(AppMenuAction("Вид пространства", workspaceReady) { appearanceWorkspace = pager.currentPage })
+            add(AppMenuAction("Порядок элементов", workspaceReady) { orderWorkspace = pager.currentPage })
             add(AppMenuAction("Выбрать изображение…", shellReady, actions.chooseWallpaper))
             add(AppMenuAction("Системные обои", shellReady, actions.systemWallpaper))
             add(AppMenuAction("Другой лаунчер", onClick = actions.otherLauncher))
@@ -143,19 +182,23 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
         }
         Waybar(pager.currentPage, { index -> scope.launch { pager.animateScrollToPage(index) }; Unit }, panelMenu, Modifier.widthIn(max = 760.dp).fillMaxWidth())
         Spacer(Modifier.height(12.dp))
-        HorizontalPager(state = pager, modifier = Modifier.weight(1f).widthIn(max = 960.dp).fillMaxWidth(), userScrollEnabled = !drawerOpen) { page ->
+        HorizontalPager(state = pager, modifier = Modifier.weight(1f).widthIn(max = 960.dp).fillMaxWidth(), userScrollEnabled = !overlayOpen) { page ->
             WorkspaceCanvas(
-                settings.workspaces[page], appsById, settings.gridLayout, editing && workspaceReady,
-                onEdit = enterEdit, onLaunch = launchApp,
-                onRemove = { if (workspaceReady) actions.pin(page, it, false) }, menu = appMenu,
+                settings.workspaces[page], appsById, editing && workspaceReady,
+                gesturesEnabled = !overlayOpen, onEdit = enterEdit, onSwipeUp = openDrawer, onSwipeDown = openControl,
+                onLaunch = launchApp,
+                onRemove = { if (workspaceReady) actions.removeItem(page, it) },
+                menu = { item -> if (item is WorkspaceItem.App) appMenu(item.componentId) else
+                    listOf(AppMenuAction("Убрать элемент", workspaceReady) { actions.removeItem(page, item.id) }) + itemMenu(page, item) },
                 modifier = Modifier.fillMaxSize(),
             )
         }
         if (editing && workspaceReady) {
             Spacer(Modifier.height(8.dp))
-            EditToolbar(pager.currentPage, settings.gridLayout,
+            EditToolbar(pager.currentPage, settings.workspaces[pager.currentPage].appearance.gridLayout,
                 onAdd = { selectingWorkspace = pager.currentPage; drawerOpen = true },
-                onLayout = { actions.gridLayout(!settings.gridLayout) }, onDone = { editing = false },
+                onLayout = { actions.gridLayout(pager.currentPage, !settings.workspaces[pager.currentPage].appearance.gridLayout) }, onDone = { editing = false },
+                onOrder = { orderWorkspace = pager.currentPage }, onAppearance = { appearanceWorkspace = pager.currentPage },
                 modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth())
         }
         Spacer(Modifier.height(12.dp))
@@ -165,5 +208,16 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
         AppDrawer(state, selectingWorkspace, closeDrawer, launchApp,
             onPin = { component, enabled -> selectingWorkspace?.let { actions.pin(it, component, enabled) } },
             menu = appMenu, onRetry = actions.retryApps)
+    }
+    if (controlOpen) ControlCenter(onClose = { controlOpen = false }, onSettings = actions.systemSettings)
+    appearanceWorkspace?.let { id ->
+        val workspace = settings.workspaces[id]
+        WorkspaceAppearanceScreen(workspace, workspace.pinnedApps.firstOrNull()?.let { appsById[it] },
+            onApply = { if (workspaceReady) actions.appearance(id, it); appearanceWorkspace = null },
+            onClose = { appearanceWorkspace = null })
+    }
+    orderWorkspace?.let { id ->
+        WorkspaceOrderScreen(settings.workspaces[id], appsById,
+            onReorder = { item, delta -> if (workspaceReady) actions.reorder(id, item, delta) }, onClose = { orderWorkspace = null })
     }
 }

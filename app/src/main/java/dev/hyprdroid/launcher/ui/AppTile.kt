@@ -34,6 +34,7 @@ fun AppTile(
     app: LauncherApp?, component: String, onClick: () -> Unit, menu: List<AppMenuAction>,
     modifier: Modifier = Modifier, list: Boolean = false, compact: Boolean = false,
     selected: Boolean = false, onRemove: (() -> Unit)? = null,
+    iconSizeDp: Int = 48,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val label = app?.label ?: component.substringBefore('/')
@@ -46,7 +47,7 @@ fun AppTile(
         if (list) {
             Surface(color = Mocha.Mantle.copy(alpha = .86f), shape = RoundedCornerShape(18.dp), border = BorderStroke(1.dp, Mocha.Outline.copy(alpha = .5f))) {
                 Row(clickModifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    AppImage(app, Modifier.size(44.dp))
+                    AppImage(app, Modifier.size(iconSizeDp.dp))
                     Spacer(Modifier.width(14.dp))
                     Text(label, modifier = Modifier.weight(1f).padding(end = if (onRemove != null) 28.dp else 0.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
@@ -62,8 +63,8 @@ fun AppTile(
                     color = Mocha.Mantle.copy(alpha = if (compact) .1f else .8f),
                     border = if (compact) null else BorderStroke(1.dp, if (selected) Mocha.Mauve else Mocha.Outline.copy(alpha = .45f)),
                 ) {
-                    Box(Modifier.size(if (compact) 44.dp else 64.dp), contentAlignment = Alignment.Center) {
-                        AppImage(app, Modifier.size(if (compact) 38.dp else 48.dp))
+                    Box(Modifier.size(if (compact) 44.dp else (iconSizeDp + 16).dp), contentAlignment = Alignment.Center) {
+                        AppImage(app, Modifier.size(if (compact) 38.dp else iconSizeDp.dp))
                     }
                 }
                 if (!compact) {

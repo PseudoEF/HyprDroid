@@ -118,7 +118,7 @@ fun DrawerGlyph() {
 }
 
 @Composable
-fun EditToolbar(workspace: Int, grid: Boolean, onAdd: () -> Unit, onLayout: () -> Unit, onDone: () -> Unit, modifier: Modifier = Modifier) {
+fun EditToolbar(workspace: Int, grid: Boolean, onAdd: () -> Unit, onLayout: () -> Unit, onDone: () -> Unit, onOrder: () -> Unit, onAppearance: () -> Unit, modifier: Modifier = Modifier) {
     ShellSurface(modifier, highlighted = true) {
         Column(Modifier.padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 4.dp)) {
             Text("ПРОСТРАНСТВО 0${workspace + 1}", style = MaterialTheme.typography.labelSmall, color = Mocha.Lavender)
@@ -126,6 +126,8 @@ fun EditToolbar(workspace: Int, grid: Boolean, onAdd: () -> Unit, onLayout: () -
                 Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = onAdd) { Icon(Icons.Default.Add, null, Modifier.size(18.dp)); Text("Приложения") }
                     TextButton(onClick = onLayout) { Text(if (grid) "Раскладка: сетка" else "Раскладка: список") }
+                    TextButton(onClick = onOrder) { Text("Порядок") }
+                    TextButton(onClick = onAppearance) { Text("Вид") }
                 }
                 IconButton(onClick = onDone) { Icon(Icons.Default.Check, "Готово, завершить редактирование", tint = Mocha.Green) }
             }

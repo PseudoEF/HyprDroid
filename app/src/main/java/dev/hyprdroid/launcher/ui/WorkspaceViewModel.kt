@@ -12,6 +12,8 @@ import dev.hyprdroid.launcher.data.ShellRepository
 import dev.hyprdroid.launcher.data.WorkspaceRepository
 import dev.hyprdroid.launcher.model.ShellSettings
 import dev.hyprdroid.launcher.model.WorkspaceSettings
+import dev.hyprdroid.launcher.model.WorkspaceAppearance
+import dev.hyprdroid.launcher.model.WorkspaceMoveConflictException
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -122,7 +124,11 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
         repository.setPinned(workspace, component, pinned)
     }
     fun selectWorkspace(id: Int) = save { repository.selectWorkspace(id) }
-    fun setGridLayout(enabled: Boolean) = save { repository.setGridLayout(enabled) }
+    fun setGridLayout(workspace: Int, enabled: Boolean) = save { repository.setGridLayout(workspace, enabled) }
+    fun setAppearance(workspace: Int, appearance: WorkspaceAppearance) = save { repository.setAppearance(workspace, appearance) }
+    fun reorder(workspace: Int, id: String, delta: Int) = save { repository.reorder(workspace, id, delta) }
+    fun moveItem(from: Int, to: Int, id: String) = save { repository.moveItem(from, to, id) }
+    fun removeItem(workspace: Int, id: String) = save { repository.removeItem(workspace, id) }
     fun setFavorite(component: String, enabled: Boolean) = save { shellRepository.setFavorite(component, enabled) }
 
     fun chooseWallpaper(uri: Uri) {
@@ -170,6 +176,8 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
                 action()
             } catch (_: DockFullException) {
                 showMessage("В dock помещаются четыре избранных приложения. Сначала уберите одно из них.")
+            } catch (_: WorkspaceMoveConflictException) {
+                showMessage("В целевом пространстве есть другой элемент с тем же ID. Перенос отменён; данные сохранены.")
             } catch (_: IOException) {
                 showMessage("Изменения не сохранены. Проверьте свободное место и повторите попытку.")
             }

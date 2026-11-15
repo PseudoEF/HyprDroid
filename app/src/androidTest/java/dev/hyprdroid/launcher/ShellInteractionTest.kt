@@ -13,6 +13,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import dev.hyprdroid.launcher.data.LauncherCatalog
 import dev.hyprdroid.launcher.data.ShellRepository
 import dev.hyprdroid.launcher.data.WorkspaceRepository
+import dev.hyprdroid.launcher.model.WorkspaceAppearance
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -33,6 +35,10 @@ class ShellInteractionTest {
         val third = apps[2].componentId
         runBlocking {
             val workspace = WorkspaceRepository(context)
+            workspace.settings.first().workspaces.forEach { existing ->
+                existing.items.forEach { workspace.removeItem(existing.id, it.id) }
+                workspace.setAppearance(existing.id, WorkspaceAppearance())
+            }
             workspace.selectWorkspace(0)
             workspace.setGridLayout(true)
             workspace.setPinned(0, first, true)

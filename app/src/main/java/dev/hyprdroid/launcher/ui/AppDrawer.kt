@@ -33,7 +33,7 @@ fun AppDrawer(
         state.apps.filter { it.label.contains(search, ignoreCase = true) || it.componentId.contains(search, ignoreCase = true) }
     }
     val pinned = selectingWorkspace?.let { state.settings?.workspaces?.get(it)?.pinnedApps }.orEmpty()
-    Surface(color = Mocha.Base, contentColor = Mocha.Text, modifier = Modifier.fillMaxSize().testTag("app-drawer")) {
+    Surface(color = Mocha.Base, contentColor = Mocha.Text, modifier = Modifier.fillMaxSize().blockHomeBehind().testTag("app-drawer")) {
         Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Row(Modifier.widthIn(max = 960.dp).fillMaxWidth().padding(top = 8.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(if (selectingWorkspace == null) "Приложения" else "Закрепить · 0${selectingWorkspace + 1}", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
