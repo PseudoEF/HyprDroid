@@ -21,6 +21,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -39,35 +40,39 @@ import java.util.Date
 fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>, modifier: Modifier = Modifier) {
     var menuOpen by remember { mutableStateOf(false) }
     ShellSurface(modifier) {
-      BoxWithConstraints {
-        val largeText = LocalDensity.current.fontScale > 1.35f && maxWidth < 420.dp
-        Column {
-        Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            repeat(WORKSPACE_COUNT) { index ->
-                Box(
-                    Modifier.size(48.dp).selectable(selected = current == index, role = Role.Tab, onClick = { onSelect(index) })
-                        .semantics { contentDescription = "Рабочее пространство ${index + 1}" },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Box(Modifier.size(26.dp).background(if (current == index) Mocha.Mauve else Mocha.Surface, RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
-                        Text("${index + 1}", color = if (current == index) Mocha.Base else Mocha.Subtext, style = MaterialTheme.typography.labelLarge)
+        BoxWithConstraints {
+            val density = LocalDensity.current
+            val largeText = density.fontScale > 1.35f && maxWidth < 420.dp
+            val badgeSize = maxOf(26.dp, with(density) { MaterialTheme.typography.labelLarge.lineHeight.toDp() } + 4.dp)
+            val targetSize = maxOf(48.dp, badgeSize + 8.dp)
+            Column {
+                Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
+                        repeat(WORKSPACE_COUNT) { index ->
+                            Box(
+                                Modifier.size(targetSize).selectable(selected = current == index, role = Role.Tab, onClick = { onSelect(index) })
+                                    .semantics { contentDescription = "Рабочее пространство ${index + 1}" },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Box(Modifier.size(badgeSize).background(if (current == index) Mocha.Mauve else Mocha.Surface, RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
+                                    Text("${index + 1}", color = if (current == index) Mocha.Base else Mocha.Subtext, style = MaterialTheme.typography.labelLarge)
+                                }
+                            }
+                        }
+                    }
+                    if (!largeText) ShellClock()
+                    Box {
+                        IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "Меню оболочки") }
+                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            menuItems.forEach { item ->
+                                DropdownMenuItem(text = { Text(item.label) }, enabled = item.enabled, onClick = { menuOpen = false; item.onClick() })
+                            }
+                        }
                     }
                 }
-            }
-            Spacer(Modifier.weight(1f))
-            if (!largeText) ShellClock()
-            Box {
-                IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "Меню оболочки") }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    menuItems.forEach { item ->
-                        DropdownMenuItem(text = { Text(item.label) }, enabled = item.enabled, onClick = { menuOpen = false; item.onClick() })
-                    }
-                }
+                if (largeText) Box(Modifier.align(Alignment.End).padding(end = 16.dp, bottom = 8.dp)) { ShellClock() }
             }
         }
-        if (largeText) Box(Modifier.align(Alignment.End).padding(end = 16.dp, bottom = 8.dp)) { ShellClock() }
-        }
-      }
     }
 }
 
@@ -95,7 +100,7 @@ fun FavoriteDock(
     ShellSurface(modifier.widthIn(max = 440.dp)) {
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
             components.forEach { component ->
-                AppTile(apps[component], component, onClick = { onLaunch(component) }, menu = menu(component), compact = true, modifier = Modifier.width(52.dp))
+                AppTile(apps[component], component, onClick = { onLaunch(component) }, menu = menu(component), compact = true, modifier = Modifier.width(52.dp).testTag("dock-app-$component"))
             }
             IconButton(onClick = onDrawer, modifier = Modifier.size(52.dp)) { DrawerGlyph() }
         }

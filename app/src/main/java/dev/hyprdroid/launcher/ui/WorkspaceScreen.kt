@@ -54,7 +54,10 @@ fun WorkspaceScreen(model: WorkspaceViewModel) {
             ShellHome(state, ShellActions(
                 launch = model::launch, pin = model::setPinned, favorite = model::setFavorite,
                 selectWorkspace = model::selectWorkspace, gridLayout = model::setGridLayout,
-                chooseWallpaper = { photoPicker.launch(arrayOf("image/*")) }, systemWallpaper = model::useSystemWallpaper,
+                chooseWallpaper = {
+                    try { photoPicker.launch(arrayOf("image/*")) }
+                    catch (_: RuntimeException) { model.showMessage("Системный выбор изображений недоступен.") }
+                }, systemWallpaper = model::useSystemWallpaper,
                 otherLauncher = { if (!openHomeSettings(context)) model.showMessage("Откройте настройки Android и выберите другой домашний экран.") },
                 retryApps = model::refreshApps, retryWorkspace = model::retryStorage, retryShell = model::retryShellStorage,
             ))

@@ -3,9 +3,11 @@ package dev.hyprdroid.launcher.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -30,7 +32,9 @@ fun ShellTheme(content: @Composable () -> Unit) {
         background = Mocha.Base, surface = Mocha.Mantle, surfaceVariant = Mocha.Surface,
         onBackground = Mocha.Text, onSurface = Mocha.Text, onSurfaceVariant = Mocha.Subtext,
         outline = Mocha.Outline, error = Mocha.Red,
-    ), content = content)
+    )) {
+        CompositionLocalProvider(LocalContentColor provides Mocha.Text, content = content)
+    }
 }
 
 @Composable

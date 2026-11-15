@@ -1,6 +1,7 @@
 package dev.hyprdroid.launcher
 
 import android.os.ParcelFileDescriptor
+import android.os.SystemClock
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -50,6 +51,7 @@ class ShellInteractionTest {
             compose.onNodeWithTag("drawer-app-$third").assertExists()
             screenshot("drawer-search")
             compose.onNodeWithContentDescription("Очистить поиск").performClick()
+            compose.onNodeWithTag("app-search").performImeAction()
             screenshot("drawer")
             compose.onNodeWithContentDescription("Закрыть приложения").performClick()
 
@@ -67,6 +69,14 @@ class ShellInteractionTest {
             compose.onNodeWithTag("workspace-app-$first").performTouchInput { longClick() }
             compose.onNodeWithText("Убрать из пространства").performClick()
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("workspace-app-$first").fetchSemanticsNodes().isEmpty() }
+
+            compose.onNodeWithTag("workspace-app-$third").performTouchInput { longClick() }
+            compose.onNodeWithText("Добавить в dock").performClick()
+            compose.waitUntil(5_000) { compose.onAllNodesWithTag("dock-app-$third").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("dock-app-$third").performTouchInput { longClick() }
+            compose.onNodeWithText("Убрать из dock").performClick()
+            compose.waitUntil(5_000) { compose.onAllNodesWithTag("dock-app-$third").fetchSemanticsNodes().isEmpty() }
+            compose.onNodeWithTag("workspace-app-$third").assertExists()
 
             compose.onNodeWithContentDescription("Рабочее пространство 2").performClick()
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("workspace-canvas-1").fetchSemanticsNodes().isNotEmpty() }
@@ -89,6 +99,9 @@ class ShellInteractionTest {
 
     private fun screenshot(name: String) {
         compose.waitForIdle()
+        // Semantics can settle before SurfaceFlinger presents the last icon/text frame.
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        SystemClock.sleep(350)
         // Test-only shell capture survives AGP uninstalling the instrumented package.
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         for (command in listOf("mkdir -p /sdcard/Download/hyprdroid-shell", "screencap -p /sdcard/Download/hyprdroid-shell/$name.png")) {
