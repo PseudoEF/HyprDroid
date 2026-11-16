@@ -41,6 +41,8 @@ import dev.hyprdroid.launcher.data.ShellRepository
 import dev.hyprdroid.launcher.widgets.PanelWidgetHost
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 // Typed chrome keys cannot collide with persisted shortcut IDs.
 private enum class SidebarChrome { STATUS, TITLE, SEARCH, EMPTY }
@@ -84,8 +86,12 @@ fun ModularSidebar(
         scope.launch {
             savingModules = true
             try {
-                repository.setPanel(side, value, editorBase)
-                PanelWidgetHost.get(context).cleanup(repository)
+                // Saving overlay settings rebuilds its window and cancels this composition scope.
+                // Complete the committed edit and resource cleanup even when that window detaches.
+                withContext(NonCancellable) {
+                    repository.setPanel(side, value, editorBase)
+                    PanelWidgetHost.get(context).cleanup(repository)
+                }
                 moduleEditing = false; editorError = null
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { editorError = "Не удалось сохранить. Черновик оставлен; повторите попытку." }
