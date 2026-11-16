@@ -9,6 +9,7 @@
 - Панели v2 с чтением v1, сохранением незавершённой привязки и восстановлением ID между запусками. Workspace/shell, подпись и applicationId сохранены.
 - Жизненный цикл видимых host views, обновления RemoteViews, заглушки для недоступных поставщиков/привязок. Home и Global Overlay используют тот же компонент с ограничениями Android.
 - Нет root, AccessibilityService, скрытых API, полноценной панели уведомлений или Quick Settings.
+- Подтверждены [17 UI-тестов и две фазы восстановления привязки после завершения процесса/установки поверх](https://github.com/PseudoEF/HyprDroid/actions/runs/43931890499), [подписанный APK 10045 и обновление с 10039](https://github.com/PseudoEF/HyprDroid/actions/runs/43926465707) с сохранением DataStore. Проверки выполнены на эмуляторе Android 15; сторонние виджеты на телефоне требуют ручной проверки.
 
 ### Universal Panels v0.6.2
 
