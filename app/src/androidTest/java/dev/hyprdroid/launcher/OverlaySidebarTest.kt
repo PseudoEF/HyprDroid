@@ -33,6 +33,10 @@ class OverlaySidebarTest {
     @Test fun permissionGatesServiceAndRightZoneOpensOverSettingsWithBackAndStop() {
         dismissBackgroundPixelLauncherAnr()
         val repository = ShellRepository(context)
+        val app = LauncherCatalog(context).load().first { it.componentId.substringBefore('/') !in setOf(context.packageName, "com.android.settings") }
+        val launchItem = WorkspaceItem.AppShortcut(app.componentId)
+        val alreadyPinned = runBlocking { repository.settings.first().sidebar.any { it.id == launchItem.id } }
+        runBlocking { repository.setSidebarItem(launchItem, true) }
         runBlocking { repository.setOverlay(OverlaySettings()) }
         permission("deny")
         val scenario = ActivityScenario.launch(MainActivity::class.java)
@@ -64,6 +68,13 @@ class OverlaySidebarTest {
             assertTrue(device.wait(Until.hasObject(By.desc("Открыть глобальную Sidebar")), 5_000))
             assertEquals(before, runBlocking { repository.settings.first().sidebar })
             device.findObject(By.desc("Открыть глобальную Sidebar")).click()
+            val tile = device.wait(Until.findObject(By.text(app.label)), 8_000)
+            assertNotNull("The existing launcher catalogue must provide an icon and label", tile)
+            tile!!.click()
+            waitFor { device.currentPackageName == app.componentId.substringBefore('/') }
+            context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            assertTrue(device.wait(Until.hasObject(By.desc("Открыть глобальную Sidebar")), 8_000))
+            device.findObject(By.desc("Открыть глобальную Sidebar")).click()
             val stop = device.wait(Until.findObject(By.text("Отключить overlay")), 5_000)
             assertNotNull(stop)
             stop!!.click()
@@ -82,6 +93,7 @@ class OverlaySidebarTest {
             assertFalse(device.hasObject(By.desc("Открыть глобальную Sidebar")))
         } finally {
             runBlocking { repository.setOverlay(OverlaySettings()) }
+            if (!alreadyPinned) runBlocking { repository.removeSidebarItem(launchItem.id) }
             scenario.onActivity { OverlaySession.stop(it) }
             scenario.close()
             permission("default")
