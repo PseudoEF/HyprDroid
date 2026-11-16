@@ -105,7 +105,7 @@ class ShellInteractionTest {
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("workspace-canvas-1").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithTag("workspace-app-$third").assertExists()
             compose.onNodeWithContentDescription("Рабочее пространство 1").performClick()
-            compose.onNodeWithTag("workspace-canvas-0").performTouchInput { swipeLeft() }
+            compose.onNodeWithTag("workspace-canvas-0").performTouchInput { swipe(Offset(width * .75f, height * .5f), Offset(width * .2f, height * .5f), 350) }
             compose.onNodeWithTag("workspace-canvas-1").assertExists()
             compose.onNodeWithContentDescription("Рабочее пространство 1").performClick()
 

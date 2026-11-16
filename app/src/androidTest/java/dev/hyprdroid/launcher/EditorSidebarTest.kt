@@ -99,7 +99,7 @@ class EditorSidebarTest {
             compose.onNodeWithTag("sidebar-header").performTouchInput { swipe(center, center + Offset(250f, 0f)) }
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("sidebar").fetchSemanticsNodes().isEmpty() }
             // Horizontal paging still works outside editor drags and the handle.
-            compose.onNodeWithTag("workspace-canvas-0").performTouchInput { swipeLeft() }
+            compose.onNodeWithTag("workspace-canvas-0").performTouchInput { swipe(Offset(width * .75f, height * .5f), Offset(width * .2f, height * .5f), 350) }
             compose.waitUntil(5_000) { runBlocking { repo.settings.first().selectedWorkspace == 1 } }
         } finally { scenario.close() }
     }

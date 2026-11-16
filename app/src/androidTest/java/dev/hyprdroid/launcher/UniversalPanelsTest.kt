@@ -54,6 +54,12 @@ class UniversalPanelsTest {
                 val scenario = ActivityScenario.launch(MainActivity::class.java)
                 try {
                     await("home-marker-LEFT")
+                    compose.waitUntil(5_000) {
+                        var focused = false
+                        scenario.onActivity { focused = it.hasWindowFocus() }
+                        focused
+                    }
+                    device.waitForIdle()
                     edge(PanelSide.LEFT)
                     await("left-panel")
                     compose.onNodeWithTag("panel-module-CLOCK").assertExists()
@@ -63,6 +69,7 @@ class UniversalPanelsTest {
                     captureShellScreen("universal-left-${mode.name.lowercase()}")
                     device.pressBack()
                     gone("left-panel")
+                    device.waitForIdle()
                     edge(PanelSide.RIGHT)
                     await("sidebar")
                     compose.onNodeWithTag("sidebar-quick-launch").assertExists()
