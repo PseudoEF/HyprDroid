@@ -142,7 +142,8 @@ class UniversalPanelsTest {
             device.pressBack()
             assertTrue(device.wait(Until.hasObject(By.desc("Открыть глобальную левую панель")), 5_000))
             runBlocking {
-                repository.setPanel(PanelSide.LEFT, PanelsSettings().left.copy(scope = PanelScope.EVERYWHERE, visibility = MarkerVisibility.HIDDEN))
+                repository.setPanel(PanelSide.LEFT, PanelsSettings().left.copy(scope = PanelScope.EVERYWHERE, visibility = MarkerVisibility.HIDDEN,
+                    modules = listOf("BATTERY", "DATE", "CLOCK")))
                 repository.setPanel(PanelSide.RIGHT, PanelsSettings().right.copy(scope = PanelScope.EVERYWHERE))
             }
             assertTrue(device.wait(Until.hasObject(By.desc("Открыть глобальную Sidebar")), 5_000))
@@ -150,11 +151,46 @@ class UniversalPanelsTest {
             assertNotNull(hidden)
             hidden.click() // Hidden marker retains the explicitly enabled touch zone.
             assertTrue(device.wait(Until.hasObject(By.desc("Закрыть левую панель")), 5_000))
+            val battery = device.wait(Until.findObject(By.text("Батарея")), 5_000)
+            val date = device.findObject(By.text("Дата"))
+            val clock = device.findObject(By.text("Часы"))
+            assertTrue(battery!!.visibleBounds.top < date.visibleBounds.top)
+            assertTrue(date.visibleBounds.top < clock.visibleBounds.top)
             device.pressBack()
             val right = device.wait(Until.findObject(By.desc("Открыть глобальную Sidebar")), 5_000)
             edge(PanelSide.RIGHT, right!!.visibleBounds.centerY())
             assertTrue(device.wait(Until.hasObject(By.text("Quick Launch")), 5_000))
             device.pressBack()
         } finally { reset(); scenario.close(); permission("default") }
+    }
+
+    @Test fun edgeTouchCancellationVerticalMovementAndTapFallbackWorkOnBothSides() {
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
+        try {
+            scenario.onActivity { activity ->
+                PanelSide.entries.forEach { side ->
+                    var opened = 0
+                    val target = OverlayEdgeView(activity, side, PanelSettings()) { opened++ }
+                    val start = 200f
+                    val distance = 100 * activity.resources.displayMetrics.density * if (side == PanelSide.LEFT) 1 else -1
+                    fun event(action: Int, x: Float, y: Float) {
+                        val time = android.os.SystemClock.uptimeMillis()
+                        val touch = android.view.MotionEvent.obtain(time, time, action, x, y, 0)
+                        try { target.onTouchEvent(touch) } finally { touch.recycle() }
+                    }
+                    event(android.view.MotionEvent.ACTION_DOWN, start, start)
+                    event(android.view.MotionEvent.ACTION_MOVE, start + distance, start)
+                    event(android.view.MotionEvent.ACTION_CANCEL, start + distance, start)
+                    assertEquals(0, opened)
+                    event(android.view.MotionEvent.ACTION_DOWN, start, start)
+                    event(android.view.MotionEvent.ACTION_MOVE, start, start + kotlin.math.abs(distance))
+                    event(android.view.MotionEvent.ACTION_UP, start, start + kotlin.math.abs(distance))
+                    assertEquals(0, opened)
+                    event(android.view.MotionEvent.ACTION_DOWN, start, start)
+                    event(android.view.MotionEvent.ACTION_UP, start, start)
+                    assertEquals(1, opened)
+                }
+            }
+        } finally { scenario.close() }
     }
 }
