@@ -42,13 +42,16 @@ class AndroidWidgetsTest {
         await("overlay-settings")
     }
     private fun choose(configured: Boolean, approveBind: Boolean = true) {
+        device.waitForIdle()
         val count = state().panels.left.widgets.size
         compose.onNodeWithTag("add-android-widget").performScrollTo().performClick()
         await("widget-picker")
         val name = if (configured) "HyprDroid configured fixture" else "HyprDroid fixture widget"
-        compose.onNodeWithTag("widget-search").performTextInput(name)
+        compose.onNodeWithTag("widget-search").performTextReplacement(name)
         val provider = if (configured) ConfiguredFixtureWidgetProvider::class.java.name else FixtureWidgetProvider::class.java.name
-        compose.onNodeWithTag("widget-provider-$testPackage/$provider").performClick()
+        val choice = "widget-provider-$testPackage/$provider"
+        await(choice)
+        compose.onNodeWithTag(choice).performClick()
         compose.waitUntil(8_000) {
             val saved = state()
             saved.pendingWidget?.stage?.let { it != WidgetBindingStage.ALLOCATED } == true || saved.panels.left.widgets.size > count
