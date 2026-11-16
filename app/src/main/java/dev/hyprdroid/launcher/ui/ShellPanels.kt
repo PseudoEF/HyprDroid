@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,7 +38,8 @@ import kotlinx.coroutines.isActive
 import java.util.Date
 
 @Composable
-fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>, modifier: Modifier = Modifier) {
+fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>, modifier: Modifier = Modifier,
+    onDrawer: (() -> Unit)? = null, onSidebar: (() -> Unit)? = null) {
     var menuOpen by remember { mutableStateOf(false) }
     ShellSurface(modifier) {
         BoxWithConstraints {
@@ -61,6 +63,8 @@ fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>
                         }
                     }
                     if (!largeText) ShellClock()
+                    onDrawer?.let { IconButton(onClick = it) { DrawerGlyph("Открыть app drawer") } }
+                    onSidebar?.let { IconButton(onClick = it, modifier = Modifier.testTag("sidebar-open")) { Icon(Icons.Default.Menu, "Открыть Sidebar") } }
                     Box {
                         IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "Меню оболочки") }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -108,8 +112,8 @@ fun FavoriteDock(
 }
 
 @Composable
-fun DrawerGlyph() {
-    Canvas(Modifier.size(22.dp).semantics { contentDescription = "Все приложения" }) {
+fun DrawerGlyph(description: String = "Все приложения") {
+    Canvas(Modifier.size(22.dp).semantics { contentDescription = description }) {
         val side = size.width * .38f
         for (x in 0..1) for (y in 0..1) {
             drawRoundRect(Mocha.Lavender, topLeft = Offset(x * (size.width - side), y * (size.height - side)), size = Size(side, side), cornerRadius = CornerRadius(3.dp.toPx()))

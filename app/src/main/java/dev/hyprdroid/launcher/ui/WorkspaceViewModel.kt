@@ -12,6 +12,7 @@ import dev.hyprdroid.launcher.data.ShellRepository
 import dev.hyprdroid.launcher.data.WorkspaceRepository
 import dev.hyprdroid.launcher.data.SidebarEntry
 import dev.hyprdroid.launcher.model.WorkspaceItem
+import dev.hyprdroid.launcher.model.ShellPresentation
 import dev.hyprdroid.launcher.model.ShellSettings
 import dev.hyprdroid.launcher.model.WorkspaceSettings
 import dev.hyprdroid.launcher.model.WorkspaceAppearance
@@ -142,6 +143,7 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
     fun moveItem(from: Int, to: Int, id: String) = save { repository.moveItem(from, to, id) }
     fun removeItem(workspace: Int, id: String) = save { repository.removeItem(workspace, id) }
     fun setFavorite(component: String, enabled: Boolean) = save { shellRepository.setFavorite(component, enabled) }
+    fun setPresentation(value: ShellPresentation, onComplete: () -> Unit) = save(onComplete) { shellRepository.setPresentation(value) }
 
     fun chooseWallpaper(uri: Uri) {
         viewModelScope.launch {

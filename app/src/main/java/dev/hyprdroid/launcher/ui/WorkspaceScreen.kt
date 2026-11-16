@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -32,6 +33,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.hyprdroid.launcher.model.WORKSPACE_COUNT
 import dev.hyprdroid.launcher.model.WorkspaceAppearance
 import dev.hyprdroid.launcher.model.WorkspaceItem
+import dev.hyprdroid.launcher.model.ShellPresentation
+import dev.hyprdroid.launcher.model.DesktopMode
+import dev.hyprdroid.launcher.model.DockVisibility
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -70,6 +75,7 @@ fun WorkspaceScreen(model: WorkspaceViewModel) {
                 placeBefore = model::placeBefore, sidebarPin = model::setSidebarItem,
                 sidebarRemove = model::removeSidebarItem, sidebarReorder = model::reorderSidebar,
                 sidebarLaunch = model::launchSidebar,
+                presentation = model::setPresentation,
                 systemSettings = { action -> if (!openSystemSettings(context, action)) model.showMessage("Системные настройки недоступны.") },
             ))
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).safeDrawingPadding().imePadding().padding(12.dp))
@@ -99,6 +105,7 @@ data class ShellActions(
     val sidebarRemove: (String) -> Unit,
     val sidebarReorder: (String, Int) -> Unit,
     val sidebarLaunch: (WorkspaceItem.AppShortcut) -> Unit,
+    val presentation: (ShellPresentation, () -> Unit) -> Unit,
 )
 
 @Composable
@@ -131,12 +138,22 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     var appearanceWorkspace by rememberSaveable { mutableStateOf<Int?>(null) }
     var orderWorkspace by rememberSaveable { mutableStateOf<Int?>(null) }
     var selectingWorkspace by rememberSaveable { mutableStateOf<Int?>(null) }
+    var presentationPreview by remember { mutableStateOf<ShellPresentation?>(null) }
+    var savingPresentation by remember { mutableStateOf(false) }
+    var autoDockShown by remember { mutableStateOf(true) }
+    var dockPulse by remember { mutableIntStateOf(0) }
+    val presentation = presentationPreview ?: state.shell?.presentation ?: ShellPresentation(DesktopMode.CLASSIC)
+    val classic = presentation.desktopMode == DesktopMode.CLASSIC
+    val closePresentation = { presentationPreview = null; savingPresentation = false }
+    val openPresentation = { if (state.shell != null && !state.shellError) { editing = false; presentationPreview = state.shell.presentation } }
+    val revealDock = { autoDockShown = true; dockPulse++ }
     val appsById = remember(state.apps) { state.apps.associateBy { it.componentId } }
     val favorites = state.shell?.favorites.orEmpty()
     val workspaceReady = !state.storageError
     val shellReady = state.shell != null && !state.shellError
     val enterEdit = {
-        if (workspaceReady) {
+        if (!classic) openPresentation()
+        else if (workspaceReady) {
             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
             editing = true
         }
@@ -171,9 +188,23 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     LaunchedEffect(pager, workspaceReady) {
         if (workspaceReady) snapshotFlow { pager.settledPage }.distinctUntilChanged().collect(actions.selectWorkspace)
     }
-    val overlayOpen = drawerOpen || controlOpen || sidebarOpen || aboutOpen || appearanceWorkspace != null || orderWorkspace != null
+    val overlayOpen = drawerOpen || controlOpen || sidebarOpen || aboutOpen || presentationPreview != null || appearanceWorkspace != null || orderWorkspace != null
+    LaunchedEffect(presentation.desktopMode) { if (!classic) editing = false }
+    LaunchedEffect(pager.settledPage) { revealDock() }
+    val homeLifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(homeLifecycle) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) revealDock() }
+        homeLifecycle.addObserver(observer)
+        onDispose { homeLifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(presentation.dockVisibility, autoDockShown, dockPulse, editing, overlayOpen) {
+        if (presentation.dockVisibility == DockVisibility.AUTO && autoDockShown && !editing && !overlayOpen) {
+            delay(3_500); autoDockShown = false
+        }
+    }
     BackHandler(enabled = overlayOpen || editing) {
         when {
+            presentationPreview != null -> if (!savingPresentation) closePresentation()
             aboutOpen -> aboutOpen = false
             sidebarOpen -> sidebarOpen = false
             drawerOpen -> closeDrawer()
@@ -189,10 +220,12 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         val panelMenu = buildList {
+            add(AppMenuAction("Рабочий стол и панели", shellReady, openPresentation))
             add(AppMenuAction("О приложении") { aboutOpen = true })
             add(AppMenuAction("Все приложения", onClick = openDrawer))
             add(AppMenuAction("Control Center", onClick = openControl))
             add(AppMenuAction("Sidebar") { sidebarOpen = true })
+            if (presentation.dockVisibility == DockVisibility.AUTO) add(AppMenuAction("Показать dock", onClick = revealDock))
             add(AppMenuAction("Редактировать пространство", workspaceReady, enterEdit))
             add(AppMenuAction("Вид пространства", workspaceReady) { appearanceWorkspace = pager.currentPage })
             add(AppMenuAction("Порядок элементов", workspaceReady) { orderWorkspace = pager.currentPage })
@@ -203,10 +236,16 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
             if (state.storageError) add(AppMenuAction("Повторить чтение пространств", onClick = actions.retryWorkspace))
             if (state.shellError) add(AppMenuAction("Повторить чтение dock и обоев", onClick = actions.retryShell))
         }
-        Waybar(pager.currentPage, { index -> scope.launch { pager.animateScrollToPage(index) }; Unit }, panelMenu, Modifier.widthIn(max = 760.dp).fillMaxWidth())
+        Waybar(pager.currentPage, { index -> scope.launch { pager.animateScrollToPage(index) }; Unit }, panelMenu, Modifier.widthIn(max = 760.dp).fillMaxWidth(),
+            onDrawer = openDrawer, onSidebar = { sidebarOpen = true })
         Spacer(Modifier.height(12.dp))
-        HorizontalPager(state = pager, modifier = Modifier.weight(1f).widthIn(max = 960.dp).fillMaxWidth(), userScrollEnabled = !overlayOpen && !dragging) { page ->
-            WorkspaceCanvas(
+        HorizontalPager(state = pager, modifier = Modifier.weight(1f).widthIn(max = 960.dp).fillMaxWidth().testTag("home-pager")
+            .sidebarOpeningGesture(!overlayOpen && !editing, { sidebarOpen = true }), userScrollEnabled = !overlayOpen && !dragging) { page ->
+            if (!classic) Box(Modifier.fillMaxSize().testTag("workspace-canvas-$page")) {
+                Box(Modifier.fillMaxSize().testTag("clean-workspace-$page")
+                    .homeBlankGestures(!overlayOpen, true, openPresentation, openDrawer, openControl, revealDock))
+            }
+            else WorkspaceCanvas(
                 settings.workspaces[page], appsById, editing && workspaceReady,
                 gesturesEnabled = !overlayOpen, onEdit = enterEdit, onSwipeUp = openDrawer, onSwipeDown = openControl,
                 onLaunch = launchApp,
@@ -217,9 +256,10 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
                 onDrop = { id, before -> if (workspaceReady) actions.placeBefore(page, id, before) { dragRevision++ } },
                 onDragging = { dragging = it },
                 resetToken = dragRevision,
+                onBlankTap = revealDock,
             )
         }
-        if (editing && workspaceReady) {
+        if (editing && classic && workspaceReady) {
             Spacer(Modifier.height(8.dp))
             EditToolbar(pager.currentPage, settings.workspaces[pager.currentPage].appearance.gridLayout,
                 onAdd = { selectingWorkspace = pager.currentPage; drawerOpen = true },
@@ -227,17 +267,19 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
                 onOrder = { orderWorkspace = pager.currentPage }, onAppearance = { appearanceWorkspace = pager.currentPage },
                 modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth())
         }
-        Spacer(Modifier.height(12.dp))
-        FavoriteDock(favorites.sortedBy { appsById[it]?.label ?: it }, appsById, launchApp, appMenu, openDrawer)
+        AnimatedVisibility(presentation.dockVisibility != DockVisibility.HIDDEN &&
+            (presentation.dockVisibility == DockVisibility.ALWAYS || autoDockShown || editing)) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.testTag("favorite-dock")) {
+                Spacer(Modifier.height(12.dp))
+                FavoriteDock(favorites.sortedBy { appsById[it]?.label ?: it }, appsById, launchApp, appMenu, openDrawer)
+            }
+        }
     }
-    if (!overlayOpen && !editing) Box(Modifier.fillMaxSize().safeDrawingPadding()
-        .windowInsetsPadding(WindowInsets.systemGestures.only(WindowInsetsSides.Horizontal)), contentAlignment = Alignment.CenterEnd) {
-        SidebarHandle({ sidebarOpen = true }, Modifier.padding(end = 32.dp))
-    }
-    AnimatedVisibility(visible = sidebarOpen, enter = slideInHorizontally { it } + fadeIn(), exit = slideOutHorizontally { it } + fadeOut()) {
+    AnimatedVisibility(visible = sidebarOpen, enter = fadeIn(), exit = fadeOut()) {
         ModularSidebar(state, onClose = { sidebarOpen = false },
             onLaunch = { sidebarOpen = false; actions.sidebarLaunch(it) }, onPin = actions.sidebarPin,
-            onRemove = actions.sidebarRemove, onReorder = actions.sidebarReorder)
+            onRemove = actions.sidebarRemove, onReorder = actions.sidebarReorder,
+            panelModifier = Modifier.animateEnterExit(enter = slideInHorizontally { it }, exit = slideOutHorizontally { it }))
     }
     AnimatedVisibility(visible = drawerOpen, enter = slideInVertically { it / 3 } + fadeIn(), exit = slideOutVertically { it / 3 } + fadeOut()) {
         AppDrawer(state, selectingWorkspace, closeDrawer, launchApp,
@@ -246,6 +288,9 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     }
     if (controlOpen) ControlCenter(onClose = { controlOpen = false }, onSettings = actions.systemSettings)
     if (aboutOpen) AboutScreen { aboutOpen = false }
+    presentationPreview?.let { draft -> ShellAppearancePanel(draft, savingPresentation,
+        onChange = { presentationPreview = it }, onCancel = closePresentation,
+        onApply = { savingPresentation = true; actions.presentation(draft, closePresentation) }) }
     appearanceWorkspace?.let { id ->
         val workspace = settings.workspaces[id]
         WorkspaceAppearanceScreen(workspace, workspace.pinnedApps.firstOrNull()?.let { appsById[it] },

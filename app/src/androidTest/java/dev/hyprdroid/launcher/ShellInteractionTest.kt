@@ -18,6 +18,8 @@ import dev.hyprdroid.launcher.data.LauncherCatalog
 import dev.hyprdroid.launcher.data.ShellRepository
 import dev.hyprdroid.launcher.data.WorkspaceRepository
 import dev.hyprdroid.launcher.model.WorkspaceAppearance
+import dev.hyprdroid.launcher.model.ShellPresentation
+import dev.hyprdroid.launcher.model.DesktopMode
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
@@ -39,6 +41,7 @@ class ShellInteractionTest {
         val second = apps[1].componentId
         val third = apps[2].componentId
         runBlocking {
+            ShellRepository(context).setPresentation(ShellPresentation(DesktopMode.CLASSIC))
             val workspace = WorkspaceRepository(context)
             workspace.settings.first().workspaces.forEach { existing ->
                 existing.items.forEach { workspace.removeItem(existing.id, it.id) }

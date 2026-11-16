@@ -80,6 +80,9 @@ class UpgradePersistenceTest {
             assertEquals(setOf(apps[0], apps[2]), shell.settings.first().favorites)
             assertEquals(listOf(apps[0], apps[1]).map { "app:$it" }, shell.settings.first().sidebar.map { it.id })
             assertEquals(wallpaper, shell.settings.first().wallpaperUri)
+            assertEquals(DesktopMode.CLASSIC, shell.settings.first().presentation.desktopMode)
+            assertEquals(DockVisibility.ALWAYS, shell.settings.first().presentation.dockVisibility)
+            assertEquals(SidebarModule.entries.toSet(), shell.settings.first().presentation.sidebarModules)
             dismissBackgroundPixelLauncherAnr()
             val scenario = ActivityScenario.launch(MainActivity::class.java)
             try {

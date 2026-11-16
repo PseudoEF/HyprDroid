@@ -13,12 +13,12 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 
 private enum class BlankStart { CANCEL, VERTICAL }
-private data class BlankActions(val enabled: Boolean, val swipes: Boolean, val edit: () -> Unit, val up: () -> Unit, val down: () -> Unit)
+private data class BlankActions(val enabled: Boolean, val swipes: Boolean, val edit: () -> Unit, val up: () -> Unit, val down: () -> Unit, val tap: () -> Unit)
 
 /** Observe child consumption before claiming a gesture; never install on the drawer or dock. */
 @Composable
-fun Modifier.homeBlankGestures(enabled: Boolean, swipes: Boolean, onEdit: () -> Unit, onUp: () -> Unit, onDown: () -> Unit): Modifier {
-    val actions by rememberUpdatedState(BlankActions(enabled, swipes, onEdit, onUp, onDown))
+fun Modifier.homeBlankGestures(enabled: Boolean, swipes: Boolean, onEdit: () -> Unit, onUp: () -> Unit, onDown: () -> Unit, onTap: () -> Unit = {}): Modifier {
+    val actions by rememberUpdatedState(BlankActions(enabled, swipes, onEdit, onUp, onDown, onTap))
     val density = LocalDensity.current
     val edge = with(density) { 16.dp.toPx() }
     val distance = with(density) { 64.dp.toPx() }
@@ -32,7 +32,11 @@ fun Modifier.homeBlankGestures(enabled: Boolean, swipes: Boolean, onEdit: () -> 
                 while (true) {
                     val event = awaitPointerEvent(PointerEventPass.Initial)
                     val change = event.changes.find { it.id == down.id }
-                    if (event.changes.size != 1 || change == null || !change.pressed || !actions.enabled) return@withTimeoutOrNull BlankStart.CANCEL
+                    if (event.changes.size != 1 || change == null || !actions.enabled) return@withTimeoutOrNull BlankStart.CANCEL
+                    if (!change.pressed) {
+                        if (!change.isConsumed && (change.position - down.position).getDistance() < viewConfiguration.touchSlop) actions.tap()
+                        return@withTimeoutOrNull BlankStart.CANCEL
+                    }
                     travel = change.position - down.position
                     val x = abs(travel.x)
                     val y = abs(travel.y)

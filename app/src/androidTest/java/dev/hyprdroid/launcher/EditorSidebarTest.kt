@@ -36,6 +36,7 @@ class EditorSidebarTest {
         val repo = WorkspaceRepository(context)
         val shell = ShellRepository(context)
         runBlocking {
+            shell.setPresentation(ShellPresentation(DesktopMode.CLASSIC))
             repo.settings.first().workspaces.forEach { w -> w.items.forEach { repo.removeItem(w.id, it.id) } }
             repo.selectWorkspace(0)
             repo.setAppearance(0, WorkspaceAppearance())
@@ -64,8 +65,7 @@ class EditorSidebarTest {
             scenario.recreate()
             awaitTag("workspace-canvas-0")
             assertEquals(expected, runBlocking { repo.settings.first().workspaces[0].items.map { it.id } })
-            // Opening begins well inside the display, away from Android's Back edge.
-            compose.onNodeWithTag("sidebar-handle").performTouchInput { swipe(center, center - Offset(200f, 0f)) }
+            compose.onNodeWithTag("sidebar-open").performClick()
             awaitTag("sidebar")
             compose.onNodeWithText("Панель пуста", substring = true).assertExists()
             compose.onNodeWithText("Редактировать", substring = false).performClick()
@@ -77,13 +77,13 @@ class EditorSidebarTest {
             compose.onNodeWithTag("sidebar-earlier-$second").performClick()
             compose.waitUntil(5_000) { runBlocking { shell.settings.first().sidebar.firstOrNull()?.id == second } }
             compose.onNodeWithContentDescription("Закрыть Sidebar").performClick()
-            compose.onNodeWithTag("sidebar-handle").performClick()
+            compose.onNodeWithTag("sidebar-open").performClick()
             awaitTag("sidebar")
             UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("sidebar").fetchSemanticsNodes().isEmpty() }
             scenario.recreate()
-            awaitTag("sidebar-handle")
-            compose.onNodeWithTag("sidebar-handle").performClick()
+            awaitTag("sidebar-open")
+            compose.onNodeWithTag("sidebar-open").performClick()
             awaitTag("sidebar")
             compose.onNodeWithTag("sidebar-item-$second").assertExists()
             compose.waitForIdle()

@@ -14,6 +14,7 @@ import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import dev.hyprdroid.launcher.data.LauncherCatalog
 import dev.hyprdroid.launcher.data.WorkspaceRepository
+import dev.hyprdroid.launcher.data.ShellRepository
 import dev.hyprdroid.launcher.model.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -37,6 +38,7 @@ class GestureWorkspaceTest {
         val c = apps[2].componentId
         val repo = WorkspaceRepository(context)
         runBlocking {
+            ShellRepository(context).setPresentation(ShellPresentation(DesktopMode.CLASSIC))
             repo.settings.first().workspaces.forEach { workspace ->
                 workspace.items.forEach { repo.removeItem(workspace.id, it.id) }
                 repo.setAppearance(workspace.id, WorkspaceAppearance())

@@ -34,6 +34,7 @@ fun WorkspaceCanvas(
     onDrop: (String, String?) -> Unit = { _, _ -> }, onDragging: (Boolean) -> Unit = {},
     resetToken: Int = 0,
     gridState: LazyGridState = rememberLazyGridState(),
+    onBlankTap: () -> Unit = {},
 ) {
     val appearance = workspace.appearance
     val grid = gridState
@@ -55,7 +56,7 @@ fun WorkspaceCanvas(
         modifier.testTag("workspace-canvas-${workspace.id}")
             .then(if (editing) Modifier.border(BorderStroke(1.dp, Mocha.Mauve.copy(alpha = .6f)), RoundedCornerShape(24.dp)) else Modifier)
             .semantics { customActions = listOf(CustomAccessibilityAction("Редактировать пространство") { onEdit(); true }) }
-            .homeBlankGestures(gesturesEnabled, !editing, onEdit, onSwipeUp, onSwipeDown),
+            .homeBlankGestures(gesturesEnabled, !editing, onEdit, onSwipeUp, onSwipeDown, onBlankTap),
     ) {
         LazyVerticalGrid(
             state = grid,

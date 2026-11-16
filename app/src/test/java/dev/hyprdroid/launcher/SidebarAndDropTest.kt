@@ -65,7 +65,7 @@ class SidebarAndDropTest {
             val store = PreferenceDataStoreFactory.create(scope = scope, produceFile = { file })
             val key = stringPreferencesKey("sidebar_items")
             val repo = ShellRepository(store)
-            for (schema in listOf(2, 3)) {
+            for (schema in listOf(2, 4)) {
                 store.edit { it[intPreferencesKey("schema_version")] = schema; it[key] = "broken" }
                 try { repo.setFavorite(a.componentId, true); fail("Must reject invalid storage") } catch (_: IOException) { }
                 assertEquals("broken", store.data.first()[key])

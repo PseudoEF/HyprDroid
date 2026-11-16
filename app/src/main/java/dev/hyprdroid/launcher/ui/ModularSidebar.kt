@@ -26,6 +26,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.hyprdroid.launcher.model.WorkspaceItem
+import dev.hyprdroid.launcher.model.SidebarModule
 
 private fun Modifier.sidebarSwipe(left: Boolean, threshold: Float, action: () -> Unit): Modifier = composed {
     val currentAction by rememberUpdatedState(action)
@@ -37,22 +38,13 @@ private fun Modifier.sidebarSwipe(left: Boolean, threshold: Float, action: () ->
 }
 }
 
-/** A visible internal handle, inset from Android's Back edge; no gesture exclusion regions. */
-@Composable
-fun SidebarHandle(onOpen: () -> Unit, modifier: Modifier = Modifier) {
-    val threshold = with(LocalDensity.current) { 40.dp.toPx() }
-    Box(modifier.width(24.dp).height(112.dp).testTag("sidebar-handle")
-        .semantics { contentDescription = "Открыть Sidebar" }
-        .sidebarSwipe(true, threshold, onOpen).clickable(onClick = onOpen), contentAlignment = Alignment.Center) {
-        Box(Modifier.width(4.dp).height(64.dp).background(Mocha.Mauve.copy(alpha = .75f), RoundedCornerShape(4.dp)))
-    }
-}
-
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ModularSidebar(
     state: WorkspaceUiState, onClose: () -> Unit, onLaunch: (WorkspaceItem.AppShortcut) -> Unit,
     onPin: (WorkspaceItem.AppShortcut, Boolean) -> Unit, onRemove: (String) -> Unit,
     onReorder: (String, Int) -> Unit,
+    panelModifier: Modifier = Modifier,
 ) {
     var editing by rememberSaveable { mutableStateOf(false) }
     var adding by rememberSaveable { mutableStateOf(false) }
@@ -60,6 +52,7 @@ fun ModularSidebar(
     val entries = remember(state.sidebarEntries) { state.sidebarEntries.associateBy { it.item.id } }
     val items = state.shell?.sidebar.orEmpty()
     val enabled = state.shell != null && !state.shellError
+    val modules = state.shell?.presentation?.sidebarModules ?: SidebarModule.entries.toSet()
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
     val dismiss = { keyboard?.hide(); focus.clearFocus(force = true); onClose() }
@@ -67,18 +60,24 @@ fun ModularSidebar(
     DisposableEffect(Unit) { onDispose { keyboard?.hide() } }
     val threshold = with(LocalDensity.current) { 48.dp.toPx() }
     Box(Modifier.fillMaxSize().imePadding().testTag("sidebar-overlay")) {
-        Box(Modifier.fillMaxSize().background(Mocha.Base.copy(alpha = .35f)).clickable(onClickLabel = "Закрыть Sidebar", onClick = dismiss))
+        Box(Modifier.fillMaxSize().background(Mocha.Base.copy(alpha = .45f)).testTag("sidebar-scrim").clickable(onClickLabel = "Закрыть Sidebar", onClick = dismiss))
         Surface(color = Mocha.Mantle.copy(alpha = .97f), contentColor = Mocha.Text,
             shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, Mocha.Mauve.copy(alpha = .5f)),
             modifier = Modifier.align(Alignment.CenterEnd).safeDrawingPadding().padding(12.dp)
-                .widthIn(max = 380.dp).fillMaxWidth(.92f).fillMaxHeight(.9f).testTag("sidebar")
+                .widthIn(max = 420.dp).fillMaxWidth(.80f).fillMaxHeight(.86f).then(panelModifier).testTag("sidebar")
                 .sidebarSwipe(false, threshold) { close() }) {
             Column(Modifier.padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.testTag("sidebar-header")) {
                     Text("Sidebar", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                     IconButton(onClick = dismiss) { Icon(Icons.Default.Close, "Закрыть Sidebar") }
                 }
-                Row {
+                if (SidebarModule.SYSTEM_STATUS in modules && !adding) {
+                    SystemStatusModule()
+                    Spacer(Modifier.height(8.dp))
+                }
+                if (SidebarModule.QUICK_LAUNCH in modules) {
+                Text("Quick Launch", style = MaterialTheme.typography.labelLarge, color = Mocha.Subtext, modifier = Modifier.testTag("sidebar-quick-launch"))
+                FlowRow {
                     TextButton(onClick = { editing = !editing; adding = false }, enabled = enabled) { Text(if (editing) "Готово" else "Редактировать") }
                     if (editing) TextButton(onClick = { adding = !adding }, enabled = enabled) { Text(if (adding) "К панели" else "Добавить ярлык") }
                 }
@@ -106,7 +105,7 @@ fun ModularSidebar(
                                 if (shortcut != null) AppTile(entry?.app, "Ярлык недоступен", { if (!editing) onLaunch(shortcut) },
                                     listOf(AppMenuAction("Убрать из Sidebar", enabled) { onRemove(item.id) }), list = true)
                                 else Text(if (item is WorkspaceItem.WidgetPlaceholder) "${item.title} · виджет пока не поддерживается" else "Элемент новой версии", modifier = Modifier.padding(12.dp))
-                                if (editing) Row {
+                                if (editing) FlowRow {
                                     TextButton(onClick = { onReorder(item.id, -1) }, enabled = enabled && index > 0,
                                         modifier = Modifier.testTag("sidebar-earlier-${item.id}")) { Text("Выше") }
                                     TextButton(onClick = { onReorder(item.id, 1) }, enabled = enabled && index < items.lastIndex) { Text("Ниже") }
@@ -117,6 +116,7 @@ fun ModularSidebar(
                         }
                     }
                 }
+                } else if (modules.isEmpty()) Text("Модули скрыты. Настройте их через меню верхней панели.", modifier = Modifier.padding(12.dp))
             }
         }
     }

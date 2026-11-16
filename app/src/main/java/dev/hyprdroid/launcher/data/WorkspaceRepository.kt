@@ -18,8 +18,13 @@ private val Context.workspaceStore by preferencesDataStore(
     produceMigrations = { listOf(WorkspaceV2Migration()) },
 )
 
+private fun workspaceStoreFor(context: Context): DataStore<Preferences> {
+    InstallationHistory.capture(context)
+    return context.applicationContext.workspaceStore
+}
+
 class WorkspaceRepository(private val store: DataStore<Preferences>) {
-    constructor(context: Context) : this(context.applicationContext.workspaceStore)
+    constructor(context: Context) : this(workspaceStoreFor(context))
     val settings = store.data.map(WorkspaceCodec::decode).flowOn(Dispatchers.Default)
 
     suspend fun setPinned(workspaceId: Int, componentId: String, pinned: Boolean) = update { it.withPinned(workspaceId, componentId, pinned) }
