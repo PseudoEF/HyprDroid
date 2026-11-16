@@ -78,9 +78,9 @@ class GestureWorkspaceTest {
             compose.onNodeWithTag("control-dismiss-header").performTouchInput { swipe(center, center - Offset(0f, height * .65f)) }
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("control-center").fetchSemanticsNodes().isEmpty() }
 
-            compose.onNodeWithTag("workspace-canvas-0").performTouchInput { swipe(Offset(width * .75f, height * .5f), Offset(width * .2f, height * .5f), 350) }
+            compose.onNodeWithTag("workspace-canvas-0").performTouchInput { swipe(Offset(width * .6f, height * .5f), Offset(width * .1f, height * .5f), 350) }
             compose.waitUntil(10_000) { runBlocking { repo.settings.first().selectedWorkspace == 1 } }
-            compose.onNodeWithTag("workspace-canvas-1").performTouchInput { swipe(Offset(width * .2f, height * .5f), Offset(width * .75f, height * .5f), 350) }
+            compose.onNodeWithTag("workspace-canvas-1").performTouchInput { swipe(Offset(width * .1f, height * .5f), Offset(width * .6f, height * .5f), 350) }
             compose.waitUntil(10_000) { runBlocking { repo.settings.first().selectedWorkspace == 0 } }
 
             compose.onNodeWithTag("workspace-app-$a").performTouchInput { swipe(center, center + Offset(0f, 300f)) }
