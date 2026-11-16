@@ -121,6 +121,12 @@ class UniversalPanelsTest {
             compose.onNodeWithTag("panel-slider-Ширина сенсорной зоны").performScrollTo()
                 .performSemanticsAction(SemanticsActions.SetProgress) { it(42f) }
             compose.onNodeWithTag("panel-category-APPEARANCE").performScrollTo().performClick()
+            compose.onNodeWithTag("panel-width").performSemanticsAction(SemanticsActions.SetProgress) { it(70f) }
+            compose.onNodeWithTag("preview-panel").performClick()
+            await("left-panel")
+            assertEquals(80, runBlocking { repository.settings.first().panels.left.widthPercent })
+            captureShellScreen("v071-settings-preview")
+            device.pressBack(); gone("left-panel")
             compose.onNodeWithTag("panel-slider-Ширина маркера").performScrollTo()
                 .performSemanticsAction(SemanticsActions.SetProgress) { it(7f) }
             compose.onNodeWithTag("panel-visibility-HIDDEN").performScrollTo().performClick()
@@ -131,6 +137,7 @@ class UniversalPanelsTest {
             compose.waitUntil(5_000) { runBlocking { repository.settings.first().panels.left.touchWidthDp == 42 } }
             val saved = runBlocking { repository.settings.first() }
             assertEquals(7, saved.panels.left.markerWidthDp)
+            assertEquals(70, saved.panels.left.widthPercent)
             assertEquals(PanelScope.APPS, saved.panels.left.scope)
             assertEquals(MarkerVisibility.HIDDEN, saved.panels.left.visibility)
             assertEquals(listOf("DATE", "CLOCK", "BATTERY"), saved.panels.left.modules)

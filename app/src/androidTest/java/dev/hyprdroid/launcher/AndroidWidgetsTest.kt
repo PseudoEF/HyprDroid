@@ -132,6 +132,7 @@ class AndroidWidgetsTest {
             compose.onNodeWithTag("widget-width-${first.appWidgetId}").performScrollTo()
                 .performSemanticsAction(SemanticsActions.SetProgress) { it(60f) }
             compose.onNodeWithTag("module-select-${second.moduleId}").performScrollTo().performClick()
+            compose.onNodeWithTag("module-details-${first.moduleId}").assertDoesNotExist()
             compose.onNodeWithTag("module-up-${second.moduleId}").performScrollTo().performClick()
             compose.onNodeWithTag("save-panel").performScrollTo().performClick()
             compose.waitUntil(5_000) { state().panels.left.widgets.first().heightDp == 260 }
@@ -156,6 +157,27 @@ class AndroidWidgetsTest {
             assertEquals(260, state().panels.left.widgets.first().heightDp)
             assertEquals(60, state().panels.left.widgets.first().widthPercent)
 
+            // Header long-press and an explicit button both enter editing, never the native content.
+            compose.onNodeWithTag("widget-title-${second.appWidgetId}").performTouchInput { longClick() }
+            await("inline-panel-editor")
+            compose.onNodeWithTag("module-down-${second.moduleId}").performScrollTo().performClick()
+            compose.onNodeWithTag("widget-resize-${second.appWidgetId}").performScrollTo()
+                .performTouchInput { swipe(center, center + androidx.compose.ui.geometry.Offset(-20f, 45f), 500) }
+            assertEquals(second.heightDp, state().panels.left.widgets.last().heightDp)
+            compose.onNodeWithTag("inline-panel-cancel").performClick(); gone("inline-panel-editor")
+            compose.onNodeWithTag("sidebar-items").performScrollToIndex(3)
+            waitText("Fixture #${second.appWidgetId} · 2")
+            compose.onNodeWithTag("edit-panel-modules").performClick(); await("inline-panel-editor")
+            compose.onNodeWithTag("panel-width").performScrollTo()
+                .performSemanticsAction(SemanticsActions.SetProgress) { it(90f) }
+            compose.onNodeWithTag("module-select-${second.moduleId}").performScrollTo().performClick()
+            compose.onNodeWithTag("widget-height-${second.appWidgetId}").performScrollTo()
+                .performSemanticsAction(SemanticsActions.SetProgress) { it(210f) }
+            captureShellScreen("v071-inline-editor")
+            compose.onNodeWithTag("inline-panel-save").performClick(); gone("inline-panel-editor")
+            assertEquals(90, state().panels.left.widthPercent)
+            assertEquals(210, state().panels.left.widgets.last().heightDp)
+
             // Disabling a provider makes its binding unavailable; placement must remain removable data.
             enableConfiguredProvider(false)
             compose.onNodeWithTag("sidebar-items").performScrollToIndex(4)
@@ -178,9 +200,22 @@ class AndroidWidgetsTest {
             compose.onNodeWithTag("sidebar-items").performScrollToIndex(3)
             waitText("Fixture #${second.appWidgetId} · 2")
             captureShellScreen("widgets-global-overlay")
+            compose.onNodeWithTag("edit-panel-modules").performClick(); await("inline-panel-editor")
+            compose.onNodeWithTag("panel-width").performScrollTo()
+                .performSemanticsAction(SemanticsActions.SetProgress) { it(95f) }
+            compose.onNodeWithTag("inline-panel-cancel").performClick(); gone("inline-panel-editor")
+            assertEquals(90, state().panels.left.widthPercent)
             device.pressBack()
             context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             await("home-pager")
+            leftPanel()
+            compose.onNodeWithTag("edit-panel-modules").performClick(); await("inline-panel-editor")
+            compose.onNodeWithTag("module-select-${first.moduleId}").performScrollTo().performClick()
+            compose.onNodeWithTag("module-remove-${first.moduleId}").performScrollTo().performClick()
+            compose.onNodeWithTag("inline-panel-save").performClick(); gone("inline-panel-editor")
+            assertTrue(state().panels.left.widgets.none { it.appWidgetId == first.appWidgetId })
+            assertTrue(state().panels.left.widgets.any { it.appWidgetId == second.appWidgetId })
+            device.pressBack(); gone("left-panel")
             runBlocking {
                 repository.setPanel(PanelSide.LEFT, PanelsSettings().left)
                 repository.setOverlay(OverlaySettings())
