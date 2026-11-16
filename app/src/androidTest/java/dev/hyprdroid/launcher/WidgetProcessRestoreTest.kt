@@ -51,6 +51,10 @@ class WidgetProcessRestoreTest {
             assertEquals(180, saved.widgets.single().heightDp)
             assertTrue(session.host.appWidgetIds.contains(id))
             assertEquals(fixture.getString("provider"), session.info(id)!!.provider.flattenToString())
+            val denied = session.host.allocateAppWidgetId()
+            try {
+                assertFalse("Revoking future binding permission must require consent again", session.manager.bindAppWidgetIdIfAllowed(denied, ComponentName.unflattenFromString(fixture.getString("provider"))!!))
+            } finally { session.delete(denied) }
             val scenario = ActivityScenario.launch(MainActivity::class.java)
             try {
                 compose.waitUntil(15_000) { compose.onAllNodesWithContentDescription("Меню оболочки").fetchSemanticsNodes().isNotEmpty() }

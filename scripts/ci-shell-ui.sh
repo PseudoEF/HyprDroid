@@ -12,7 +12,10 @@ trap collect_artifacts EXIT
 # Shell binding permission is limited to this isolated emulator fixture, never product code.
 adb shell appwidget grantbind --package dev.hyprdroid.launcher --user 0
 for widget_phase in seed verify; do
-  if [ "$widget_phase" = verify ]; then adb shell am force-stop dev.hyprdroid.launcher; fi
+  if [ "$widget_phase" = verify ]; then
+    adb shell appwidget revokebind --package dev.hyprdroid.launcher --user 0
+    adb shell am force-stop dev.hyprdroid.launcher
+  fi
   adb shell am instrument -w -r -e class dev.hyprdroid.launcher.WidgetProcessRestoreTest -e widgetPhase "$widget_phase" \
     dev.hyprdroid.launcher.test/androidx.test.runner.AndroidJUnitRunner > ".local/shell-ui/widget-process-$widget_phase.txt"
   cat ".local/shell-ui/widget-process-$widget_phase.txt"
