@@ -205,6 +205,11 @@ class AndroidWidgetsTest {
                 .performSemanticsAction(SemanticsActions.SetProgress) { it(95f) }
             compose.onNodeWithTag("inline-panel-cancel").performClick(); gone("inline-panel-editor")
             assertEquals(90, state().panels.left.widthPercent)
+            compose.onNodeWithTag("edit-panel-modules").performClick(); await("inline-panel-editor")
+            compose.onNodeWithTag("panel-width").performScrollTo()
+                .performSemanticsAction(SemanticsActions.SetProgress) { it(92f) }
+            compose.onNodeWithTag("inline-panel-save").performClick(); gone("inline-panel-editor")
+            compose.waitUntil(8_000) { state().panels.left.widthPercent == 92 }
             device.pressBack()
             context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             await("home-pager")
