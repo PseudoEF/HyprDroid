@@ -49,7 +49,10 @@ class AndroidWidgetsTest {
         compose.onNodeWithTag("widget-search").performTextInput(name)
         val provider = if (configured) ConfiguredFixtureWidgetProvider::class.java.name else FixtureWidgetProvider::class.java.name
         compose.onNodeWithTag("widget-provider-$testPackage/$provider").performClick()
-        compose.waitUntil(8_000) { state().pendingWidget != null || state().panels.left.widgets.size > count }
+        compose.waitUntil(8_000) {
+            val saved = state()
+            saved.pendingWidget?.stage?.let { it != WidgetBindingStage.ALLOCATED } == true || saved.panels.left.widgets.size > count
+        }
         val pending = state().pendingWidget ?: return
         if (pending.stage == WidgetBindingStage.BIND) {
             captureShellScreen("widget-bind-consent")
