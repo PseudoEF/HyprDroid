@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,6 +60,7 @@ fun ModularSidebar(
     val close by rememberUpdatedState(dismiss)
     DisposableEffect(Unit) { onDispose { keyboard?.hide() } }
     val threshold = with(LocalDensity.current) { 48.dp.toPx() }
+    val listState = remember(adding) { LazyListState() }
     Box(Modifier.fillMaxSize().imePadding().testTag("sidebar-overlay")) {
         Box(Modifier.fillMaxSize().background(Mocha.Base.copy(alpha = .45f)).testTag("sidebar-scrim").clickable(onClickLabel = "Закрыть Sidebar", onClick = dismiss))
         Surface(color = Mocha.Mantle.copy(alpha = .97f), contentColor = Mocha.Text,
@@ -71,33 +73,33 @@ fun ModularSidebar(
                     Text("Sidebar", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                     IconButton(onClick = dismiss) { Icon(Icons.Default.Close, "Закрыть Sidebar") }
                 }
-                if (SidebarModule.SYSTEM_STATUS in modules && !adding) {
-                    SystemStatusModule()
-                    Spacer(Modifier.height(8.dp))
-                }
                 if (SidebarModule.QUICK_LAUNCH in modules) {
-                Text("Quick Launch", style = MaterialTheme.typography.labelLarge, color = Mocha.Subtext, modifier = Modifier.testTag("sidebar-quick-launch"))
-                FlowRow {
-                    TextButton(onClick = { editing = !editing; adding = false }, enabled = enabled) { Text(if (editing) "Готово" else "Редактировать") }
-                    if (editing) TextButton(onClick = { adding = !adding }, enabled = enabled) { Text(if (adding) "К панели" else "Добавить ярлык") }
+                    FlowRow {
+                        TextButton(onClick = { editing = !editing; adding = false }, enabled = enabled) { Text(if (editing) "Готово" else "Редактировать") }
+                        if (editing) TextButton(onClick = { adding = !adding }, enabled = enabled) { Text(if (adding) "К панели" else "Добавить ярлык") }
+                    }
                 }
                 if (!enabled) Text("Хранилище панели недоступно. Повторите чтение через меню оболочки.")
-                if (adding) {
-                    OutlinedTextField(value = search, onValueChange = { search = it }, singleLine = true,
-                        label = { Text("Поиск ярлыков") }, modifier = Modifier.fillMaxWidth())
-                    Text("Ярлыки Android доступны, когда HyprDroid выбран домашним экраном.", style = MaterialTheme.typography.bodySmall)
-                    val candidates = state.sidebarEntries.filter { it.app.label.contains(search, ignoreCase = true) }
-                    if (candidates.isEmpty()) Text(if (state.loadingApps) "Загрузка…" else "Доступных ярлыков нет")
-                    LazyColumn(Modifier.weight(1f).testTag("sidebar-picker")) {
+                LazyColumn(state = listState, modifier = Modifier.weight(1f).testTag(if (adding) "sidebar-picker" else "sidebar-items"),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (SidebarModule.SYSTEM_STATUS in modules && !adding && !editing) item(key = "module:status") { SystemStatusModule() }
+                    if (SidebarModule.QUICK_LAUNCH in modules) {
+                        item(key = "module:quick") { Text("Quick Launch", style = MaterialTheme.typography.labelLarge, color = Mocha.Subtext, modifier = Modifier.testTag("sidebar-quick-launch")) }
+                        if (adding) {
+                        item(key = "search") {
+                            OutlinedTextField(value = search, onValueChange = { search = it }, singleLine = true,
+                                label = { Text("Поиск ярлыков") }, modifier = Modifier.fillMaxWidth())
+                            Text("Ярлыки Android доступны, когда HyprDroid выбран домашним экраном.", style = MaterialTheme.typography.bodySmall)
+                        }
+                        val candidates = state.sidebarEntries.filter { it.app.label.contains(search, ignoreCase = true) }
+                        if (candidates.isEmpty()) item(key = "empty-search") { Text(if (state.loadingApps) "Загрузка…" else "Доступных ярлыков нет") }
                         items(candidates, key = { it.item.id }) { entry ->
                             val pinned = items.any { it.id == entry.item.id }
                             AppTile(entry.app, entry.app.componentId, { onPin(entry.item, !pinned) }, emptyList(),
                                 list = true, selected = pinned, modifier = Modifier.padding(vertical = 4.dp).testTag("sidebar-choice-${entry.item.id}"))
                         }
-                    }
-                } else {
-                    if (items.isEmpty()) Text("Панель пуста. Нажмите «Редактировать», чтобы добавить приложения или ярлыки.", modifier = Modifier.padding(12.dp))
-                    LazyColumn(Modifier.weight(1f).testTag("sidebar-items"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        } else {
+                        if (items.isEmpty()) item(key = "empty-quick") { Text("Панель пуста. Нажмите «Редактировать», чтобы добавить приложения или ярлыки.", modifier = Modifier.padding(12.dp)) }
                         itemsIndexed(items, key = { _, item -> item.id }) { index, item ->
                             val shortcut = item as? WorkspaceItem.AppShortcut
                             val entry = entries[item.id]
@@ -114,9 +116,9 @@ fun ModularSidebar(
                                 }
                             }
                         }
-                    }
+                        }
+                    } else if (modules.isEmpty()) item(key = "empty-modules") { Text("Модули скрыты. Настройте их через меню верхней панели.", modifier = Modifier.padding(12.dp)) }
                 }
-                } else if (modules.isEmpty()) Text("Модули скрыты. Настройте их через меню верхней панели.", modifier = Modifier.padding(12.dp))
             }
         }
     }

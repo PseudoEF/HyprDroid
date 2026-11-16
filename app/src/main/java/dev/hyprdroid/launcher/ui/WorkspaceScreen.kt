@@ -142,7 +142,8 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     var savingPresentation by remember { mutableStateOf(false) }
     var autoDockShown by remember { mutableStateOf(true) }
     var dockPulse by remember { mutableIntStateOf(0) }
-    val presentation = presentationPreview ?: state.shell?.presentation ?: ShellPresentation(DesktopMode.CLASSIC)
+    // Do not flash Classic pins while a saved Clean preference is still loading.
+    val presentation = presentationPreview ?: state.shell?.presentation ?: ShellPresentation(if (state.shellError) DesktopMode.CLASSIC else DesktopMode.CLEAN)
     val classic = presentation.desktopMode == DesktopMode.CLASSIC
     val closePresentation = { presentationPreview = null; savingPresentation = false }
     val openPresentation = { if (state.shell != null && !state.shellError) { editing = false; presentationPreview = state.shell.presentation } }

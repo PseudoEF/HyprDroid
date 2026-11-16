@@ -4,7 +4,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 val distribution = providers.environmentVariable("HYPRDROID_DISTRIBUTION").orNull == "true"
-// Local builds stay ahead of legacy v0.5 (6); distributed codes must be allocated by CI.
+// Local builds stay ahead of v0.5.2 (7); distributed codes must be allocated by CI.
 val buildCode = requireNotNull(providers.gradleProperty("buildVersionCode").orElse("8").get().toLongOrNull()) { "Invalid versionCode" }
 require(buildCode in 1..2_100_000_000L) { "buildVersionCode must be within Android's supported range" }
 val buildName = providers.gradleProperty("buildVersionName").orElse("0.6.0").get()

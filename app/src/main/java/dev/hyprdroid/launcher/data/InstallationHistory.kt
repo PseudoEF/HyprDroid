@@ -6,8 +6,12 @@ import android.content.Context
 internal object InstallationHistory {
     private var legacy: Boolean? = null
     @Synchronized fun capture(context: Context): Boolean {
-        return legacy ?: listOf("workspaces", "shell").any {
+        return legacy ?: (listOf("workspaces", "shell").any {
             context.applicationContext.filesDir.resolve("datastore/$it.preferences_pb").exists()
-        }.also { legacy = it }
+        } || runCatching {
+            @Suppress("DEPRECATION")
+            val info = context.packageManager.getPackageInfo(context.packageName, 0)
+            info.firstInstallTime != info.lastUpdateTime
+        }.getOrDefault(false)).also { legacy = it }
     }
 }
