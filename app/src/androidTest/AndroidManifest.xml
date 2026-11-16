@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
+        <receiver android:name="dev.hyprdroid.launcher.FixtureWidgetProvider" android:exported="true" android:label="HyprDroid fixture widget">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/fixture_widget" />
+        </receiver>
+        <receiver android:name="dev.hyprdroid.launcher.ConfiguredFixtureWidgetProvider" android:exported="true" android:label="HyprDroid configured fixture">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/fixture_config_widget" />
+        </receiver>
+        <activity android:name="dev.hyprdroid.launcher.ConfiguredWidgetActivity" android:exported="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" /></intent-filter>
+        </activity>
         <!-- A separate APK/window, never shipped in the launcher APK. -->
         <activity android:name="dev.hyprdroid.launcher.OverlayTestHostActivity" android:exported="true" android:theme="@android:style/Theme.Material.Light.NoActionBar" />
     </application>

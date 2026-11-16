@@ -26,7 +26,10 @@ val LocalWidgetBinding = staticCompositionLocalOf<WidgetBindingController?> { nu
 
 /** Activity owns only system result delivery. Durable operation and placement use the existing shell store. */
 class WidgetBindingController(private val activity: ComponentActivity) {
-    companion object { const val CONFIGURE_REQUEST = 8037 }
+    companion object {
+        private const val CONFIGURE_REQUEST_BASE = 0x4000
+        private fun configureCode(id: Int) = CONFIGURE_REQUEST_BASE + id % 0x4000
+    }
     private val repository = ShellRepository(activity)
     private val widgets = PanelWidgetHost.get(activity)
     private val failure = MutableStateFlow<String?>(null)
@@ -34,7 +37,13 @@ class WidgetBindingController(private val activity: ComponentActivity) {
     private val working = MutableStateFlow(false)
     val busy = working.asStateFlow()
     private val bind = activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        runOperation { if (result.resultCode == Activity.RESULT_OK) advanceAfterBind() else cancelLocked() }
+        runOperation {
+            val pending = repository.settings.first().pendingWidget ?: return@runOperation
+            if (pending.stage != WidgetBindingStage.BIND) return@runOperation
+            val returnedId = result.data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pending.widget.appWidgetId) ?: pending.widget.appWidgetId
+            if (returnedId != pending.widget.appWidgetId) return@runOperation
+            if (result.resultCode == Activity.RESULT_OK) advanceAfterBind() else cancelLocked()
+        }
     }
     init {
         activity.lifecycle.addObserver(object : DefaultLifecycleObserver {
@@ -60,10 +69,12 @@ class WidgetBindingController(private val activity: ComponentActivity) {
         check(repository.settings.first().pendingWidget == null)
         withContext(NonCancellable) {
             val id = widgets.host.allocateAppWidgetId()
-            val density = activity.resources.displayMetrics.density
-            val widget = PanelWidget(id, info.provider.flattenToString(), info.loadLabel(activity.packageManager).take(200),
-                heightDp = (info.minHeight / density).toInt().coerceIn(64, 600))
-            try { repository.savePendingWidget(PendingPanelWidget(side, widget, WidgetBindingStage.ALLOCATED)) }
+            try {
+                val density = activity.resources.displayMetrics.density
+                val widget = PanelWidget(id, info.provider.flattenToString(), info.loadLabel(activity.packageManager).take(200),
+                    heightDp = (info.minHeight / density).toInt().coerceIn(64, 600))
+                repository.savePendingWidget(PendingPanelWidget(side, widget, WidgetBindingStage.ALLOCATED))
+            }
             catch (error: Exception) { widgets.delete(id); throw error }
         }
         resumeLocked()
@@ -103,7 +114,7 @@ class WidgetBindingController(private val activity: ComponentActivity) {
     private suspend fun configure(pending: PendingPanelWidget) {
         val info = widgets.info(pending.widget.appWidgetId) ?: error("Widget is not bound")
         check(info.provider.flattenToString() == pending.widget.provider)
-        if (info.configure == null) commit(pending) else widgets.host.startAppWidgetConfigureActivityForResult(activity, pending.widget.appWidgetId, 0, CONFIGURE_REQUEST, null)
+        if (info.configure == null) commit(pending) else widgets.host.startAppWidgetConfigureActivityForResult(activity, pending.widget.appWidgetId, 0, configureCode(pending.widget.appWidgetId), null)
     }
     private suspend fun commit(pending: PendingPanelWidget) {
         check(widgets.info(pending.widget.appWidgetId)?.provider?.flattenToString() == pending.widget.provider)
@@ -112,10 +123,12 @@ class WidgetBindingController(private val activity: ComponentActivity) {
             repository.commitPendingWidget(pending.widget.appWidgetId)
         }
     }
-    fun onActivityResult(requestCode: Int, resultCode: Int): Boolean {
-        if (requestCode != CONFIGURE_REQUEST) return false
+    fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
+        if (requestCode !in 0x4000..0x7fff) return false
         runOperation {
             val pending = repository.settings.first().pendingWidget ?: return@runOperation
+            if (pending.stage != WidgetBindingStage.CONFIGURE || requestCode != configureCode(pending.widget.appWidgetId)) return@runOperation
+            if (data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pending.widget.appWidgetId)?.let { it != pending.widget.appWidgetId } == true) return@runOperation
             if (resultCode == Activity.RESULT_OK) commit(pending) else cancelLocked()
         }
         return true

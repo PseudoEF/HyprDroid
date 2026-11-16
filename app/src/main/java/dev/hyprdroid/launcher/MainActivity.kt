@@ -37,6 +37,6 @@ class MainActivity : ComponentActivity() {
     }
     @Deprecated("Android widget host configuration uses the platform result contract")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        if (!widgetBinding.onActivityResult(requestCode, resultCode)) super.onActivityResult(requestCode, resultCode, data)
+        if (!widgetBinding.onActivityResult(requestCode, resultCode, data)) super.onActivityResult(requestCode, resultCode, data)
     }
 }

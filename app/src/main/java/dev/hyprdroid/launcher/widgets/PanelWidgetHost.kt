@@ -28,7 +28,8 @@ class PanelWidgetHost private constructor(private val context: Context) {
     val revision = changes.asStateFlow()
     private val failure = MutableStateFlow<String?>(null)
     val error = failure.asStateFlow()
-    private var references = 0
+    @Volatile private var references = 0
+    internal val visibleConsumers get() = references
     private var watching = false
     private val main = Handler(Looper.getMainLooper())
     private val packages = object : BroadcastReceiver() {
@@ -77,7 +78,8 @@ class PanelWidgetHost private constructor(private val context: Context) {
         // Read before touching IDs: unknown/corrupt schemas must never cause resource deletion.
         val saved = repository.settings.first()
         val used = (saved.panels.left.widgets + saved.panels.right.widgets).map { it.appWidgetId }.toSet() + listOfNotNull(saved.pendingWidget?.widget?.appWidgetId)
-        host.appWidgetIds.filter { it !in used }.forEach { host.deleteAppWidgetId(it) }
+        try { host.appWidgetIds.filter { it !in used }.forEach { host.deleteAppWidgetId(it) } }
+        catch (_: RuntimeException) { failure.value = "Не удалось освободить удалённые виджеты; повторим при открытии Home" }
     }
     fun delete(id: Int) { host.deleteAppWidgetId(id); changed() }
 

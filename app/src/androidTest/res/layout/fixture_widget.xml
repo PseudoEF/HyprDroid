@@ -1,0 +1,5 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="8dp" android:background="#313244">
+    <TextView android:id="@+id/fixture_text" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Fixture widget" android:textColor="#CDD6F4" />
+    <TextView android:id="@+id/fixture_size" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="size" android:textColor="#BAC2DE" />
+    <Button android:id="@+id/fixture_click" android:layout_width="match_parent" android:layout_height="48dp" android:text="Widget click" />
+</LinearLayout>
