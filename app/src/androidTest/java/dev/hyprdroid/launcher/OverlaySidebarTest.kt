@@ -38,6 +38,10 @@ class OverlaySidebarTest {
         val alreadyPinned = runBlocking { repository.settings.first().sidebar.any { it.id == launchItem.id } }
         runBlocking { repository.setSidebarItem(launchItem, true) }
         runBlocking { repository.setOverlay(OverlaySettings()) }
+        runBlocking {
+            repository.setPanel(PanelSide.LEFT, PanelsSettings().left)
+            repository.setPanel(PanelSide.RIGHT, PanelSettings(scope = PanelScope.EVERYWHERE))
+        }
         permission("deny")
         val scenario = ActivityScenario.launch(MainActivity::class.java)
         try {

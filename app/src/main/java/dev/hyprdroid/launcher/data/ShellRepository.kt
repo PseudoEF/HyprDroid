@@ -61,6 +61,12 @@ class ShellRepository(private val store: DataStore<Preferences>) {
             data[overlayPosition] = safe.positionPercent
             data[overlayHeight] = safe.heightDp
             data[overlayInset] = safe.insetDp
+            current.panelConfiguration?.let { configuration ->
+                if (safe.positionPercent != current.overlay.positionPercent || safe.heightDp != current.overlay.heightDp || safe.insetDp != current.overlay.insetDp) {
+                    data[panels] = PanelsCodec.encode(configuration.copy(right = configuration.right.copy(
+                        positionPercent = safe.positionPercent, heightDp = safe.heightDp, insetDp = safe.insetDp)))
+                }
+            }
         }
     }
 
@@ -94,6 +100,7 @@ class ShellRepository(private val store: DataStore<Preferences>) {
             if (index >= 0) {
                 val order = panel.modules.toMutableList().apply { add((index + delta).coerceIn(0, lastIndex), removeAt(index)) }
                 data[panels] = PanelsCodec.encode(current.panels.with(side, panel.copy(modules = order)))
+                ShellPresentationCodec.write(data, current.presentation)
             }
         }
     }
