@@ -23,7 +23,7 @@ import java.io.File
 @RunWith(AndroidJUnit4::class)
 class WidgetProcessRestoreTest {
     @get:Rule val compose = createEmptyComposeRule()
-    @Test fun widgetIdPlacementAndRemoteViewsSurviveARealProcessRestart() = runBlocking {
+    @Test fun widgetIdPlacementAndRemoteViewsSurviveARealProcessRestart(): Unit = runBlocking {
         val phase = InstrumentationRegistry.getArguments().getString("widgetPhase") ?: error("Explicit widget phase required")
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val repository = ShellRepository(context)
