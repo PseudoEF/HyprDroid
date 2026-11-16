@@ -1,5 +1,9 @@
 package dev.hyprdroid.launcher
 
+import android.content.ComponentName
+import android.content.Intent
+import dev.hyprdroid.launcher.widgets.PanelWidgetHost
+
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.test.core.app.ActivityScenario
@@ -65,9 +69,16 @@ class UpgradePersistenceTest {
             shell.setOverlay(OverlaySettings(true, 67, 144, 24))
             shell.reorderPanelModule(PanelSide.RIGHT, "QUICK_LAUNCH", -1)
             shell.setWallpaper(wallpaper)
+            context.startActivity(Intent().setClassName(context.packageName + ".test", OverlayTestHostActivity::class.java.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            val host = PanelWidgetHost.get(context)
+            val widgetId = host.host.allocateAppWidgetId()
+            val provider = ComponentName(context.packageName + ".test", FixtureWidgetProvider::class.java.name)
+            assertTrue(host.manager.bindAppWidgetIdIfAllowed(widgetId, provider))
+            shell.savePendingWidget(PendingPanelWidget(PanelSide.LEFT, PanelWidget(widgetId, provider.flattenToString(), "Upgrade widget", 85, 180), WidgetBindingStage.COMMIT))
+            shell.commitPendingWidget(widgetId)
             baseline.writeText(JSONObject().put("apps", JSONArray(apps)).put("uid", context.applicationInfo.uid)
                 .put("firstInstallTime", packageInfo.firstInstallTime).put("code", identity.versionCode)
-                .put("certificate", identity.certificateSha256).toString())
+                .put("widgetId", widgetId).put("certificate", identity.certificateSha256).toString())
         } else {
             val original = JSONObject(baseline.readText())
             val apps = original.getJSONArray("apps").let { array -> List(array.length()) { array.getString(it) } }
@@ -95,9 +106,12 @@ class UpgradePersistenceTest {
             assertEquals(67, shell.settings.first().panels.right.positionPercent)
             assertEquals(24, shell.settings.first().panels.right.insetDp)
             assertEquals(PanelScope.HOME, shell.settings.first().panels.left.scope)
-            assertEquals(listOf("CLOCK", "DATE", "BATTERY"), shell.settings.first().panels.left.modules)
+            val widgetId = original.getInt("widgetId")
+            assertEquals(listOf("CLOCK", "DATE", "BATTERY", "ANDROID_WIDGET:$widgetId"), shell.settings.first().panels.left.modules)
             assertEquals(listOf("QUICK_LAUNCH", "SYSTEM_STATUS"), shell.settings.first().panels.right.modules)
-            assertTrue(shell.settings.first().panels.left.widgets.isEmpty())
+            assertEquals(listOf(widgetId), shell.settings.first().panels.left.widgets.map { it.appWidgetId })
+            assertEquals(80, shell.settings.first().panels.left.widthPercent)
+            assertNotNull(PanelWidgetHost.get(context).info(widgetId))
             assertNull(shell.settings.first().pendingWidget)
             dismissBackgroundPixelLauncherAnr()
             val scenario = ActivityScenario.launch(MainActivity::class.java)
@@ -113,6 +127,17 @@ class UpgradePersistenceTest {
                 compose.onNodeWithTag("about-certificate").performScrollTo().assertTextEquals(identity.certificateSha256)
                 UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
                 compose.onNodeWithTag("about-screen").assertDoesNotExist()
+                compose.onNodeWithContentDescription("Меню оболочки").performClick()
+                compose.onNodeWithText("Левая панель", substring = false).performClick()
+                compose.waitUntil(10_000) { compose.onAllNodesWithTag("left-panel").fetchSemanticsNodes().isNotEmpty() }
+                compose.onNodeWithTag("sidebar-items").performScrollToIndex(3)
+                assertTrue(UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).wait(
+                    androidx.test.uiautomator.Until.hasObject(androidx.test.uiautomator.By.text("Fixture #$widgetId · 0")), 10_000))
+                captureShellScreen("v071-widget-upgrade")
+                val old = shell.settings.first().panels.left
+                shell.setPanel(PanelSide.LEFT, old.copy(widthPercent = 90), old)
+                assertEquals(widgetId, shell.settings.first().panels.left.widgets.single().appWidgetId)
+                assertEquals(90, shell.settings.first().panels.left.widthPercent)
             } finally { scenario.close() }
         }
     }

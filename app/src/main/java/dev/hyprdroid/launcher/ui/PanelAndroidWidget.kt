@@ -6,6 +6,9 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Process
 import android.util.SizeF
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,13 +23,17 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.hyprdroid.launcher.model.PanelWidget
+import dev.hyprdroid.launcher.model.PanelWidgetLimits
+import dev.hyprdroid.launcher.model.fitPanelWidget
 import dev.hyprdroid.launcher.widgets.PanelWidgetHost
 
 val LocalGlobalWidgetSurface = staticCompositionLocalOf { false }
 
 /** RemoteViews rendering remains inside the existing panel module slot. */
 @Composable
-internal fun PanelAndroidWidget(widget: PanelWidget) {
+@OptIn(ExperimentalFoundationApi::class)
+internal fun PanelAndroidWidget(widget: PanelWidget, onEdit: (() -> Unit)? = null,
+    interactive: Boolean = true, onResize: ((PanelWidget) -> Unit)? = null) {
     val context = LocalContext.current
     val session = remember { PanelWidgetHost.get(context) }
     val revision by session.revision.collectAsState()
@@ -51,7 +58,9 @@ internal fun PanelAndroidWidget(widget: PanelWidget) {
     } }
     ShellSurface(Modifier.fillMaxWidth().testTag("android-widget-${widget.appWidgetId}")) {
         Column(Modifier.padding(8.dp)) {
-            Text(widget.title.ifBlank { "Android-виджет" }, style = MaterialTheme.typography.labelMedium, color = Mocha.Subtext)
+            Text(widget.title.ifBlank { "Android-виджет" }, style = MaterialTheme.typography.labelMedium, color = Mocha.Subtext,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 32.dp).testTag("widget-title-${widget.appWidgetId}")
+                    .then(if (onEdit != null) Modifier.combinedClickable(onClick = {}, onLongClick = onEdit, onLongClickLabel = "Редактировать виджет") else Modifier))
             if (info == null || failed || hostError != null) {
                 Text(hostError ?: "Виджет недоступен: поставщик удалён/отключён или привязка отозвана. Запись сохранена.", style = MaterialTheme.typography.bodySmall)
                 TextButton(onClick = { failed = false; session.retry() }) { Text("Повторить") }
@@ -59,13 +68,19 @@ internal fun PanelAndroidWidget(widget: PanelWidget) {
             } else if (active) {
                 val density = LocalDensity.current.density
                 BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    val minWidth = (if (info.resizeMode and AppWidgetProviderInfo.RESIZE_HORIZONTAL != 0) info.minResizeWidth else info.minWidth) / density
-                    val limitWidth = if (Build.VERSION.SDK_INT >= 31 && info.maxResizeWidth > 0) minOf(maxWidth.value, info.maxResizeWidth / density) else maxWidth.value
-                    val width = (maxWidth.value * widget.widthPercent / 100).coerceAtLeast(minOf(minWidth, limitWidth)).coerceAtMost(limitWidth)
-                    val minHeight = (if (info.resizeMode and AppWidgetProviderInfo.RESIZE_VERTICAL != 0) info.minResizeHeight else info.minHeight) / density
-                    val requestedHeight = if (info.resizeMode and AppWidgetProviderInfo.RESIZE_VERTICAL == 0) info.minHeight / density else widget.heightDp.toFloat()
-                    val maxHeight = if (Build.VERSION.SDK_INT >= 31 && info.maxResizeHeight > 0) (info.maxResizeHeight / density).coerceAtMost(600f) else 600f
-                    val height = requestedHeight.coerceAtLeast(minHeight.coerceAtMost(maxHeight)).coerceIn(64f, maxHeight.coerceAtLeast(64f))
+                    val horizontal = info.resizeMode and AppWidgetProviderInfo.RESIZE_HORIZONTAL != 0
+                    val vertical = info.resizeMode and AppWidgetProviderInfo.RESIZE_VERTICAL != 0
+                    val limits = PanelWidgetLimits(
+                        (if (horizontal && info.minResizeWidth > 0) info.minResizeWidth else info.minWidth) / density,
+                        (if (vertical && info.minResizeHeight > 0) info.minResizeHeight else info.minHeight) / density,
+                        if (Build.VERSION.SDK_INT >= 31) info.maxResizeWidth / density else 0f,
+                        if (Build.VERSION.SDK_INT >= 31) info.maxResizeHeight / density else 0f, horizontal, vertical)
+                    val fitted = fitPanelWidget(widget, maxWidth.value, limits)
+                    val width = fitted.width
+                    val height = fitted.height
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (fitted.tooNarrow) Text("Панель уже минимальной ширины поставщика. Увеличьте ширину панели.", style = MaterialTheme.typography.bodySmall)
+                    Box {
                     key(widget.appWidgetId, generation, revision) {
                         AndroidView(factory = { visual ->
                             try { session.host.createView(visual, widget.appWidgetId, info) }
@@ -82,6 +97,12 @@ internal fun PanelAndroidWidget(widget: PanelWidget) {
                                     } catch (_: RuntimeException) { failed = true }
                                 }
                             })
+                    }
+                    if (!interactive) Box(Modifier.matchParentSize().clickable(onClickLabel = "Предпросмотр виджета", onClick = {}))
+                    if (onResize != null && (horizontal || vertical)) Box(Modifier.align(Alignment.BottomEnd)) {
+                        WidgetResizeHandle(widget, maxWidth.value, horizontal, vertical, onResize)
+                    }
+                    }
                     }
                 }
             } else Text("Загрузка виджета…", style = MaterialTheme.typography.bodySmall)

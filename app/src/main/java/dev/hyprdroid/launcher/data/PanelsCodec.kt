@@ -9,7 +9,7 @@ internal object PanelsCodec {
     fun decode(raw: String): PanelsSettings = try {
         val root = JSONObject(raw)
         val version = root.getInt("version")
-        if (version !in 1..2) throw IOException("Unsupported panels schema")
+        if (version !in 1..3) throw IOException("Unsupported panels schema")
         PanelsSettings(read(root.getJSONObject("left"), version), read(root.getJSONObject("right"), version)).also {
             val ids = (it.left.widgets + it.right.widgets).map { widget -> widget.appWidgetId }
             require(ids.distinct().size == ids.size)
@@ -23,17 +23,18 @@ internal object PanelsCodec {
         visibility = MarkerVisibility.valueOf(value.getString("visibility")),
         modules = value.getJSONArray("modules").let { array -> List(array.length()) { array.getString(it) } },
         widgets = if (version == 1) emptyList() else value.getJSONArray("widgets").let { array -> List(array.length()) { readWidget(array.getJSONObject(it)) } },
+        widthPercent = if (version < 3) 80 else value.getInt("widthPercent"),
     ).validated()
     fun encode(value: PanelsSettings): String {
         val ids = (value.left.widgets + value.right.widgets).map { it.appWidgetId }
         require(ids.distinct().size == ids.size)
-        return JSONObject().put("version", 2).put("left", write(value.left)).put("right", write(value.right)).toString()
+        return JSONObject().put("version", 3).put("left", write(value.left)).put("right", write(value.right)).toString()
     }
     private fun write(value: PanelSettings): JSONObject = value.validated().let {
         JSONObject().put("scope", it.scope.name).put("markerWidthDp", it.markerWidthDp).put("touchWidthDp", it.touchWidthDp)
             .put("heightDp", it.heightDp).put("positionPercent", it.positionPercent).put("insetDp", it.insetDp)
             .put("visibility", it.visibility.name).put("modules", JSONArray(it.modules))
-            .put("widgets", JSONArray().apply { it.widgets.forEach { widget -> put(writeWidget(widget)) } })
+            .put("widgets", JSONArray().apply { it.widgets.forEach { widget -> put(writeWidget(widget)) } }).put("widthPercent", it.widthPercent)
     }
     private fun readWidget(value: JSONObject) = PanelWidget(value.getInt("id"), value.getString("provider"), value.getString("title"),
         value.getInt("widthPercent"), value.getInt("heightDp")).validated()

@@ -5,6 +5,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,6 +21,7 @@ import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -31,6 +35,11 @@ import androidx.compose.ui.zIndex
 import dev.hyprdroid.launcher.model.WorkspaceItem
 import dev.hyprdroid.launcher.model.SidebarModule
 import dev.hyprdroid.launcher.model.PanelSide
+import dev.hyprdroid.launcher.model.PanelSettings
+import dev.hyprdroid.launcher.data.ShellRepository
+import dev.hyprdroid.launcher.widgets.PanelWidgetHost
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
 // Typed chrome keys cannot collide with persisted shortcut IDs.
 private enum class SidebarChrome { STATUS, TITLE, SEARCH, EMPTY }
@@ -46,6 +55,7 @@ fun ModularSidebar(
     panelModifier: Modifier = Modifier,
     onStopOverlay: (() -> Unit)? = null,
     side: PanelSide = PanelSide.RIGHT,
+    allowPanelEditing: Boolean = true,
 ) {
     var editing by rememberSaveable { mutableStateOf(false) }
     var adding by rememberSaveable { mutableStateOf(false) }
@@ -54,6 +64,34 @@ fun ModularSidebar(
     val entries = remember(state.sidebarEntries) { state.sidebarEntries.associateBy { it.item.id } }
     val storedItems = state.shell?.sidebar.orEmpty()
     val enabled = state.shell != null && !state.shellError
+    val context = LocalContext.current
+    val repository = remember(context) { ShellRepository(context) }
+    val scope = rememberCoroutineScope()
+    var moduleEditing by remember { mutableStateOf(false) }
+    var editorBase by remember { mutableStateOf(PanelSettings()) }
+    var editorDraft by remember { mutableStateOf(PanelSettings()) }
+    var initialModule by remember { mutableStateOf<String?>(null) }
+    var savingModules by remember { mutableStateOf(false) }
+    var editorError by remember { mutableStateOf<String?>(null) }
+    fun editModules(id: String? = null) {
+        state.shell?.panels?.get(side)?.let {
+            editorBase = it; editorDraft = it; initialModule = id; moduleEditing = true; editing = false; adding = false
+        }
+    }
+    fun saveModules() {
+        val value = editorDraft
+        scope.launch {
+            savingModules = true
+            try {
+                repository.setPanel(side, value, editorBase)
+                PanelWidgetHost.get(context).cleanup(repository)
+                moduleEditing = false; editorError = null
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { editorError = "Не удалось сохранить. Черновик оставлен; повторите попытку." }
+            finally { savingModules = false }
+        }
+    }
+    if (allowPanelEditing) BackHandler(moduleEditing) { if (!savingModules) moduleEditing = false }
     val modules = state.shell?.panels?.get(side)?.modules.orEmpty()
     val androidWidgets = state.shell?.panels?.get(side)?.widgets.orEmpty().associateBy { it.moduleId }
     val tag = if (side == PanelSide.RIGHT) "sidebar" else "left-panel"
@@ -78,20 +116,35 @@ fun ModularSidebar(
 
     BoxWithConstraints(Modifier.fillMaxSize().imePadding().testTag("$tag-overlay")) {
         val heightLimit = maxHeight * .8f
+        val panelWidth = (maxWidth * (if (moduleEditing) editorDraft.widthPercent else state.shell?.panels?.get(side)?.widthPercent ?: 80) / 100f).coerceAtMost(600.dp)
         Box(Modifier.fillMaxSize().background(Mocha.Base.copy(alpha = .45f)).testTag("$tag-scrim")
             .clickable(onClickLabel = closeLabel, onClick = dismiss))
         Surface(color = Mocha.Mantle.copy(alpha = .97f), contentColor = Mocha.Text,
             shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, Mocha.Mauve.copy(alpha = .45f)),
             modifier = Modifier.align(if (side == PanelSide.RIGHT) AbsoluteAlignment.CenterRight else AbsoluteAlignment.CenterLeft).safeDrawingPadding().padding(12.dp)
-                .widthIn(max = 420.dp).fillMaxWidth(.80f).heightIn(max = heightLimit)
+                .width(panelWidth).heightIn(max = heightLimit)
                 .animateContentSize(tween(180)).then(panelModifier).testTag(tag)
-                .sidebarClosingGesture(enabled = !editing && drag.draggedId == null, sign = closeSign, onClose = dismiss)) {
+                .sidebarClosingGesture(enabled = !editing && !moduleEditing && drag.draggedId == null, sign = closeSign, onClose = dismiss)) {
             Column(Modifier.padding(12.dp)) {
                 Row(Modifier.testTag("$tag-header").sidebarClosingGesture(sign = closeSign, onClose = dismiss), verticalAlignment = Alignment.CenterVertically) {
                     Text(if (side == PanelSide.RIGHT) "Sidebar" else "Левая панель", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                     IconButton(onClick = dismiss) { Icon(Icons.Default.Close, closeLabel) }
                 }
                 onStopOverlay?.let { stop -> TextButton(onClick = stop, modifier = Modifier.testTag("stop-overlay")) { Text("Отключить overlay") } }
+                if (moduleEditing) {
+                    Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).testTag("inline-panel-editor")) {
+                        Text("Предпросмотр · изменения не сохранены", style = MaterialTheme.typography.labelSmall)
+                        PanelWidthControl(editorDraft, !savingModules) { editorDraft = it }
+                        PanelModuleEditor(editorDraft, { editorDraft = it }, !savingModules, initialModule, inlinePreview = true)
+                    }
+                    editorError?.let { Text(it, color = Mocha.Red) }
+                    FlowRow {
+                        Button(onClick = ::saveModules, enabled = !savingModules, modifier = Modifier.testTag("inline-panel-save")) { Text("Сохранить") }
+                        TextButton(onClick = { moduleEditing = false }, enabled = !savingModules, modifier = Modifier.testTag("inline-panel-cancel")) { Text("Отмена") }
+                    }
+                } else {
+                if (allowPanelEditing) TextButton(onClick = { editModules() }, enabled = enabled && !editing,
+                    modifier = Modifier.testTag("edit-panel-modules")) { Text("Редактировать панель") }
                 if (LocalGlobalWidgetSurface.current && androidWidgets.isNotEmpty()) Text("Android может ограничивать действия виджетов в overlay. Привязка и настройка доступны в Home.", style = MaterialTheme.typography.bodySmall, color = Mocha.Subtext)
                 if ("QUICK_LAUNCH" in modules && side == PanelSide.RIGHT) FlowRow {
                     TextButton(onClick = { editing = !editing; adding = false }, enabled = enabled) { Text(if (editing) "Готово" else "Редактировать") }
@@ -149,10 +202,12 @@ fun ModularSidebar(
                             }
                         }
                     } else if (!adding && !editing) item(key = PanelModuleKey(module), span = { GridItemSpan(maxLineSpan) }) {
-                        androidWidgets[module]?.let { PanelAndroidWidget(it) } ?: PanelStatusModule(module)
+                        androidWidgets[module]?.let { PanelAndroidWidget(it,
+                            onEdit = if (allowPanelEditing) ({ editModules(module) }) else null, interactive = allowPanelEditing) } ?: PanelStatusModule(module)
                     }
                     }
                     if (modules.isEmpty()) item(key = SidebarChrome.EMPTY, span = { GridItemSpan(maxLineSpan) }) { Text("Модули скрыты. Настройте их через меню верхней панели.") }
+                }
                 }
             }
         }

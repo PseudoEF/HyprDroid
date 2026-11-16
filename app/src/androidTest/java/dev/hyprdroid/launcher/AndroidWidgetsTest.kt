@@ -126,10 +126,12 @@ class AndroidWidgetsTest {
             compose.waitUntil(8_000) { state().panels.left.widgets.size == 2 && state().pendingWidget == null }
             val second = state().panels.left.widgets.last()
             assertNotEquals(first.appWidgetId, second.appWidgetId)
+            compose.onNodeWithTag("module-select-${first.moduleId}").performScrollTo().performClick()
             compose.onNodeWithTag("widget-height-${first.appWidgetId}").performScrollTo()
                 .performSemanticsAction(SemanticsActions.SetProgress) { it(260f) }
             compose.onNodeWithTag("widget-width-${first.appWidgetId}").performScrollTo()
                 .performSemanticsAction(SemanticsActions.SetProgress) { it(60f) }
+            compose.onNodeWithTag("module-select-${second.moduleId}").performScrollTo().performClick()
             compose.onNodeWithTag("module-up-${second.moduleId}").performScrollTo().performClick()
             compose.onNodeWithTag("save-panel").performScrollTo().performClick()
             compose.waitUntil(5_000) { state().panels.left.widgets.first().heightDp == 260 }

@@ -21,10 +21,12 @@ fixture() {
   grep -q 'OK (1 test)' "$report/$phase.txt"
 }
 cp "$RUNNER_TEMP/hyprdroid-upgrade/a.json" "$report/build-a.json"
-cp "$RUNNER_TEMP/hyprdroid-distribution/HyprDroid-0.7.0-$CODE_B.json" "$report/build-b.json"
+cp "$RUNNER_TEMP/hyprdroid-distribution/HyprDroid-0.7.1-$CODE_B.json" "$report/build-b.json"
 adb install "$RUNNER_TEMP/hyprdroid-upgrade/a.apk"
 adb install "$RUNNER_TEMP/hyprdroid-upgrade/test.apk"
-fixture seed 10039 0.6.2 1cc56d19682d1d8809c78ae353a200d8b6b88eb8
+adb shell appwidget grantbind --package "$package" --user 0
+fixture seed 10045 0.7.0 2a5b856655f1d471f15cf9a4ebd05033c4b919c4
+adb shell appwidget revokebind --package "$package" --user 0
 # Simulate an already opted-in installation, including Android's actual special permission.
 adb shell appops set "$package" SYSTEM_ALERT_WINDOW allow
 adb shell appops get "$package" SYSTEM_ALERT_WINDOW > "$report/overlay-permission-before.txt"
@@ -32,12 +34,12 @@ adb shell am force-stop "$package"
 adb shell run-as "$package" sha256sum files/datastore/workspaces.preferences_pb files/datastore/shell.preferences_pb > "$report/datastore-before.sha256"
 adb shell dumpsys package "$package" > "$report/package-before.txt"
 # No uninstall, clear-data, downgrade flag or replacement DataStore fixture.
-adb install -r "$RUNNER_TEMP/hyprdroid-distribution/HyprDroid-0.7.0-$CODE_B.apk" > "$report/install-update.txt"
+adb install -r "$RUNNER_TEMP/hyprdroid-distribution/HyprDroid-0.7.1-$CODE_B.apk" > "$report/install-update.txt"
 cat "$report/install-update.txt"
 grep -q Success "$report/install-update.txt"
 adb shell run-as "$package" sha256sum files/datastore/workspaces.preferences_pb files/datastore/shell.preferences_pb > "$report/datastore-after.sha256"
 cmp "$report/datastore-before.sha256" "$report/datastore-after.sha256"
-fixture verify "$CODE_B" 0.7.0 "$HYPRDROID_BUILD_COMMIT"
+fixture verify "$CODE_B" 0.7.1 "$HYPRDROID_BUILD_COMMIT"
 adb shell appops get "$package" SYSTEM_ALERT_WINDOW > "$report/overlay-permission-after.txt"
 adb shell dumpsys package "$package" > "$report/package-after.txt"
-echo "Update v0.6.2 (10039) -> v0.7.0 ($CODE_B) succeeded; UID, firstInstallTime and DataStore preserved" | tee "$report/result.txt"
+echo "Update v0.7 (10045) -> v0.7.1 ($CODE_B) succeeded; UID, firstInstallTime and DataStore preserved" | tee "$report/result.txt"

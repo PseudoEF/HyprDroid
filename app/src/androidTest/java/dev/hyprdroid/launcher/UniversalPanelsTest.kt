@@ -115,12 +115,17 @@ class UniversalPanelsTest {
             compose.onNodeWithContentDescription("Меню оболочки").performClick()
             compose.onNodeWithText("Настройки панелей", substring = false).performClick()
             await("overlay-settings")
+            compose.onNodeWithTag("panel-category-OVERLAY").performScrollTo().performClick()
             compose.onNodeWithTag("panel-scope-APPS").performScrollTo().performClick()
+            compose.onNodeWithTag("panel-category-GESTURES").performScrollTo().performClick()
             compose.onNodeWithTag("panel-slider-Ширина сенсорной зоны").performScrollTo()
                 .performSemanticsAction(SemanticsActions.SetProgress) { it(42f) }
+            compose.onNodeWithTag("panel-category-APPEARANCE").performScrollTo().performClick()
             compose.onNodeWithTag("panel-slider-Ширина маркера").performScrollTo()
                 .performSemanticsAction(SemanticsActions.SetProgress) { it(7f) }
             compose.onNodeWithTag("panel-visibility-HIDDEN").performScrollTo().performClick()
+            compose.onNodeWithTag("panel-category-CONTENT").performScrollTo().performClick()
+            compose.onNodeWithTag("module-select-CLOCK").performScrollTo().performClick()
             compose.onNodeWithTag("module-down-CLOCK").performScrollTo().performClick()
             compose.onNodeWithTag("save-panel").performScrollTo().performClick()
             compose.waitUntil(5_000) { runBlocking { repository.settings.first().panels.left.touchWidthDp == 42 } }
@@ -131,6 +136,7 @@ class UniversalPanelsTest {
             assertEquals(listOf("DATE", "CLOCK", "BATTERY"), saved.panels.left.modules)
             assertEquals(PanelsSettings().right, saved.panels.right)
             compose.onNodeWithTag("panel-tab-RIGHT").performScrollTo().performClick()
+            compose.onNodeWithTag("panel-category-OVERLAY").performScrollTo().performClick()
             compose.onNodeWithTag("panel-scope-EVERYWHERE").performScrollTo().performClick()
             compose.onNodeWithTag("save-panel").performScrollTo().performClick()
             compose.waitUntil(5_000) { runBlocking { repository.settings.first().panels.right.scope == PanelScope.EVERYWHERE } }
