@@ -6,6 +6,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
@@ -91,7 +92,10 @@ fun ModularSidebar(
             finally { savingModules = false }
         }
     }
-    if (allowPanelEditing) BackHandler(moduleEditing) { if (!savingModules) moduleEditing = false }
+    // Overlay has its existing native BackFrame, not an Activity dispatcher.
+    if (allowPanelEditing && LocalOnBackPressedDispatcherOwner.current != null) {
+        BackHandler(moduleEditing) { if (!savingModules) moduleEditing = false }
+    }
     val modules = state.shell?.panels?.get(side)?.modules.orEmpty()
     val androidWidgets = state.shell?.panels?.get(side)?.widgets.orEmpty().associateBy { it.moduleId }
     val tag = if (side == PanelSide.RIGHT) "sidebar" else "left-panel"
