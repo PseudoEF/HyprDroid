@@ -230,6 +230,7 @@ class UniversalPanelsTest {
                     device.waitForIdle()
                     val before = PanelSide.entries.associateWith { side -> compose.onNodeWithTag("home-marker-${side.name}").fetchSemanticsNode().boundsInRoot }
                     fun unchanged() {
+                        device.waitForIdle()
                         await("home-marker-LEFT")
                         scenario.onActivity { assertFalse("Back must not finish HOME", it.isFinishing) }
                         PanelSide.entries.forEach { side ->
