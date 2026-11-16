@@ -56,7 +56,12 @@ internal fun OverlaySettingsPanel(onClose: () -> Unit) {
         val value = draft
         scope.launch {
             saving = true
-            try { repository.setPanel(destination, value); error = null }
+            try {
+                repository.setPanel(destination, value); error = null
+                val latest = repository.settings.first()
+                if (activity != null && latest.overlay.enabled && (latest.panels.left.scope.apps || latest.panels.right.scope.apps)
+                    && Settings.canDrawOverlays(context) && !running) OverlaySession.start(activity)
+            }
             catch (_: java.io.IOException) { error = "Не удалось сохранить панель. Повторите попытку." }
             finally { saving = false }
         }

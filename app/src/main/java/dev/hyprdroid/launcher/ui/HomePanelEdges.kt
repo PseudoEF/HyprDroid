@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
@@ -40,8 +41,8 @@ internal fun HomePanelMarkers(panels: PanelsSettings) {
             if (value.scope.home && value.visibility != MarkerVisibility.HIDDEN) {
                 val height = minOf(value.heightDp.dp, maxHeight * .5f)
                 val top = (maxHeight - height) * (value.positionPercent / 100f)
-                Box(Modifier.align(if (side == PanelSide.LEFT) Alignment.TopStart else Alignment.TopEnd)
-                    .offset(x = (if (side == PanelSide.LEFT) value.insetDp else -value.insetDp).dp, y = top)
+                Box(Modifier.align(if (side == PanelSide.LEFT) AbsoluteAlignment.TopLeft else AbsoluteAlignment.TopRight)
+                    .absoluteOffset(x = (if (side == PanelSide.LEFT) value.insetDp else -value.insetDp).dp, y = top)
                     .width(value.markerWidthDp.dp).height(height)
                     .background(Mocha.Mauve.copy(alpha = value.visibility.alpha / 255f), RoundedCornerShape(8.dp))
                     .testTag("home-marker-${side.name}"))

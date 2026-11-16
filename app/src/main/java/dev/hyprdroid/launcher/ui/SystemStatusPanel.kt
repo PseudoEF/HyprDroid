@@ -62,6 +62,12 @@ internal fun SystemStatusModule() {
 internal fun PanelStatusModule(id: String) {
     if (id == "SYSTEM_STATUS") { SystemStatusModule(); return }
     val known = dev.hyprdroid.launcher.model.PanelModule.entries.find { it.name == id }
+    if (id !in setOf("CLOCK", "DATE", "BATTERY")) {
+        ShellSurface(Modifier.fillMaxWidth().testTag("panel-module-$id")) {
+            Text("Недоступный модуль. Запись сохранена.", modifier = Modifier.padding(16.dp))
+        }
+        return
+    }
     val context = LocalContext.current
     val status by rememberSystemStatus()
     ShellSurface(Modifier.fillMaxWidth().testTag("panel-module-$id")) {

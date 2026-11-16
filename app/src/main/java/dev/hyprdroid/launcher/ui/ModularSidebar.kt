@@ -14,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
@@ -80,7 +81,7 @@ fun ModularSidebar(
             .clickable(onClickLabel = closeLabel, onClick = dismiss))
         Surface(color = Mocha.Mantle.copy(alpha = .97f), contentColor = Mocha.Text,
             shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, Mocha.Mauve.copy(alpha = .45f)),
-            modifier = Modifier.align(if (side == PanelSide.RIGHT) Alignment.CenterEnd else Alignment.CenterStart).safeDrawingPadding().padding(12.dp)
+            modifier = Modifier.align(if (side == PanelSide.RIGHT) AbsoluteAlignment.CenterRight else AbsoluteAlignment.CenterLeft).safeDrawingPadding().padding(12.dp)
                 .widthIn(max = 420.dp).fillMaxWidth(.80f).heightIn(max = heightLimit)
                 .animateContentSize(tween(180)).then(panelModifier).testTag(tag)
                 .sidebarClosingGesture(enabled = !editing && drag.draggedId == null, sign = closeSign, onClose = dismiss)) {
