@@ -36,6 +36,11 @@ class AndroidWidgetsTest {
     private fun await(tag: String) = compose.waitUntil(15_000) { compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() }
     private fun gone(tag: String) = compose.waitUntil(8_000) { compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isEmpty() }
     private fun state() = runBlocking { repository.settings.first() }
+    private fun enableConfiguredProvider(enabled: Boolean) {
+        // The separate fixture APK changes its own component, without a privileged pm command.
+        context.sendBroadcast(Intent("dev.hyprdroid.test.PROVIDER_ENABLED")
+            .setClassName(testPackage, FixtureWidgetProvider::class.java.name).putExtra("enabled", enabled))
+    }
     private fun openSettings() {
         compose.onNodeWithContentDescription("Меню оболочки").performClick()
         compose.onNodeWithText("Настройки панелей", substring = false).performClick()
@@ -89,7 +94,7 @@ class AndroidWidgetsTest {
         val before = state()
         assumeTrue("Use an isolated emulator, never replace existing widget data", before.panels.left.widgets.isEmpty() && before.panels.right.widgets.isEmpty() && before.pendingWidget == null)
         shell("appwidget revokebind --package ${context.packageName} --user 0")
-        shell("pm enable $testPackage/${ConfiguredFixtureWidgetProvider::class.java.name}")
+        enableConfiguredProvider(true)
         // Launch the separate fixture APK once so its provider is not in the stopped state.
         context.startActivity(Intent().setClassName(testPackage, OverlayTestHostActivity::class.java.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         runBlocking {
@@ -150,13 +155,12 @@ class AndroidWidgetsTest {
             assertEquals(60, state().panels.left.widgets.first().widthPercent)
 
             // Disabling a provider makes its binding unavailable; placement must remain removable data.
-            val disabled = shell("pm disable --user 0 $testPackage/${ConfiguredFixtureWidgetProvider::class.java.name}")
-            assertTrue("Provider component must actually be disabled: $disabled", disabled.contains("disabled"))
+            enableConfiguredProvider(false)
             compose.onNodeWithTag("sidebar-items").performScrollToIndex(4)
             compose.waitUntil(8_000) { session.info(first.appWidgetId) == null }
             compose.onNodeWithText("Виджет недоступен", substring = true).assertExists()
             assertTrue(state().panels.left.widgets.any { it.appWidgetId == first.appWidgetId })
-            shell("pm enable $testPackage/${ConfiguredFixtureWidgetProvider::class.java.name}")
+            enableConfiguredProvider(true)
             device.pressBack(); gone("left-panel")
 
             runBlocking {
@@ -182,7 +186,7 @@ class AndroidWidgetsTest {
             }
             assertFalse(session.host.appWidgetIds.contains(second.appWidgetId))
         } finally {
-            shell("pm enable $testPackage/${ConfiguredFixtureWidgetProvider::class.java.name}")
+            enableConfiguredProvider(true)
             runBlocking {
                 repository.settings.first().pendingWidget?.let { repository.cancelPendingWidget(it.widget.appWidgetId) }
                 repository.setPanel(PanelSide.LEFT, before.panels.left)

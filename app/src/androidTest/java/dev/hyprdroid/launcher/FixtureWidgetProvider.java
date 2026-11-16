@@ -5,6 +5,8 @@ import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
 import android.content.Context;
 import android.content.Intent;
+import android.content.ComponentName;
+import android.content.pm.PackageManager;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.widget.RemoteViews;
@@ -19,6 +21,13 @@ public class FixtureWidgetProvider extends AppWidgetProvider {
         render(context, manager, id);
     }
     @Override public void onReceive(Context context, Intent intent) {
+        if ("dev.hyprdroid.test.PROVIDER_ENABLED".equals(intent.getAction())) {
+            context.getPackageManager().setComponentEnabledSetting(
+                    new ComponentName(context, ConfiguredFixtureWidgetProvider.class),
+                    intent.getBooleanExtra("enabled", true) ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED : PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP);
+            return;
+        }
         if ("dev.hyprdroid.test.WIDGET_CLICK".equals(intent.getAction()) || "dev.hyprdroid.test.WIDGET_PULSE".equals(intent.getAction())) {
             int id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
             SharedPreferences prefs = context.getSharedPreferences("widget-fixture", 0);
