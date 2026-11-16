@@ -2,6 +2,7 @@ package dev.hyprdroid.launcher.ui
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.*
@@ -24,7 +25,7 @@ internal fun PanelSettings.moveModule(id: String, delta: Int): PanelSettings {
 }
 
 /** A compact list: at most one detail section. Shared by settings and the actual panel editor. */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 internal fun PanelModuleEditor(draft: PanelSettings, onChange: (PanelSettings) -> Unit, enabled: Boolean,
     initialSelection: String? = null, inlinePreview: Boolean = false) {
