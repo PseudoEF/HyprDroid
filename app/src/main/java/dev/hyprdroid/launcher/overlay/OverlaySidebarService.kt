@@ -27,6 +27,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collect
 
 /** Explicitly enabled foreground service. No app inspection, boot start, sticky restart or hidden API. */
 class OverlaySidebarService : Service() {
@@ -45,8 +46,12 @@ class OverlaySidebarService : Service() {
     private var settings = OverlaySettings()
     private var observing: Job? = null
     private var registered = false
+    private var screenOff = false
     private val receiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) { panel = false; refreshVisibility() }
+        override fun onReceive(context: Context?, intent: Intent?) {
+            screenOff = intent?.action == Intent.ACTION_SCREEN_OFF
+            panel = false; refreshVisibility()
+        }
     }
     private val appOps by lazy { getSystemService(AppOpsManager::class.java) }
     private val permissionListener = AppOpsManager.OnOpChangedListener { _, packageName ->
@@ -106,7 +111,7 @@ class OverlaySidebarService : Service() {
         if (!Settings.canDrawOverlays(this)) { stopSelf(); return }
         val locked = getSystemService(KeyguardManager::class.java).isKeyguardLocked
         val awake = getSystemService(PowerManager::class.java).isInteractive
-        if (OverlaySession.homeVisible || locked || !awake) { panel = false; removeWindow(); return }
+        if (OverlaySession.homeVisible || screenOff || locked || !awake) { panel = false; removeWindow(); return }
         render()
     }
     private fun render() {
@@ -180,19 +185,28 @@ class OverlaySidebarService : Service() {
     }
 
     private class BackFrame(context: Context, private val close: () -> Unit) : FrameLayout(context) {
-        private val back = OnBackInvokedCallback { close() }
+        // Keep Android 13 classes out of the API 29–32 view's fields/signatures.
+        private var platformBack: Any? = null
         init { isFocusableInTouchMode = true }
         override fun onAttachedToWindow() {
             super.onAttachedToWindow()
-            if (Build.VERSION.SDK_INT >= 33) findOnBackInvokedDispatcher()?.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, back)
+            if (Build.VERSION.SDK_INT >= 33) platformBack = PlatformBack(this, close)
         }
         override fun onDetachedFromWindow() {
-            if (Build.VERSION.SDK_INT >= 33) findOnBackInvokedDispatcher()?.unregisterOnBackInvokedCallback(back)
+            if (Build.VERSION.SDK_INT >= 33) (platformBack as? PlatformBack)?.dispose()
+            platformBack = null
             super.onDetachedFromWindow()
         }
         override fun dispatchKeyEvent(event: KeyEvent): Boolean {
             if (event.keyCode == KeyEvent.KEYCODE_BACK) { if (event.action == KeyEvent.ACTION_UP) close(); return true }
             return super.dispatchKeyEvent(event)
         }
+    }
+    @androidx.annotation.RequiresApi(33)
+    private class PlatformBack(view: View, close: () -> Unit) {
+        private val dispatcher = view.findOnBackInvokedDispatcher()
+        private val callback = OnBackInvokedCallback { close() }
+        init { dispatcher?.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, callback) }
+        fun dispose() { dispatcher?.unregisterOnBackInvokedCallback(callback) }
     }
 }

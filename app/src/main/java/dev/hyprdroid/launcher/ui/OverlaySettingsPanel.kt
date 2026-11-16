@@ -19,8 +19,10 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.hyprdroid.launcher.data.ShellRepository
 import dev.hyprdroid.launcher.model.OverlaySettings
+import dev.hyprdroid.launcher.model.ShellSettings
 import dev.hyprdroid.launcher.overlay.OverlaySession
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 @Composable
@@ -28,7 +30,11 @@ internal fun OverlaySettingsPanel(onClose: () -> Unit) {
     val context = LocalContext.current
     val activity = context as? Activity
     val repository = remember(context) { ShellRepository(context) }
-    val saved by repository.settings.collectAsState(initial = null)
+    var storageError by remember { mutableStateOf<String?>(null) }
+    val saved by produceState<ShellSettings?>(null, repository) {
+        try { repository.settings.collect { value = it } }
+        catch (_: java.io.IOException) { storageError = "Не удалось прочитать настройки overlay" }
+    }
     val current = saved?.overlay
     var draft by remember(current) { mutableStateOf(current ?: OverlaySettings()) }
     var allowed by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
@@ -85,7 +91,7 @@ internal fun OverlaySettingsPanel(onClose: () -> Unit) {
             Text("При 0 dp пробуем исключить Back только в зоне. Если Android отдаёт жест системе, увеличьте отступ или коснитесь видимого маркера. Остальная часть края сохраняет Back.", style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = { save(draft, false) }, enabled = !saving && current != null) { Text("Сохранить зону") }
             Text("Некоторые приложения и системные экраны скрывают overlay. На экране блокировки панель не показывается. После перезагрузки или остановки Android откройте HyprDroid для возобновления. Запуск ярлыков зависит от разрешений Android.", style = MaterialTheme.typography.bodySmall)
-            (error ?: serviceError)?.let { Text(it, color = Mocha.Red) }
+            (error ?: storageError ?: serviceError)?.let { Text(it, color = Mocha.Red) }
             TextButton(onClick = onClose, modifier = Modifier.testTag("overlay-settings-close")) { Text("Назад") }
         }
     }

@@ -51,7 +51,8 @@ class ShellRepository(private val store: DataStore<Preferences>) {
     suspend fun setOverlay(value: OverlaySettings) {
         val safe = value.validated()
         store.edit { data ->
-            decode(data) // Refuse unknown schemas; leave all existing records intact.
+            val current = decode(data) // Refuse unknown schemas; leave all existing records intact.
+            ShellPresentationCodec.write(data, current.presentation)
             data[overlayEnabled] = safe.enabled
             data[overlayPosition] = safe.positionPercent
             data[overlayHeight] = safe.heightDp
