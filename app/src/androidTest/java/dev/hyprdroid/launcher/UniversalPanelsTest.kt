@@ -46,6 +46,19 @@ class UniversalPanelsTest {
         val start = if (side == PanelSide.LEFT) 2 else device.displayWidth - 2
         device.swipe(start, y, if (side == PanelSide.LEFT) distance else device.displayWidth - distance, y, 25)
     }
+    private fun excludes(scenario: ActivityScenario<MainActivity>, x: Int, y: Int): Boolean {
+        var found = false
+        scenario.onActivity { activity ->
+            fun inspect(view: android.view.View) {
+                val location = IntArray(2)
+                view.getLocationOnScreen(location)
+                if (view.systemGestureExclusionRects.any { android.graphics.Rect(it).apply { offset(location[0], location[1]) }.contains(x, y) }) found = true
+                if (view is android.view.ViewGroup) for (index in 0 until view.childCount) inspect(view.getChildAt(index))
+            }
+            inspect(activity.window.decorView)
+        }
+        return found
+    }
     @Test fun homeEdgesWorkInCleanAndClassicAndBackRestoresNormalGestures() {
         seed()
         try {
@@ -60,6 +73,7 @@ class UniversalPanelsTest {
                         focused
                     }
                     device.waitForIdle()
+                    compose.waitUntil(5_000) { excludes(scenario, 2, device.displayHeight / 2) }
                     edge(PanelSide.LEFT)
                     await("left-panel")
                     compose.onNodeWithTag("panel-module-CLOCK").assertExists()
@@ -70,6 +84,7 @@ class UniversalPanelsTest {
                     device.pressBack()
                     gone("left-panel")
                     device.waitForIdle()
+                    compose.waitUntil(5_000) { excludes(scenario, device.displayWidth - 2, device.displayHeight / 2) }
                     edge(PanelSide.RIGHT)
                     await("sidebar")
                     compose.onNodeWithTag("sidebar-quick-launch").assertExists()
@@ -79,6 +94,8 @@ class UniversalPanelsTest {
                     await("app-drawer")
                     compose.onNodeWithTag("home-marker-LEFT").assertDoesNotExist()
                     compose.onNodeWithTag("home-marker-RIGHT").assertDoesNotExist()
+                    assertFalse(excludes(scenario, 2, device.displayHeight / 2))
+                    assertFalse(excludes(scenario, device.displayWidth - 2, device.displayHeight / 2))
                     device.pressBack()
                     gone("app-drawer")
                     compose.onNodeWithTag("left-panel-open").performClick()
