@@ -150,7 +150,8 @@ class AndroidWidgetsTest {
             assertEquals(60, state().panels.left.widgets.first().widthPercent)
 
             // Disabling a provider makes its binding unavailable; placement must remain removable data.
-            shell("pm disable-user --user 0 $testPackage/${ConfiguredFixtureWidgetProvider::class.java.name}")
+            val disabled = shell("pm disable --user 0 $testPackage/${ConfiguredFixtureWidgetProvider::class.java.name}")
+            assertTrue("Provider component must actually be disabled: $disabled", disabled.contains("disabled"))
             compose.onNodeWithTag("sidebar-items").performScrollToIndex(4)
             compose.waitUntil(8_000) { session.info(first.appWidgetId) == null }
             compose.onNodeWithText("Виджет недоступен", substring = true).assertExists()
