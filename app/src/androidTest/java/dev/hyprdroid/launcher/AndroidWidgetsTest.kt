@@ -134,7 +134,7 @@ class AndroidWidgetsTest {
             compose.onNodeWithTag("module-select-${second.moduleId}").performScrollTo().performClick()
             compose.onNodeWithTag("module-details-${first.moduleId}").assertDoesNotExist()
             compose.onNodeWithTag("module-up-${second.moduleId}").performScrollTo().performClick()
-            compose.onNodeWithTag("save-panel").performScrollTo().performClick()
+            compose.onNodeWithTag("save-panel").performClick()
             compose.waitUntil(5_000) { state().panels.left.widgets.first().heightDp == 260 }
             assertEquals(listOf(second.moduleId, first.moduleId), state().panels.left.modules.takeLast(2))
             device.pressBack(); gone("overlay-settings")
