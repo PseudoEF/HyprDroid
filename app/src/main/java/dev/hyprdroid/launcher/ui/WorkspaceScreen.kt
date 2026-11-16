@@ -146,7 +146,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     val classic = presentation.desktopMode == DesktopMode.CLASSIC
     val closePresentation = { presentationPreview = null; savingPresentation = false }
     val openPresentation = { if (state.shell != null && !state.shellError) { editing = false; presentationPreview = state.shell.presentation } }
-    val revealDock = { autoDockShown = true; dockPulse++ }
+    val revealDock: () -> Unit = { autoDockShown = true; dockPulse++ }
     val appsById = remember(state.apps) { state.apps.associateBy { it.componentId } }
     val favorites = state.shell?.favorites.orEmpty()
     val workspaceReady = !state.storageError
