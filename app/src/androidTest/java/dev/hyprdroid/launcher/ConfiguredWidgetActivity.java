@@ -15,6 +15,9 @@ public class ConfiguredWidgetActivity extends Activity {
         setResult(RESULT_CANCELED);
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setFitsSystemWindows(true);
+        int padding = Math.round(32 * getResources().getDisplayMetrics().density);
+        layout.setPadding(padding, padding, padding, padding);
         TextView title = new TextView(this);
         title.setText("Fixture widget configuration"); title.setTextSize(22);
         layout.addView(title);

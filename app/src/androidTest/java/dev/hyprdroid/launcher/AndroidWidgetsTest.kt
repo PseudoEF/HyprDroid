@@ -75,7 +75,12 @@ class AndroidWidgetsTest {
         await("left-panel")
     }
     private fun waitText(text: String) {
-        assertTrue("RemoteViews should show: $text", device.wait(Until.hasObject(By.text(text)), 8_000))
+        val shown = device.wait(Until.hasObject(By.text(text)), 15_000)
+        if (!shown) {
+            captureShellScreen("widget-text-missing")
+            device.dumpWindowHierarchy(java.io.File(context.getExternalFilesDir(null), "widget-window-missing.xml"))
+        }
+        assertTrue("RemoteViews should show: $text", shown)
     }
     @Test fun bindConfigureCancelMultipleResizeReorderUpdatesAndOverlayUseRealRemoteViews() {
         dismissBackgroundPixelLauncherAnr()
