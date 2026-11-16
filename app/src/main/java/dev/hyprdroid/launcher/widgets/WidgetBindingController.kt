@@ -41,8 +41,10 @@ class WidgetBindingController(private val activity: ComponentActivity) {
             val pending = repository.settings.first().pendingWidget ?: return@runOperation
             if (pending.stage != WidgetBindingStage.BIND) return@runOperation
             val returnedId = result.data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pending.widget.appWidgetId) ?: pending.widget.appWidgetId
-            if (returnedId != pending.widget.appWidgetId) return@runOperation
-            if (result.resultCode == Activity.RESULT_OK) advanceAfterBind() else cancelLocked()
+            if (result.resultCode == Activity.RESULT_OK) {
+                if (returnedId != pending.widget.appWidgetId) return@runOperation
+                advanceAfterBind()
+            } else cancelLocked()
         }
     }
     init {
@@ -129,7 +131,7 @@ class WidgetBindingController(private val activity: ComponentActivity) {
         runOperation {
             val pending = repository.settings.first().pendingWidget ?: return@runOperation
             if (pending.stage != WidgetBindingStage.CONFIGURE || requestCode != configureCode(pending.widget.appWidgetId)) return@runOperation
-            if (data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pending.widget.appWidgetId)?.let { it != pending.widget.appWidgetId } == true) return@runOperation
+            if (resultCode == Activity.RESULT_OK && data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pending.widget.appWidgetId)?.let { it != pending.widget.appWidgetId } == true) return@runOperation
             if (resultCode == Activity.RESULT_OK) commit(pending) else cancelLocked()
         }
         return true

@@ -41,7 +41,7 @@ class AndroidWidgetsTest {
         compose.onNodeWithText("Настройки панелей", substring = false).performClick()
         await("overlay-settings")
     }
-    private fun choose(configured: Boolean) {
+    private fun choose(configured: Boolean, approveBind: Boolean = true) {
         val count = state().panels.left.widgets.size
         compose.onNodeWithTag("add-android-widget").performScrollTo().performClick()
         await("widget-picker")
@@ -53,6 +53,10 @@ class AndroidWidgetsTest {
         val pending = state().pendingWidget ?: return
         if (pending.stage == WidgetBindingStage.BIND) {
             captureShellScreen("widget-bind-consent")
+            if (!approveBind) {
+                val negative = device.wait(Until.findObject(By.res("android", "button2")), 8_000)
+                assertNotNull(negative); negative!!.click(); return
+            }
             val positive = device.wait(Until.findObject(By.res("android", "button1")), 8_000)
                 ?: device.findObject(By.text(Pattern.compile("(?i)(create|allow|add)")))
             assertNotNull("Android's binding consent must be available", positive)
@@ -83,6 +87,10 @@ class AndroidWidgetsTest {
         val scenario = ActivityScenario.launch(MainActivity::class.java)
         try {
             await("home-pager"); openSettings()
+            choose(false, approveBind = false)
+            compose.waitUntil(8_000) { state().pendingWidget == null }
+            assertTrue(state().panels.left.widgets.isEmpty())
+            assertTrue(session.host.appWidgetIds.isEmpty())
             choose(true)
             waitText("Fixture widget configuration")
             val cancelled = state().pendingWidget!!.widget.appWidgetId
