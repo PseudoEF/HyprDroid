@@ -88,6 +88,7 @@ class UpgradePersistenceTest {
             assertEquals(DockVisibility.AUTO, shell.settings.first().presentation.dockVisibility)
             assertEquals(SidebarModule.entries.toSet(), shell.settings.first().presentation.sidebarModules)
             assertEquals(OverlaySettings(true, 67, 144, 24), shell.settings.first().overlay)
+            assertTrue("Android overlay permission must survive install -r", android.provider.Settings.canDrawOverlays(context))
             assertEquals(PanelScope.EVERYWHERE, shell.settings.first().panels.right.scope)
             assertEquals(144, shell.settings.first().panels.right.heightDp)
             assertEquals(67, shell.settings.first().panels.right.positionPercent)
