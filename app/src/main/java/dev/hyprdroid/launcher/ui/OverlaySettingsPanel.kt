@@ -171,7 +171,7 @@ internal fun OverlaySettingsPanel(onClose: () -> Unit) {
             if (!hasApps) Text("Сохраните режим «Поверх приложений» или «Везде» хотя бы для одной панели.", style = MaterialTheme.typography.bodySmall)
             Text(if (running) "Служба запущена; внутри HyprDroid используется Home-панель" else "Служба остановлена", Modifier.testTag("overlay-service-status"))
             if (optedIn && !running && allowed && hasApps) TextButton(onClick = { activity?.let { OverlaySession.start(it) } }) { Text("Повторить запуск") }
-            Text("Android может скрывать overlay на защищённых экранах. Уведомление службы и кнопка в панели позволяют её отключить. После перезапуска устройства откройте HyprDroid для возобновления. Полноценные Android-виджеты пока не поддерживаются.", style = MaterialTheme.typography.bodySmall)
+            Text("Android может скрывать overlay на защищённых экранах и ограничивать действия виджетов. Настройка виджетов доступна в Home. Уведомление службы и кнопка в панели позволяют её отключить. После перезапуска устройства откройте HyprDroid для возобновления.", style = MaterialTheme.typography.bodySmall)
             (error ?: serviceError)?.let { Text(it, color = Mocha.Red) }
             TextButton(onClick = onClose, modifier = Modifier.testTag("overlay-settings-close")) { Text("Назад") }
         }
