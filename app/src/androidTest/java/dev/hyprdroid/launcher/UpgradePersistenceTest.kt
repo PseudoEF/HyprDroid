@@ -86,6 +86,7 @@ class UpgradePersistenceTest {
             assertEquals(DesktopMode.CLEAN, shell.settings.first().presentation.desktopMode)
             assertEquals(DockVisibility.AUTO, shell.settings.first().presentation.dockVisibility)
             assertEquals(SidebarModule.entries.toSet(), shell.settings.first().presentation.sidebarModules)
+            assertFalse("Overlay must remain opt-in after upgrading", shell.settings.first().overlay.enabled)
             dismissBackgroundPixelLauncherAnr()
             val scenario = ActivityScenario.launch(MainActivity::class.java)
             try {
