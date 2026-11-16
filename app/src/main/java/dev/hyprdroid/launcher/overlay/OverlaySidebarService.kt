@@ -38,6 +38,7 @@ class OverlaySidebarService : Service() {
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var windows: WindowManager
+    private lateinit var windowContext: Context
     private lateinit var owner: OverlayOwner
     private lateinit var repository: ShellRepository
     private var root: View? = null
@@ -63,7 +64,8 @@ class OverlaySidebarService : Service() {
     override fun onCreate() {
         super.onCreate()
         instance = this
-        windows = getSystemService(WindowManager::class.java)
+        windowContext = if (Build.VERSION.SDK_INT >= 30) createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null) else this
+        windows = windowContext.getSystemService(WindowManager::class.java)
         owner = OverlayOwner()
         repository = ShellRepository(this)
         val filter = IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_USER_PRESENT) }
@@ -100,7 +102,7 @@ class OverlaySidebarService : Service() {
         } catch (_: RuntimeException) { OverlaySession.failed("Не удалось запустить foreground-службу Sidebar"); stopSelf() }
         return START_NOT_STICKY
     }
-    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+    private fun dp(value: Int) = (value * windowContext.resources.displayMetrics.density).toInt()
     internal fun refreshVisibility() {
         if (!settings.enabled) { removeWindow(); return }
         if (!Settings.canDrawOverlays(this)) { stopSelf(); return }
@@ -115,12 +117,12 @@ class OverlaySidebarService : Service() {
             val params: WindowManager.LayoutParams
             val view: View
             if (panel) {
-                val holder = BackFrame(this, ::closePanel)
+                val holder = BackFrame(windowContext, ::closePanel)
                 holder.setViewTreeLifecycleOwner(owner)
                 holder.setViewTreeViewModelStoreOwner(owner)
                 holder.setViewTreeSavedStateRegistryOwner(owner)
                 val model = ViewModelProvider(owner, ViewModelProvider.AndroidViewModelFactory.getInstance(application))[WorkspaceViewModel::class.java]
-                val content = ComposeView(this).apply {
+                val content = ComposeView(windowContext).apply {
                     setContent {
                         val state by model.state.collectAsState()
                         ShellTheme {
@@ -141,8 +143,8 @@ class OverlaySidebarService : Service() {
                 params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
                 owner.visible(true)
             } else {
-                view = OverlayEdgeView(this) { panel = true; refreshVisibility() }
-                val screen = resources.displayMetrics.heightPixels
+                view = OverlayEdgeView(windowContext) { panel = true; refreshVisibility() }
+                val screen = windowContext.resources.displayMetrics.heightPixels
                 val height = dp(settings.heightDp).coerceAtMost(screen / 2)
                 params = WindowManager.LayoutParams(dp(24), height, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL, PixelFormat.TRANSLUCENT)
