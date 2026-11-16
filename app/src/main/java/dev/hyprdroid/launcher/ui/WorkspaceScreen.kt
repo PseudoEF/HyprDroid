@@ -261,8 +261,8 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
             onDrawer = openDrawer, onSidebar = { if (panels.right.scope.home) sidebarOpen = true else overlaySettingsOpen = true },
             onLeftPanel = { if (panels.left.scope.home) leftPanelOpen = true else overlaySettingsOpen = true })
         Spacer(Modifier.height(12.dp))
-        HorizontalPager(state = pager, modifier = Modifier.weight(1f).widthIn(max = 960.dp).fillMaxWidth().testTag("home-pager")
-            , userScrollEnabled = !overlayOpen && !dragging) { page ->
+        HorizontalPager(state = pager, modifier = Modifier.weight(1f).widthIn(max = 960.dp).fillMaxWidth().testTag("home-pager"),
+            userScrollEnabled = !overlayOpen && !dragging) { page ->
             if (!classic) Box(Modifier.fillMaxSize().testTag("workspace-canvas-$page")) {
                 Box(Modifier.fillMaxSize().testTag("clean-workspace-$page")
                     .homeBlankGestures(!overlayOpen, true, openPresentation, openDrawer, openControl, revealDock))

@@ -2,30 +2,13 @@ package dev.hyprdroid.launcher.ui
 
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.systemGestures
-import androidx.compose.foundation.layout.mandatorySystemGestures
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
-
-/** A wider internal band, separated from both Android Back and the page boundary. No overlay hit target. */
-@Composable
-internal fun Modifier.sidebarOpeningGesture(enabled: Boolean, onOpen: () -> Unit): Modifier {
-    val density = LocalDensity.current
-    val direction = LocalLayoutDirection.current
-    val inset = maxOf(WindowInsets.systemGestures.getRight(density, direction), WindowInsets.mandatorySystemGestures.getRight(density, direction))
-    val right = inset + with(density) { 32.dp.toPx() }
-    val band = with(density) { 40.dp.toPx() }
-    val edge = with(density) { 24.dp.toPx() }
-    return sidebarSwipeGesture(enabled, -1f, { width, height -> SidebarActivationZone(width - right - band, width - right, edge, height - edge) }, onOpen)
-}
 
 @Composable
 internal fun Modifier.sidebarClosingGesture(enabled: Boolean = true, sign: Float = 1f, onClose: () -> Unit): Modifier =
