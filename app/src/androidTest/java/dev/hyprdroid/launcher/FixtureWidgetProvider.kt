@@ -43,7 +43,10 @@ class ConfiguredWidgetActivity : Activity() {
             addView(TextView(this@ConfiguredWidgetActivity).apply { text = "Fixture widget configuration"; textSize = 22f })
             addView(Button(this@ConfiguredWidgetActivity).apply {
                 text = "Save widget"
-                setOnClickListener { setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)); finish() }
+                setOnClickListener {
+                    ConfiguredFixtureWidgetProvider().onUpdate(this@ConfiguredWidgetActivity, AppWidgetManager.getInstance(this@ConfiguredWidgetActivity), intArrayOf(id))
+                    setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)); finish()
+                }
             })
             addView(Button(this@ConfiguredWidgetActivity).apply { text = "Cancel widget"; setOnClickListener { finish() } })
         })

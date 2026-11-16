@@ -103,6 +103,7 @@ class ShellRepository(private val store: DataStore<Preferences>) {
             val current = decode(data)
             if (current.pendingWidget?.widget?.appWidgetId?.let { it != value.widget.appWidgetId } == true) throw IOException("Another widget is pending")
             data[pendingWidget] = PanelsCodec.encodePending(value)
+            ShellPresentationCodec.write(data, current.presentation)
         }
     }
     suspend fun cancelPendingWidget(id: Int) {
