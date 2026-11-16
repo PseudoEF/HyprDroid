@@ -19,6 +19,7 @@ public class ConfiguredWidgetActivity extends Activity {
         title.setText("Fixture widget configuration"); title.setTextSize(22);
         layout.addView(title);
         Button save = new Button(this);
+        save.setAllCaps(false);
         save.setText("Save widget");
         save.setOnClickListener(view -> {
             new ConfiguredFixtureWidgetProvider().onUpdate(this, AppWidgetManager.getInstance(this), new int[] { id });
@@ -27,6 +28,7 @@ public class ConfiguredWidgetActivity extends Activity {
         });
         layout.addView(save);
         Button cancel = new Button(this);
+        cancel.setAllCaps(false);
         cancel.setText("Cancel widget"); cancel.setOnClickListener(view -> finish());
         layout.addView(cancel);
         setContentView(layout);
