@@ -43,7 +43,7 @@ internal fun HomePanelMarkers(panels: PanelsSettings) {
                 val top = (maxHeight - height) * (value.positionPercent / 100f)
                 Box(Modifier.align(if (side == PanelSide.LEFT) AbsoluteAlignment.TopLeft else AbsoluteAlignment.TopRight)
                     .absoluteOffset(x = (if (side == PanelSide.LEFT) value.insetDp else -value.insetDp).dp, y = top)
-                    .width(value.markerWidthDp.dp).height(height)
+                    .requiredWidth(value.markerWidthDp.dp).requiredHeight(height)
                     .background(Mocha.Mauve.copy(alpha = value.visibility.alpha / 255f), RoundedCornerShape(8.dp))
                     .testTag("home-marker-${side.name}"))
             }

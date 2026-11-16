@@ -119,7 +119,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     var aboutOpen by rememberSaveable { mutableStateOf(false) }
     // Construct the pager only after preferences load, so its initial page is the persisted one.
     if (state.settings == null) {
-        BackHandler(aboutOpen) { aboutOpen = false }
+        BackHandler { aboutOpen = false }
         if (aboutOpen) { AboutScreen { aboutOpen = false }; return }
         Column(Modifier.fillMaxSize().safeDrawingPadding().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Waybar(0, {}, listOf(
@@ -216,7 +216,8 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
             delay(3_500); autoDockShown = false
         }
     }
-    BackHandler(enabled = overlayOpen || editing) {
+    // HOME is the navigation root. Back closes local UI but never finishes the launcher window.
+    BackHandler {
         when {
             leftPanelOpen -> leftPanelOpen = false
             overlaySettingsOpen -> overlaySettingsOpen = false

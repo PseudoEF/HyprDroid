@@ -218,4 +218,41 @@ class UniversalPanelsTest {
             }
         } finally { scenario.close() }
     }
+
+    @Test fun rootBackAndPanelCloseKeepMarkerDimensionsInCleanAndClassic() {
+        seed()
+        try {
+            for (mode in DesktopMode.entries) {
+                runBlocking { repository.setPresentation(ShellPresentation(mode)) }
+                val scenario = ActivityScenario.launch(MainActivity::class.java)
+                try {
+                    await("home-marker-LEFT")
+                    device.waitForIdle()
+                    val before = PanelSide.entries.associateWith { side -> compose.onNodeWithTag("home-marker-${side.name}").fetchSemanticsNode().boundsInRoot }
+                    fun unchanged() {
+                        await("home-marker-LEFT")
+                        scenario.onActivity { assertFalse("Back must not finish HOME", it.isFinishing) }
+                        PanelSide.entries.forEach { side ->
+                            val actual = compose.onNodeWithTag("home-marker-${side.name}").fetchSemanticsNode().boundsInRoot
+                            assertEquals(before.getValue(side).height, actual.height, 1f)
+                            assertEquals(before.getValue(side).width, actual.width, 1f)
+                        }
+                    }
+                    // Outside panel activation rectangles these are real system Back gestures.
+                    edge(PanelSide.LEFT, (device.displayHeight * .2f).toInt())
+                    unchanged()
+                    edge(PanelSide.RIGHT, (device.displayHeight * .2f).toInt())
+                    unchanged()
+                    device.pressBack()
+                    unchanged()
+                    compose.onNodeWithTag("sidebar-open").performClick()
+                    await("sidebar")
+                    device.pressBack()
+                    gone("sidebar")
+                    unchanged()
+                    captureShellScreen("home-after-back-${mode.name.lowercase()}")
+                } finally { scenario.close() }
+            }
+        } finally { reset() }
+    }
 }
