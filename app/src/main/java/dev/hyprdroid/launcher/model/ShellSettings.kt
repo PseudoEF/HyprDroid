@@ -26,4 +26,12 @@ data class ShellSettings(
     val sidebar: List<WorkspaceItem> = emptyList(),
     val presentation: ShellPresentation = ShellPresentation(),
     val overlay: OverlaySettings = OverlaySettings(),
-)
+    val panelConfiguration: PanelsSettings? = null,
+) {
+    // Lazy migration preserves the existing overlay switch, geometry and enabled right modules.
+    val panels: PanelsSettings get() = panelConfiguration ?: PanelsSettings(right = PanelSettings(
+        scope = if (overlay.enabled) PanelScope.EVERYWHERE else PanelScope.HOME,
+        heightDp = overlay.heightDp, positionPercent = overlay.positionPercent, insetDp = overlay.insetDp,
+        modules = listOf("SYSTEM_STATUS", "QUICK_LAUNCH").filter { id -> presentation.sidebarModules.any { it.name == id } },
+    ))
+}

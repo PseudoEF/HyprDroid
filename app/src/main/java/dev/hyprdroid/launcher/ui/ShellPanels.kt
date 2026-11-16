@@ -39,7 +39,7 @@ import java.util.Date
 
 @Composable
 fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>, modifier: Modifier = Modifier,
-    onDrawer: (() -> Unit)? = null, onSidebar: (() -> Unit)? = null) {
+    onDrawer: (() -> Unit)? = null, onSidebar: (() -> Unit)? = null, onLeftPanel: (() -> Unit)? = null) {
     var menuOpen by remember { mutableStateOf(false) }
     ShellSurface(modifier) {
         BoxWithConstraints {
@@ -65,6 +65,7 @@ fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>
                     if (!largeText) ShellClock()
                     onDrawer?.let { IconButton(onClick = it) { DrawerGlyph("Открыть app drawer") } }
                     onSidebar?.let { IconButton(onClick = it, modifier = Modifier.testTag("sidebar-open")) { Icon(Icons.Default.Menu, "Открыть Sidebar") } }
+                    onLeftPanel?.let { IconButton(onClick = it, modifier = Modifier.testTag("left-panel-open")) { Text("◧", color = Mocha.Lavender, modifier = Modifier.semantics { contentDescription = "Открыть левую панель" }) } }
                     Box {
                         IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "Меню оболочки") }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {

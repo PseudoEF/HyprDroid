@@ -38,7 +38,8 @@ object OverlaySession {
             override fun onResume(owner: LifecycleOwner) {
                 activity.lifecycleScope.launch {
                     try {
-                        if (ShellRepository(activity).settings.first().overlay.enabled && Settings.canDrawOverlays(activity) && !running.value) start(activity)
+                        val saved = ShellRepository(activity).settings.first()
+                        if (saved.overlay.enabled && dev.hyprdroid.launcher.model.PanelSide.entries.any { saved.panels[it].scope.apps } && Settings.canDrawOverlays(activity) && !running.value) start(activity)
                     } catch (_: java.io.IOException) { failed("Не удалось прочитать настройки overlay") }
                 }
             }

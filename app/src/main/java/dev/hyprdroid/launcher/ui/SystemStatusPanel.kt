@@ -56,3 +56,23 @@ internal fun SystemStatusModule() {
         }
     }
 }
+
+/** Shared built-in module renderer, used by either side in Home and overlay windows. */
+@Composable
+internal fun PanelStatusModule(id: String) {
+    if (id == "SYSTEM_STATUS") { SystemStatusModule(); return }
+    val known = dev.hyprdroid.launcher.model.PanelModule.entries.find { it.name == id }
+    val context = LocalContext.current
+    val status by rememberSystemStatus()
+    ShellSurface(Modifier.fillMaxWidth().testTag("panel-module-$id")) {
+        Column(Modifier.padding(16.dp)) {
+            Text(known?.title ?: "Недоступный модуль", style = MaterialTheme.typography.labelMedium, color = Mocha.Subtext)
+            Text(when (id) {
+                "CLOCK" -> DateFormat.getTimeFormat(context).format(Date(status.now))
+                "DATE" -> DateFormat.getLongDateFormat(context).format(Date(status.now))
+                "BATTERY" -> "${status.battery?.let { "$it%" } ?: "недоступно"}${if (status.charging) " · зарядка" else ""}"
+                else -> "Этот тип пока не поддерживается. Запись сохранена."
+            }, style = MaterialTheme.typography.headlineSmall)
+        }
+    }
+}

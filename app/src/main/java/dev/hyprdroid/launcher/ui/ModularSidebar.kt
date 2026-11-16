@@ -29,9 +29,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import dev.hyprdroid.launcher.model.WorkspaceItem
 import dev.hyprdroid.launcher.model.SidebarModule
+import dev.hyprdroid.launcher.model.PanelSide
 
 // Typed chrome keys cannot collide with persisted shortcut IDs.
 private enum class SidebarChrome { STATUS, TITLE, SEARCH, EMPTY }
+private data class PanelModuleKey(val id: String)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -41,6 +43,7 @@ fun ModularSidebar(
     onReorder: (String, Int) -> Unit, onPlaceBefore: (String, String?, () -> Unit) -> Unit,
     panelModifier: Modifier = Modifier,
     onStopOverlay: (() -> Unit)? = null,
+    side: PanelSide = PanelSide.RIGHT,
 ) {
     var editing by rememberSaveable { mutableStateOf(false) }
     var adding by rememberSaveable { mutableStateOf(false) }
@@ -49,7 +52,10 @@ fun ModularSidebar(
     val entries = remember(state.sidebarEntries) { state.sidebarEntries.associateBy { it.item.id } }
     val storedItems = state.shell?.sidebar.orEmpty()
     val enabled = state.shell != null && !state.shellError
-    val modules = state.shell?.presentation?.sidebarModules ?: SidebarModule.entries.toSet()
+    val modules = state.shell?.panels?.get(side)?.modules.orEmpty()
+    val tag = if (side == PanelSide.RIGHT) "sidebar" else "left-panel"
+    val closeLabel = if (side == PanelSide.RIGHT) "Закрыть Sidebar" else "Закрыть левую панель"
+    val closeSign = if (side == PanelSide.RIGHT) 1f else -1f
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
     val dismiss = { keyboard?.hide(); focus.clearFocus(force = true); onClose() }
@@ -67,23 +73,23 @@ fun ModularSidebar(
     DisposableEffect(drag) { onDispose { drag.finish(false) } }
     DragAutoScroll(drag, with(LocalDensity.current) { 56.dp.toPx() })
 
-    BoxWithConstraints(Modifier.fillMaxSize().imePadding().testTag("sidebar-overlay")) {
+    BoxWithConstraints(Modifier.fillMaxSize().imePadding().testTag("$tag-overlay")) {
         val heightLimit = maxHeight * .8f
-        Box(Modifier.fillMaxSize().background(Mocha.Base.copy(alpha = .45f)).testTag("sidebar-scrim")
-            .clickable(onClickLabel = "Закрыть Sidebar", onClick = dismiss))
+        Box(Modifier.fillMaxSize().background(Mocha.Base.copy(alpha = .45f)).testTag("$tag-scrim")
+            .clickable(onClickLabel = closeLabel, onClick = dismiss))
         Surface(color = Mocha.Mantle.copy(alpha = .97f), contentColor = Mocha.Text,
             shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, Mocha.Mauve.copy(alpha = .45f)),
-            modifier = Modifier.align(Alignment.CenterEnd).safeDrawingPadding().padding(12.dp)
+            modifier = Modifier.align(if (side == PanelSide.RIGHT) Alignment.CenterEnd else Alignment.CenterStart).safeDrawingPadding().padding(12.dp)
                 .widthIn(max = 420.dp).fillMaxWidth(.80f).heightIn(max = heightLimit)
-                .animateContentSize(tween(180)).then(panelModifier).testTag("sidebar")
-                .sidebarClosingGesture(enabled = !editing && drag.draggedId == null, onClose = dismiss)) {
+                .animateContentSize(tween(180)).then(panelModifier).testTag(tag)
+                .sidebarClosingGesture(enabled = !editing && drag.draggedId == null, sign = closeSign, onClose = dismiss)) {
             Column(Modifier.padding(12.dp)) {
-                Row(Modifier.testTag("sidebar-header").sidebarClosingGesture(onClose = dismiss), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Sidebar", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                    IconButton(onClick = dismiss) { Icon(Icons.Default.Close, "Закрыть Sidebar") }
+                Row(Modifier.testTag("$tag-header").sidebarClosingGesture(sign = closeSign, onClose = dismiss), verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (side == PanelSide.RIGHT) "Sidebar" else "Левая панель", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                    IconButton(onClick = dismiss) { Icon(Icons.Default.Close, closeLabel) }
                 }
                 onStopOverlay?.let { stop -> TextButton(onClick = stop, modifier = Modifier.testTag("stop-overlay")) { Text("Отключить overlay") } }
-                if (SidebarModule.QUICK_LAUNCH in modules) FlowRow {
+                if ("QUICK_LAUNCH" in modules && side == PanelSide.RIGHT) FlowRow {
                     TextButton(onClick = { editing = !editing; adding = false }, enabled = enabled) { Text(if (editing) "Готово" else "Редактировать") }
                     if (editing) TextButton(onClick = { adding = !adding }, enabled = enabled) { Text(if (adding) "К панели" else "Добавить ярлык") }
                 }
@@ -94,8 +100,8 @@ fun ModularSidebar(
                     modifier = Modifier.weight(1f, fill = false).testTag(if (adding) "sidebar-picker" else "sidebar-items")
                         .workspaceDrag(drag, editing && !adding && enabled),
                     horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (SidebarModule.SYSTEM_STATUS in modules && !adding && !editing) item(key = SidebarChrome.STATUS, span = { GridItemSpan(maxLineSpan) }) { SystemStatusModule() }
-                    if (SidebarModule.QUICK_LAUNCH in modules) {
+                    for (module in modules) {
+                    if (module == "QUICK_LAUNCH" && side == PanelSide.RIGHT) {
                         item(key = SidebarChrome.TITLE, span = { GridItemSpan(maxLineSpan) }) {
                             Text("Quick Launch", style = MaterialTheme.typography.labelLarge, color = Mocha.Subtext, modifier = Modifier.testTag("sidebar-quick-launch"))
                         }
@@ -138,7 +144,9 @@ fun ModularSidebar(
                                         }.testTag("sidebar-item-${item.id}"))
                             }
                         }
-                    } else if (modules.isEmpty()) item(key = SidebarChrome.EMPTY, span = { GridItemSpan(maxLineSpan) }) { Text("Модули скрыты. Настройте их через меню верхней панели.") }
+                    } else if (!adding && !editing) item(key = PanelModuleKey(module), span = { GridItemSpan(maxLineSpan) }) { PanelStatusModule(module) }
+                    }
+                    if (modules.isEmpty()) item(key = SidebarChrome.EMPTY, span = { GridItemSpan(maxLineSpan) }) { Text("Модули скрыты. Настройте их через меню верхней панели.") }
                 }
             }
         }

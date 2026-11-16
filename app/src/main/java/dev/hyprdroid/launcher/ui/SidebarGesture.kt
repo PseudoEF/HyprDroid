@@ -28,11 +28,11 @@ internal fun Modifier.sidebarOpeningGesture(enabled: Boolean, onOpen: () -> Unit
 }
 
 @Composable
-internal fun Modifier.sidebarClosingGesture(enabled: Boolean = true, onClose: () -> Unit): Modifier =
-    sidebarSwipeGesture(enabled, 1f, { width, height -> SidebarActivationZone(0f, width, 0f, height) }, onClose)
+internal fun Modifier.sidebarClosingGesture(enabled: Boolean = true, sign: Float = 1f, onClose: () -> Unit): Modifier =
+    sidebarSwipeGesture(enabled, sign, { width, height -> SidebarActivationZone(0f, width, 0f, height) }, onClose)
 
 @Composable
-private fun Modifier.sidebarSwipeGesture(enabled: Boolean, sign: Float, zone: (Float, Float) -> SidebarActivationZone, action: () -> Unit): Modifier {
+internal fun Modifier.sidebarSwipeGesture(enabled: Boolean, sign: Float, zone: (Float, Float) -> SidebarActivationZone, action: () -> Unit): Modifier {
     val active by rememberUpdatedState(enabled)
     val bounds by rememberUpdatedState(zone)
     val complete by rememberUpdatedState(action)

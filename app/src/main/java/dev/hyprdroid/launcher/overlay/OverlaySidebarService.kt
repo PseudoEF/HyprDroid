@@ -22,6 +22,8 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.hyprdroid.launcher.MainActivity
 import dev.hyprdroid.launcher.data.ShellRepository
 import dev.hyprdroid.launcher.model.OverlaySettings
+import dev.hyprdroid.launcher.model.PanelSide
+import dev.hyprdroid.launcher.model.PanelsSettings
 import dev.hyprdroid.launcher.ui.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -43,15 +45,17 @@ class OverlaySidebarService : Service() {
     private lateinit var repository: ShellRepository
     private var root: View? = null
     private var compose: ComposeView? = null
-    private var panel = false
+    private var openSide: PanelSide? = null
+    private val handles = mutableListOf<View>()
     private var settings = OverlaySettings()
+    private var panels = PanelsSettings()
     private var observing: Job? = null
     private var registered = false
     private var screenOff = false
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             screenOff = intent?.action == Intent.ACTION_SCREEN_OFF
-            panel = false; refreshVisibility()
+            openSide = null; refreshVisibility()
         }
     }
     private val appOps by lazy { getSystemService(AppOpsManager::class.java) }
@@ -89,17 +93,18 @@ class OverlaySidebarService : Service() {
             val home = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             val stop = PendingIntent.getService(this, 1, Intent(this, javaClass).setAction(STOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             val notification = Notification.Builder(this, CHANNEL).setSmallIcon(android.R.drawable.ic_menu_view)
-                .setContentTitle("HyprDroid · Sidebar поверх приложений")
-                .setContentText("Правая зона активна. Нажмите, чтобы открыть HyprDroid.")
+                .setContentTitle("HyprDroid · Панели поверх приложений")
+                .setContentText("Боковые зоны активны. Нажмите, чтобы открыть HyprDroid.")
                 .setContentIntent(home).setOngoing(true).addAction(Notification.Action.Builder(null, "Отключить", stop).build()).build()
             if (Build.VERSION.SDK_INT >= 34) startForeground(62, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
             else startForeground(62, notification)
             OverlaySession.running(true)
             if (observing == null) observing = scope.launch {
                 try {
-                    repository.settings.map { it.overlay }.distinctUntilChanged().collect {
-                        settings = it
-                        if (!it.enabled) stopSelf() else refreshVisibility()
+                    repository.settings.map { it.overlay to it.panels }.distinctUntilChanged().collect { (overlay, configuration) ->
+                        settings = overlay; panels = configuration
+                        if (openSide?.let { !panels[it].scope.apps } == true) openSide = null
+                        if (!overlay.enabled || PanelSide.entries.none { panels[it].scope.apps }) stopSelf() else refreshVisibility()
                     }
                 } catch (_: java.io.IOException) { OverlaySession.failed("Не удалось прочитать overlay-настройки"); stopSelf() }
             }
@@ -112,7 +117,7 @@ class OverlaySidebarService : Service() {
         if (!Settings.canDrawOverlays(this)) { stopSelf(); return }
         val locked = getSystemService(KeyguardManager::class.java).isKeyguardLocked
         val awake = getSystemService(PowerManager::class.java).isInteractive
-        if (OverlaySession.homeVisible || screenOff || locked || !awake) { panel = false; removeWindow(); return }
+        if (OverlaySession.homeVisible || screenOff || locked || !awake) { openSide = null; removeWindow(); return }
         render()
     }
     private fun render() {
@@ -120,7 +125,8 @@ class OverlaySidebarService : Service() {
         try {
             val params: WindowManager.LayoutParams
             val view: View
-            if (panel) {
+            val side = openSide
+            if (side != null) {
                 val holder = BackFrame(windowContext, ::closePanel)
                 holder.setViewTreeLifecycleOwner(owner)
                 holder.setViewTreeViewModelStoreOwner(owner)
@@ -133,7 +139,7 @@ class OverlaySidebarService : Service() {
                             Box(Modifier.fillMaxSize()) {
                                 ModularSidebar(state, ::closePanel, { closePanel(); model.launchSidebar(it) }, model::setSidebarItem,
                                     model::removeSidebarItem, model::reorderSidebar, model::placeSidebarBefore,
-                                    onStopOverlay = ::disableOverlay)
+                                    onStopOverlay = ::disableOverlay, side = side)
                                 state.message?.let { Text(it) }
                             }
                         }
@@ -147,27 +153,35 @@ class OverlaySidebarService : Service() {
                 params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
                 owner.visible(true)
             } else {
-                view = OverlayEdgeView(windowContext) { panel = true; refreshVisibility() }
-                val screen = windowContext.resources.displayMetrics.heightPixels
-                val height = dp(settings.heightDp).coerceAtMost(screen / 2)
-                params = WindowManager.LayoutParams(dp(24), height, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL, PixelFormat.TRANSLUCENT)
-                params.gravity = Gravity.TOP or Gravity.RIGHT
-                params.x = dp(settings.insetDp)
-                params.y = ((screen - height) * settings.positionPercent / 100).coerceAtLeast(dp(32))
+                PanelSide.entries.filter { panels[it].scope.apps }.forEach { edgeSide -> addHandle(edgeSide) }
+                return
             }
-            params.setTitle(if (panel) "HyprDroid Quick Shell" else "HyprDroid Sidebar activation")
+            params.setTitle("HyprDroid ${side.name} panel")
             root = view
             windows.addView(view, params)
-            if (panel) { view.alpha = 0f; view.animate().alpha(1f).setDuration(180).start(); view.requestFocus() }
+            view.alpha = 0f; view.animate().alpha(1f).setDuration(180).start(); view.requestFocus()
         } catch (_: RuntimeException) {
             removeWindow(); OverlaySession.failed("Android не разрешил показать overlay-панель"); stopSelf()
         }
     }
+    private fun addHandle(side: PanelSide) {
+                val value = panels[side]
+                val view = OverlayEdgeView(windowContext, side, value) { openSide = side; refreshVisibility() }
+                val screen = windowContext.resources.displayMetrics.heightPixels
+                val height = dp(value.heightDp).coerceAtMost(screen / 2)
+                val params = WindowManager.LayoutParams(dp(value.touchWidthDp), height, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL, PixelFormat.TRANSLUCENT)
+                params.gravity = Gravity.TOP or if (side == PanelSide.LEFT) Gravity.LEFT else Gravity.RIGHT
+                params.x = dp(value.insetDp)
+                params.y = ((screen - height) * value.positionPercent / 100).coerceAtLeast(dp(32))
+                params.setTitle("HyprDroid ${side.name} activation")
+                handles.add(view)
+                windows.addView(view, params)
+    }
     private fun closePanel() {
         val current = root ?: return
         current.animate().alpha(0f).setDuration(150).withEndAction {
-            if (root === current) { panel = false; refreshVisibility() }
+            if (root === current) { openSide = null; refreshVisibility() }
         }.start()
     }
     private fun disableOverlay() {
@@ -179,11 +193,13 @@ class OverlaySidebarService : Service() {
         }
     }
     private fun removeWindow() {
+        handles.forEach { try { windows.removeViewImmediate(it) } catch (_: IllegalArgumentException) { } }
+        handles.clear()
         root?.let { view -> view.animate().cancel(); try { windows.removeViewImmediate(view) } catch (_: IllegalArgumentException) { } }
         compose?.disposeComposition(); compose = null; root = null
         owner.visible(false)
     }
-    override fun onConfigurationChanged(newConfig: Configuration) { super.onConfigurationChanged(newConfig); panel = false; refreshVisibility() }
+    override fun onConfigurationChanged(newConfig: Configuration) { super.onConfigurationChanged(newConfig); openSide = null; refreshVisibility() }
     override fun onDestroy() {
         removeWindow()
         if (registered) unregisterReceiver(receiver)

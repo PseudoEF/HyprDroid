@@ -15,6 +15,9 @@ import dev.hyprdroid.launcher.model.ShellSettings
 import dev.hyprdroid.launcher.model.WorkspaceItem
 import dev.hyprdroid.launcher.model.ShellPresentation
 import dev.hyprdroid.launcher.model.OverlaySettings
+import dev.hyprdroid.launcher.model.PanelSide
+import dev.hyprdroid.launcher.model.PanelSettings
+import dev.hyprdroid.launcher.model.SidebarModule
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import dev.hyprdroid.launcher.model.placeItemBefore
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +49,7 @@ class ShellRepository(private val store: DataStore<Preferences>) {
     private val overlayPosition = intPreferencesKey("overlay_position")
     private val overlayHeight = intPreferencesKey("overlay_height")
     private val overlayInset = intPreferencesKey("overlay_inset")
+    private val panels = stringPreferencesKey("panels_configuration")
     val settings = store.data.map(::decode).flowOn(Dispatchers.Default)
 
     suspend fun setOverlay(value: OverlaySettings) {
@@ -61,7 +65,37 @@ class ShellRepository(private val store: DataStore<Preferences>) {
     }
 
     suspend fun setPresentation(value: ShellPresentation) {
-        store.edit { data -> decode(data); ShellPresentationCodec.write(data, value) }
+        store.edit { data ->
+            val current = decode(data)
+            current.panelConfiguration?.let { configuration ->
+                val old = configuration.right.modules
+                val legacy = SidebarModule.entries.map { it.name }.toSet()
+                val selected = value.sidebarModules.map { it.name }
+                val ordered = old.filter { it !in legacy || it in selected } + selected.filter { it !in old }
+                data[panels] = PanelsCodec.encode(configuration.copy(right = configuration.right.copy(modules = ordered)))
+            }
+            ShellPresentationCodec.write(data, value)
+        }
+    }
+
+    suspend fun setPanel(side: PanelSide, value: PanelSettings) {
+        store.edit { data ->
+            val current = decode(data)
+            val next = current.panels.with(side, value.validated())
+            data[panels] = PanelsCodec.encode(next)
+            ShellPresentationCodec.write(data, current.presentation.copy(sidebarModules = SidebarModule.entries.filter { it.name in next.right.modules }.toSet()))
+        }
+    }
+    suspend fun reorderPanelModule(side: PanelSide, id: String, delta: Int) {
+        store.edit { data ->
+            val current = decode(data)
+            val panel = current.panels[side]
+            val index = panel.modules.indexOf(id)
+            if (index >= 0) {
+                val order = panel.modules.toMutableList().apply { add((index + delta).coerceIn(0, lastIndex), removeAt(index)) }
+                data[panels] = PanelsCodec.encode(current.panels.with(side, panel.copy(modules = order)))
+            }
+        }
     }
 
     suspend fun setSidebarItem(item: WorkspaceItem.AppShortcut, pinned: Boolean) {
@@ -129,6 +163,7 @@ class ShellRepository(private val store: DataStore<Preferences>) {
             presentation = ShellPresentationCodec.read(preferences),
             overlay = OverlaySettings(preferences[overlayEnabled] ?: false, preferences[overlayPosition] ?: 50,
                 preferences[overlayHeight] ?: 160, preferences[overlayInset] ?: 0).validated(),
+            panelConfiguration = preferences[panels]?.let(PanelsCodec::decode),
         )
     }
 }

@@ -38,6 +38,8 @@ import dev.hyprdroid.launcher.model.WorkspaceItem
 import dev.hyprdroid.launcher.model.ShellPresentation
 import dev.hyprdroid.launcher.model.DesktopMode
 import dev.hyprdroid.launcher.model.DockVisibility
+import dev.hyprdroid.launcher.model.PanelSide
+import dev.hyprdroid.launcher.model.PanelsSettings
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -137,6 +139,8 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
     var controlOpen by rememberSaveable { mutableStateOf(false) }
     var sidebarOpen by rememberSaveable { mutableStateOf(false) }
+    var leftPanelOpen by rememberSaveable { mutableStateOf(false) }
+    val panels = state.shell?.panels ?: PanelsSettings()
     var overlaySettingsOpen by rememberSaveable { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
     var dragRevision by remember { mutableIntStateOf(0) }
@@ -194,7 +198,11 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     LaunchedEffect(pager, workspaceReady) {
         if (workspaceReady) snapshotFlow { pager.settledPage }.distinctUntilChanged().collect(actions.selectWorkspace)
     }
-    val overlayOpen = overlaySettingsOpen || drawerOpen || controlOpen || sidebarOpen || aboutOpen || presentationPreview != null || appearanceWorkspace != null || orderWorkspace != null
+    val overlayOpen = leftPanelOpen || overlaySettingsOpen || drawerOpen || controlOpen || sidebarOpen || aboutOpen || presentationPreview != null || appearanceWorkspace != null || orderWorkspace != null
+    LaunchedEffect(panels) {
+        if (!panels.left.scope.home) leftPanelOpen = false
+        if (!panels.right.scope.home) sidebarOpen = false
+    }
     LaunchedEffect(presentation.desktopMode) { if (!classic) editing = false }
     LaunchedEffect(pager.settledPage) { revealDock() }
     val homeLifecycle = LocalLifecycleOwner.current.lifecycle
@@ -210,6 +218,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     }
     BackHandler(enabled = overlayOpen || editing) {
         when {
+            leftPanelOpen -> leftPanelOpen = false
             overlaySettingsOpen -> overlaySettingsOpen = false
             presentationPreview != null -> if (!savingPresentation) closePresentation()
             aboutOpen -> aboutOpen = false
@@ -221,6 +230,9 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
             else -> editing = false
         }
     }
+    Box(Modifier.fillMaxSize().testTag("home-panel-root")
+        .homePanelGesture(PanelSide.LEFT, panels.left, !overlayOpen && !editing && panels.left.scope.home) { leftPanelOpen = true }
+        .homePanelGesture(PanelSide.RIGHT, panels.right, !overlayOpen && !editing && panels.right.scope.home) { sidebarOpen = true }) {
     Column(
         Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 12.dp, vertical = 8.dp)
             .then(if (overlayOpen) Modifier.clearAndSetSemantics {} else Modifier),
@@ -231,8 +243,9 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
             add(AppMenuAction("О приложении") { aboutOpen = true })
             add(AppMenuAction("Все приложения", onClick = openDrawer))
             add(AppMenuAction("Control Center", onClick = openControl))
-            add(AppMenuAction("Sidebar") { sidebarOpen = true })
-            add(AppMenuAction("Sidebar поверх приложений", shellReady) { overlaySettingsOpen = true })
+            add(AppMenuAction("Sidebar", panels.right.scope.home) { sidebarOpen = true })
+            add(AppMenuAction("Левая панель", panels.left.scope.home) { leftPanelOpen = true })
+            add(AppMenuAction("Настройки панелей", shellReady) { overlaySettingsOpen = true })
             if (presentation.dockVisibility == DockVisibility.AUTO) add(AppMenuAction("Показать dock", onClick = revealDock))
             add(AppMenuAction("Редактировать пространство", workspaceReady, enterEdit))
             add(AppMenuAction("Вид пространства", workspaceReady) { appearanceWorkspace = pager.currentPage })
@@ -245,10 +258,11 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
             if (state.shellError) add(AppMenuAction("Повторить чтение панелей и обоев", onClick = actions.retryShell))
         }
         Waybar(pager.currentPage, { index -> scope.launch { pager.animateScrollToPage(index) }; Unit }, panelMenu, Modifier.widthIn(max = 760.dp).fillMaxWidth(),
-            onDrawer = openDrawer, onSidebar = { sidebarOpen = true })
+            onDrawer = openDrawer, onSidebar = { if (panels.right.scope.home) sidebarOpen = true else overlaySettingsOpen = true },
+            onLeftPanel = { if (panels.left.scope.home) leftPanelOpen = true else overlaySettingsOpen = true })
         Spacer(Modifier.height(12.dp))
         HorizontalPager(state = pager, modifier = Modifier.weight(1f).widthIn(max = 960.dp).fillMaxWidth().testTag("home-pager")
-            .sidebarOpeningGesture(!overlayOpen && !editing, { sidebarOpen = true }), userScrollEnabled = !overlayOpen && !dragging) { page ->
+            .sidebarOpeningGesture(!overlayOpen && !editing && panels.right.scope.home, { sidebarOpen = true }), userScrollEnabled = !overlayOpen && !dragging) { page ->
             if (!classic) Box(Modifier.fillMaxSize().testTag("workspace-canvas-$page")) {
                 Box(Modifier.fillMaxSize().testTag("clean-workspace-$page")
                     .homeBlankGestures(!overlayOpen, true, openPresentation, openDrawer, openControl, revealDock))
@@ -283,6 +297,13 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
             }
         }
     }
+    if (!overlayOpen && !editing) HomePanelMarkers(panels)
+    AnimatedVisibility(visible = leftPanelOpen, enter = fadeIn(tween(180)), exit = fadeOut(tween(180))) {
+        ModularSidebar(state, onClose = { leftPanelOpen = false }, onLaunch = actions.sidebarLaunch,
+            onPin = actions.sidebarPin, onRemove = actions.sidebarRemove, onReorder = actions.sidebarReorder,
+            onPlaceBefore = actions.sidebarPlaceBefore, side = PanelSide.LEFT,
+            panelModifier = Modifier.animateEnterExit(enter = slideInHorizontally(tween(240)) { -it }, exit = slideOutHorizontally(tween(200)) { -it }))
+    }
     AnimatedVisibility(visible = sidebarOpen, enter = fadeIn(tween(180)), exit = fadeOut(tween(180))) {
         ModularSidebar(state, onClose = { sidebarOpen = false },
             onLaunch = { sidebarOpen = false; actions.sidebarLaunch(it) }, onPin = actions.sidebarPin,
@@ -311,5 +332,6 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     orderWorkspace?.let { id ->
         WorkspaceOrderScreen(settings.workspaces[id], appsById,
             onReorder = { item, delta -> if (workspaceReady) actions.reorder(id, item, delta) }, onClose = { orderWorkspace = null })
+    }
     }
 }

@@ -9,15 +9,17 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import kotlin.math.abs
+import dev.hyprdroid.launcher.model.PanelSettings
+import dev.hyprdroid.launcher.model.PanelSide
 
 /** A bounded, visible touch target. Never installs a full-screen transparent input catcher. */
-internal class OverlayEdgeView(context: Context, private val open: () -> Unit) : View(context) {
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(203, 166, 247); alpha = 160 }
+internal class OverlayEdgeView(context: Context, private val side: PanelSide, private val settings: PanelSettings, private val open: () -> Unit) : View(context) {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(203, 166, 247); alpha = settings.visibility.alpha }
     private var x = 0f; private var y = 0f
     private var rejected = false
     private val slop = ViewConfiguration.get(context).scaledTouchSlop
     init {
-        contentDescription = "Открыть глобальную Sidebar"
+        contentDescription = if (side == PanelSide.RIGHT) "Открыть глобальную Sidebar" else "Открыть глобальную левую панель"
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
         isClickable = true
         setOnClickListener { open() }
@@ -27,7 +29,9 @@ internal class OverlayEdgeView(context: Context, private val open: () -> Unit) :
     }
     override fun onDraw(canvas: Canvas) {
         val d = resources.displayMetrics.density
-        canvas.drawRoundRect(width - 5 * d, height * .28f, width - 2 * d, height * .72f, 2 * d, 2 * d, paint)
+        val marker = settings.markerWidthDp * d
+        val left = if (side == PanelSide.LEFT) 0f else width - marker
+        canvas.drawRoundRect(left, 0f, left + marker, height.toFloat(), marker / 2, marker / 2, paint)
     }
     override fun performClick(): Boolean = super.performClick()
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -35,12 +39,12 @@ internal class OverlayEdgeView(context: Context, private val open: () -> Unit) :
             MotionEvent.ACTION_DOWN -> { x = event.rawX; y = event.rawY; rejected = false; return true }
             MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_CANCEL -> { rejected = true; return true }
             MotionEvent.ACTION_MOVE -> {
-                val dx = event.rawX - x; val dy = event.rawY - y
+                val dx = (event.rawX - x) * if (side == PanelSide.RIGHT) 1 else -1; val dy = event.rawY - y
                 if (abs(dy) > slop && abs(dy) > abs(dx) || dx > slop) rejected = true
                 return true
             }
             MotionEvent.ACTION_UP -> {
-                val dx = event.rawX - x; val dy = event.rawY - y
+                val dx = (event.rawX - x) * if (side == PanelSide.RIGHT) 1 else -1; val dy = event.rawY - y
                 if (!rejected && (dx < -48 * resources.displayMetrics.density && -dx > abs(dy) * 1.3f || abs(dx) < slop && abs(dy) < slop)) performClick()
                 return true
             }
