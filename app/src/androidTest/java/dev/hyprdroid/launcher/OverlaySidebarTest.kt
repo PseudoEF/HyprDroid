@@ -30,7 +30,7 @@ class OverlaySidebarTest {
         while (!condition() && android.os.SystemClock.uptimeMillis() < deadline) android.os.SystemClock.sleep(50)
         assertTrue(condition())
     }
-    @Test fun permissionGatesServiceAndRightZoneOpensOverSettingsWithBackAndStop() {
+    @Test fun permissionGatesServiceAndRightZoneOpensOverAnotherAppWithBackAndStop() {
         dismissBackgroundPixelLauncherAnr()
         val repository = ShellRepository(context)
         val app = LauncherCatalog(context).load().first { it.componentId.substringBefore('/') !in setOf(context.packageName, "com.android.settings") }
@@ -50,15 +50,15 @@ class OverlaySidebarTest {
             waitFor { OverlaySession.running.value }
             assertFalse(device.hasObject(By.desc("Открыть глобальную Sidebar")))
             val before = runBlocking { repository.settings.first().sidebar }
-            context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            assertTrue(device.wait(Until.hasObject(By.pkg("com.android.settings")), 8_000))
+            context.startActivity(Intent().setClassName(context.packageName + ".test", OverlayTestHostActivity::class.java.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            assertTrue(device.wait(Until.hasObject(By.pkg(context.packageName + ".test")), 8_000))
             val edge = device.wait(Until.findObject(By.desc("Открыть глобальную Sidebar")), 8_000)
             assertNotNull("The bounded overlay zone must appear over another app", edge)
             val y = edge!!.visibleBounds.centerY()
             val distance = (90 * context.resources.displayMetrics.density).toInt()
             device.swipe(device.displayWidth - 2, y, device.displayWidth - distance, y, 25)
             assertTrue("Native right-edge swipe should open overlay on the test emulator", device.wait(Until.hasObject(By.text("Quick Launch")), 5_000))
-            captureShellScreen("v062-overlay-over-settings")
+            captureShellScreen("v062-overlay-test-host")
             device.pressBack()
             assertTrue(device.wait(Until.hasObject(By.desc("Открыть глобальную Sidebar")), 5_000))
             // Tap is an accessible fallback when an OEM prioritizes system Back over exclusion.
@@ -72,7 +72,7 @@ class OverlaySidebarTest {
             assertNotNull("The existing launcher catalogue must provide an icon and label", tile)
             tile!!.click()
             waitFor { device.currentPackageName == app.componentId.substringBefore('/') }
-            context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            context.startActivity(Intent().setClassName(context.packageName + ".test", OverlayTestHostActivity::class.java.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             assertTrue(device.wait(Until.hasObject(By.desc("Открыть глобальную Sidebar")), 8_000))
             device.findObject(By.desc("Открыть глобальную Sidebar")).click()
             val stop = device.wait(Until.findObject(By.text("Отключить overlay")), 5_000)
@@ -86,7 +86,7 @@ class OverlaySidebarTest {
             runBlocking { repository.setOverlay(OverlaySettings(enabled = true)) }
             scenario.onActivity { assertTrue(OverlaySession.start(it)) }
             waitFor { OverlaySession.running.value }
-            context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            context.startActivity(Intent().setClassName(context.packageName + ".test", OverlayTestHostActivity::class.java.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             assertTrue(device.wait(Until.hasObject(By.desc("Открыть глобальную Sidebar")), 8_000))
             permission("deny")
             waitFor { !OverlaySession.running.value }
