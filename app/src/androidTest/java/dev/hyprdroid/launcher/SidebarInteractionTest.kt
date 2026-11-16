@@ -121,7 +121,8 @@ class SidebarInteractionTest {
             scenario.recreate()
             await("sidebar")
             assertEquals(alternative, runBlocking { shell.settings.first().sidebar })
-            compose.onNodeWithText("Редактировать", substring = false).performClick()
+            // The editor itself is saveable state: recreation must keep it open.
+            compose.onNodeWithText("Готово", substring = false).assertExists()
             compose.onNodeWithTag("sidebar-item-${items[1].id}").performClick()
             compose.onNodeWithText("Убрать из Sidebar", substring = false).performClick()
             compose.waitUntil(5_000) { runBlocking { shell.settings.first().sidebar.none { it.id == items[1].id } } }

@@ -17,7 +17,8 @@ class SidebarPlacementTest {
         val a = WorkspaceItem.AppShortcut("example.app/.Main")
         val b = WorkspaceItem.AppShortcut("example.app/.Main", "public-shortcut-id")
         val c = WorkspaceItem.AppShortcut("example.other/.Main")
-        val future = WorkspaceItem.Unsupported("module:status", "{\"type\":\"future\",\"id\":\"module:status\",\"payload\":\"keep\"}")
+        // JSON object field order is not part of the persisted payload's identity.
+        val future = WorkspaceCodec.decodeItems("""[{"type":"future","id":"module:status","payload":"keep"}]""").single()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         try {
             val store = PreferenceDataStoreFactory.create(scope = scope, produceFile = { file })
