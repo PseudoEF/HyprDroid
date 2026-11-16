@@ -78,7 +78,9 @@ class AndroidWidgetsTest {
         val shown = device.wait(Until.hasObject(By.text(text)), 15_000)
         if (!shown) {
             captureShellScreen("widget-text-missing")
-            device.dumpWindowHierarchy(java.io.File(context.getExternalFilesDir(null), "widget-window-missing.xml"))
+            val hierarchy = java.io.ByteArrayOutputStream()
+            device.dumpWindowHierarchy(hierarchy)
+            android.util.Log.e("WidgetTestWindow", hierarchy.toString("UTF-8"))
         }
         assertTrue("RemoteViews should show: $text", shown)
     }
