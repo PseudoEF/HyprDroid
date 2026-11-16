@@ -21,19 +21,19 @@ fixture() {
   grep -q 'OK (1 test)' "$report/$phase.txt"
 }
 cp "$RUNNER_TEMP/hyprdroid-upgrade/a.json" "$report/build-a.json"
-cp "$RUNNER_TEMP/hyprdroid-distribution/HyprDroid-0.6.1-$CODE_B.json" "$report/build-b.json"
+cp "$RUNNER_TEMP/hyprdroid-distribution/HyprDroid-0.6.2-$CODE_B.json" "$report/build-b.json"
 adb install "$RUNNER_TEMP/hyprdroid-upgrade/a.apk"
 adb install "$RUNNER_TEMP/hyprdroid-upgrade/test.apk"
-fixture seed 10011 0.6.0 a563ddbf0c4c23db43c3e3044d2701f42d472fd2
+fixture seed 10015 0.6.1 ef2110f1dc3e316af53c2d8446d036e04774eb63
 adb shell am force-stop "$package"
 adb shell run-as "$package" sha256sum files/datastore/workspaces.preferences_pb files/datastore/shell.preferences_pb > "$report/datastore-before.sha256"
 adb shell dumpsys package "$package" > "$report/package-before.txt"
 # No uninstall, clear-data, downgrade flag or replacement DataStore fixture.
-adb install -r "$RUNNER_TEMP/hyprdroid-distribution/HyprDroid-0.6.1-$CODE_B.apk" > "$report/install-update.txt"
+adb install -r "$RUNNER_TEMP/hyprdroid-distribution/HyprDroid-0.6.2-$CODE_B.apk" > "$report/install-update.txt"
 cat "$report/install-update.txt"
 grep -q Success "$report/install-update.txt"
 adb shell run-as "$package" sha256sum files/datastore/workspaces.preferences_pb files/datastore/shell.preferences_pb > "$report/datastore-after.sha256"
 cmp "$report/datastore-before.sha256" "$report/datastore-after.sha256"
-fixture verify "$CODE_B" 0.6.1 "$HYPRDROID_BUILD_COMMIT"
+fixture verify "$CODE_B" 0.6.2 "$HYPRDROID_BUILD_COMMIT"
 adb shell dumpsys package "$package" > "$report/package-after.txt"
-echo "Update v0.6.0 (10011) -> v0.6.1 ($CODE_B) succeeded; UID, firstInstallTime and DataStore preserved" | tee "$report/result.txt"
+echo "Update v0.6.1 (10015) -> v0.6.2 ($CODE_B) succeeded; UID, firstInstallTime and DataStore preserved" | tee "$report/result.txt"

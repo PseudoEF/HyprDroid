@@ -137,6 +137,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
     var controlOpen by rememberSaveable { mutableStateOf(false) }
     var sidebarOpen by rememberSaveable { mutableStateOf(false) }
+    var overlaySettingsOpen by rememberSaveable { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
     var dragRevision by remember { mutableIntStateOf(0) }
     var appearanceWorkspace by rememberSaveable { mutableStateOf<Int?>(null) }
@@ -193,7 +194,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     LaunchedEffect(pager, workspaceReady) {
         if (workspaceReady) snapshotFlow { pager.settledPage }.distinctUntilChanged().collect(actions.selectWorkspace)
     }
-    val overlayOpen = drawerOpen || controlOpen || sidebarOpen || aboutOpen || presentationPreview != null || appearanceWorkspace != null || orderWorkspace != null
+    val overlayOpen = overlaySettingsOpen || drawerOpen || controlOpen || sidebarOpen || aboutOpen || presentationPreview != null || appearanceWorkspace != null || orderWorkspace != null
     LaunchedEffect(presentation.desktopMode) { if (!classic) editing = false }
     LaunchedEffect(pager.settledPage) { revealDock() }
     val homeLifecycle = LocalLifecycleOwner.current.lifecycle
@@ -209,6 +210,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     }
     BackHandler(enabled = overlayOpen || editing) {
         when {
+            overlaySettingsOpen -> overlaySettingsOpen = false
             presentationPreview != null -> if (!savingPresentation) closePresentation()
             aboutOpen -> aboutOpen = false
             sidebarOpen -> sidebarOpen = false
@@ -230,6 +232,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
             add(AppMenuAction("Все приложения", onClick = openDrawer))
             add(AppMenuAction("Control Center", onClick = openControl))
             add(AppMenuAction("Sidebar") { sidebarOpen = true })
+            add(AppMenuAction("Sidebar поверх приложений", shellReady) { overlaySettingsOpen = true })
             if (presentation.dockVisibility == DockVisibility.AUTO) add(AppMenuAction("Показать dock", onClick = revealDock))
             add(AppMenuAction("Редактировать пространство", workspaceReady, enterEdit))
             add(AppMenuAction("Вид пространства", workspaceReady) { appearanceWorkspace = pager.currentPage })
@@ -295,6 +298,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     }
     if (controlOpen) ControlCenter(onClose = { controlOpen = false }, onSettings = actions.systemSettings)
     if (aboutOpen) AboutScreen { aboutOpen = false }
+    if (overlaySettingsOpen) OverlaySettingsPanel { overlaySettingsOpen = false }
     presentationPreview?.let { draft -> ShellAppearancePanel(draft, savingPresentation,
         onChange = { presentationPreview = it }, onCancel = closePresentation,
         onApply = { savingPresentation = true; actions.presentation(draft, closePresentation) }) }

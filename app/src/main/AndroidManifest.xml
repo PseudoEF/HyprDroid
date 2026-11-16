@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- Discover launchable apps on Android 11+ without broad package visibility. -->
     <queries>
         <intent>
@@ -8,6 +11,9 @@
         </intent>
     </queries>
     <application android:allowBackup="false" android:label="HyprDroid" android:theme="@style/Theme.HyprDroid" android:supportsRtl="true">
+        <service android:name=".overlay.OverlaySidebarService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-enabled persistent quick-launch sidebar over other apps, with a stop notification" />
+        </service>
         <activity android:name=".MainActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

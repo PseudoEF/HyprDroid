@@ -14,6 +14,8 @@ import dev.hyprdroid.launcher.model.MAX_DOCK_APPS
 import dev.hyprdroid.launcher.model.ShellSettings
 import dev.hyprdroid.launcher.model.WorkspaceItem
 import dev.hyprdroid.launcher.model.ShellPresentation
+import dev.hyprdroid.launcher.model.OverlaySettings
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import dev.hyprdroid.launcher.model.placeItemBefore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOn
@@ -40,7 +42,22 @@ class ShellRepository(private val store: DataStore<Preferences>) {
     private val favorites = stringSetPreferencesKey("favorites")
     private val wallpaper = stringPreferencesKey("wallpaper_uri")
     private val sidebar = stringPreferencesKey("sidebar_items")
+    private val overlayEnabled = booleanPreferencesKey("overlay_enabled")
+    private val overlayPosition = intPreferencesKey("overlay_position")
+    private val overlayHeight = intPreferencesKey("overlay_height")
+    private val overlayInset = intPreferencesKey("overlay_inset")
     val settings = store.data.map(::decode).flowOn(Dispatchers.Default)
+
+    suspend fun setOverlay(value: OverlaySettings) {
+        val safe = value.validated()
+        store.edit { data ->
+            decode(data) // Refuse unknown schemas; leave all existing records intact.
+            data[overlayEnabled] = safe.enabled
+            data[overlayPosition] = safe.positionPercent
+            data[overlayHeight] = safe.heightDp
+            data[overlayInset] = safe.insetDp
+        }
+    }
 
     suspend fun setPresentation(value: ShellPresentation) {
         store.edit { data -> decode(data); ShellPresentationCodec.write(data, value) }
@@ -109,6 +126,8 @@ class ShellRepository(private val store: DataStore<Preferences>) {
             sidebar = try { WorkspaceCodec.decodeItems(preferences[sidebar] ?: "[]") }
                 catch (error: JSONException) { throw IOException("Invalid sidebar records", error) },
             presentation = ShellPresentationCodec.read(preferences),
+            overlay = OverlaySettings(preferences[overlayEnabled] ?: false, preferences[overlayPosition] ?: 50,
+                preferences[overlayHeight] ?: 160, preferences[overlayInset] ?: 0).validated(),
         )
     }
 }
