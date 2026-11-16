@@ -163,7 +163,7 @@ internal fun OverlaySettingsPanel(onClose: () -> Unit) {
         }
     }
     if (preview && saved != null) {
-        ModularSidebar(WorkspaceUiState(shell = saved!!.copy(panels = saved!!.panels.with(side, draft))), { preview = false }, {}, { _, _ -> }, {}, { _, _ -> }, { _, _, done -> done() },
+        ModularSidebar(WorkspaceUiState(shell = saved!!.copy(panelConfiguration = saved!!.panels.with(side, draft))), { preview = false }, {}, { _, _ -> }, {}, { _, _ -> }, { _, _, done -> done() },
             side = side, allowPanelEditing = false)
     }
     if (widgetPicker && binding != null) WidgetPicker(onClose = { widgetPicker = false }, onChoose = { info -> widgetPicker = false; binding.add(side, info) })

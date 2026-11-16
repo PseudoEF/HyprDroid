@@ -68,6 +68,7 @@ internal fun PanelAndroidWidget(widget: PanelWidget, onEdit: (() -> Unit)? = nul
             } else if (active) {
                 val density = LocalDensity.current.density
                 BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    val availableWidth = maxWidth.value
                     val horizontal = info.resizeMode and AppWidgetProviderInfo.RESIZE_HORIZONTAL != 0
                     val vertical = info.resizeMode and AppWidgetProviderInfo.RESIZE_VERTICAL != 0
                     val limits = PanelWidgetLimits(
@@ -100,7 +101,7 @@ internal fun PanelAndroidWidget(widget: PanelWidget, onEdit: (() -> Unit)? = nul
                     }
                     if (!interactive) Box(Modifier.matchParentSize().clickable(onClickLabel = "Предпросмотр виджета", onClick = {}))
                     if (onResize != null && (horizontal || vertical)) Box(Modifier.align(Alignment.BottomEnd)) {
-                        WidgetResizeHandle(widget, maxWidth.value, horizontal, vertical, onResize)
+                        WidgetResizeHandle(widget, availableWidth, horizontal, vertical, onResize)
                     }
                     }
                     }
