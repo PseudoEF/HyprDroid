@@ -33,7 +33,8 @@ import dev.hyprdroid.launcher.model.PanelSide
 
 // Typed chrome keys cannot collide with persisted shortcut IDs.
 private enum class SidebarChrome { STATUS, TITLE, SEARCH, EMPTY }
-private data class PanelModuleKey(val id: String)
+// Serializable value keys are Bundle-saveable and cannot collide with raw shortcut IDs.
+private data class PanelModuleKey(val id: String) : java.io.Serializable
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
