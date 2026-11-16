@@ -64,7 +64,11 @@ class OverlaySidebarService : Service() {
     override fun onCreate() {
         super.onCreate()
         instance = this
-        windowContext = if (Build.VERSION.SDK_INT >= 30) createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null) else this
+        // Service contexts are not display-associated. Bind a display before creating the visual context.
+        windowContext = if (Build.VERSION.SDK_INT >= 30) {
+            val display = requireNotNull(getSystemService(android.hardware.display.DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY))
+            createDisplayContext(display).createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null)
+        } else this
         windows = windowContext.getSystemService(WindowManager::class.java)
         owner = OverlayOwner()
         repository = ShellRepository(this)
