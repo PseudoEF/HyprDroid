@@ -15,6 +15,8 @@ for widget_phase in seed verify; do
   if [ "$widget_phase" = verify ]; then
     adb shell appwidget revokebind --package dev.hyprdroid.launcher --user 0
     adb shell am force-stop dev.hyprdroid.launcher
+    adb install -r app/build/outputs/apk/debug/app-debug.apk > .local/shell-ui/widget-install-over.txt
+    grep -q Success .local/shell-ui/widget-install-over.txt
   fi
   adb shell am instrument -w -r -e class dev.hyprdroid.launcher.WidgetProcessRestoreTest -e widgetPhase "$widget_phase" \
     dev.hyprdroid.launcher.test/androidx.test.runner.AndroidJUnitRunner > ".local/shell-ui/widget-process-$widget_phase.txt"
