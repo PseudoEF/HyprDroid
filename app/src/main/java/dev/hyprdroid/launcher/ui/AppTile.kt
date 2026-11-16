@@ -43,7 +43,7 @@ fun AppTile(
     val label = app?.label ?: component.substringBefore('/')
     Box(modifier) {
         val clickModifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
-            .then(if (dragEditing) Modifier.clickable(role = Role.Button, onClickLabel = "Действия: $label", onClick = { if (editorMenuOnTap) menuOpen = true }) else Modifier.combinedClickable(
+            .then(if (dragEditing) Modifier.clickable(role = Role.Button, onClickLabel = if (editorMenuOnTap) "Действия: $label" else label, onClick = { if (editorMenuOnTap) menuOpen = true }) else Modifier.combinedClickable(
                 role = Role.Button, onClick = onClick, onClickLabel = label,
                 onLongClick = { menuOpen = true }, onLongClickLabel = "Действия: $label",
             ))
