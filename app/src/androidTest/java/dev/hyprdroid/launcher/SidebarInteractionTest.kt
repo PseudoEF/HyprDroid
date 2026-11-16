@@ -33,6 +33,7 @@ class SidebarInteractionTest {
         workspace.setAppearance(0, WorkspaceAppearance())
         shell.settings.first().sidebar.forEach { shell.removeSidebarItem(it.id) }
         shell.setPresentation(ShellPresentation(mode))
+        shell.setPanel(PanelSide.RIGHT, PanelSettings(insetDp = 48))
         LauncherCatalog(context).load().take(3)
     }
 
@@ -42,14 +43,10 @@ class SidebarInteractionTest {
             val scenario = ActivityScenario.launch(MainActivity::class.java)
             try {
                 await("home-pager")
-                var inset = 0
-                scenario.onActivity {
-                    inset = ViewCompat.getRootWindowInsets(it.window.decorView)?.getInsets(
-                        WindowInsetsCompat.Type.systemGestures() or WindowInsetsCompat.Type.mandatorySystemGestures())?.right ?: 0
-                }
-                val reserved = inset + 52 * context.resources.displayMetrics.density
+                val reserved = 60 * context.resources.displayMetrics.density
                 val pager = compose.onNodeWithTag("home-pager")
-                pager.performTouchInput {
+                val root = compose.onNodeWithTag("home-panel-root")
+                root.performTouchInput {
                     val start = Offset(width - reserved, height * .5f)
                     down(start); moveTo(start - Offset(200f, 0f), 350); cancel()
                 }
@@ -60,7 +57,7 @@ class SidebarInteractionTest {
                 compose.waitUntil(5_000) { runBlocking { workspace.settings.first().selectedWorkspace == 1 } }
                 compose.onNodeWithContentDescription("Рабочее пространство 1").performClick()
                 compose.waitUntil(5_000) { runBlocking { workspace.settings.first().selectedWorkspace == 0 } }
-                pager.performTouchInput {
+                root.performTouchInput {
                     val start = Offset(width - reserved, height * .5f)
                     swipe(start, start - Offset(220f, 8f), 350)
                 }

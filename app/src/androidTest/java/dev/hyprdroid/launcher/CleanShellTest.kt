@@ -102,14 +102,13 @@ class CleanShellTest {
 
     @Test fun sidebarHasNoHandleOpensInsideSafeBandAndPreservesHiddenModuleItems() {
         val app = seed()
+        runBlocking { shell.setPanel(PanelSide.RIGHT, shell.settings.first().panels.right.copy(scope = PanelScope.HOME, insetDp = 48)) }
         val scenario = ActivityScenario.launch(MainActivity::class.java)
         try {
             await("clean-workspace-0")
             compose.onNodeWithTag("sidebar-handle").assertDoesNotExist()
-            var rightInset = 0
-            scenario.onActivity { rightInset = ViewCompat.getRootWindowInsets(it.window.decorView)?.getInsets(WindowInsetsCompat.Type.systemGestures())?.right ?: 0 }
-            val reserved = 44 * context.resources.displayMetrics.density + rightInset
-            compose.onNodeWithTag("home-pager").performTouchInput {
+            val reserved = 60 * context.resources.displayMetrics.density
+            compose.onNodeWithTag("home-panel-root").performTouchInput {
                 val start = Offset(width - reserved, height * .5f)
                 swipe(start, start - Offset(220f, 0f))
             }
