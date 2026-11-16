@@ -136,6 +136,7 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
     fun setSidebarItem(item: WorkspaceItem.AppShortcut, pinned: Boolean) = save { shellRepository.setSidebarItem(item, pinned) }
     fun removeSidebarItem(id: String) = save { shellRepository.removeSidebarItem(id) }
     fun reorderSidebar(id: String, delta: Int) = save { shellRepository.reorderSidebar(id, delta) }
+    fun placeSidebarBefore(id: String, before: String?, onComplete: () -> Unit) = save(onComplete) { shellRepository.placeSidebarBefore(id, before) }
     fun launchSidebar(item: WorkspaceItem.AppShortcut) {
         try { catalog.launch(item) }
         catch (_: RuntimeException) { showMessage("Ярлык недоступен. Обновите каталог или уберите его из Sidebar."); refreshApps() }

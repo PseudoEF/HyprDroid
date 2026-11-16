@@ -14,6 +14,7 @@ import dev.hyprdroid.launcher.model.MAX_DOCK_APPS
 import dev.hyprdroid.launcher.model.ShellSettings
 import dev.hyprdroid.launcher.model.WorkspaceItem
 import dev.hyprdroid.launcher.model.ShellPresentation
+import dev.hyprdroid.launcher.model.placeItemBefore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOn
 import org.json.JSONException
@@ -56,6 +57,7 @@ class ShellRepository(private val store: DataStore<Preferences>) {
     }
 
     suspend fun removeSidebarItem(id: String) = updateSidebar { it.filterNot { item -> item.id == id } }
+    suspend fun placeSidebarBefore(id: String, before: String?) = updateSidebar { placeItemBefore(it, id, before) }
     suspend fun reorderSidebar(id: String, delta: Int) = updateSidebar { items ->
         val index = items.indexOfFirst { it.id == id }
         if (index < 0) items else items.toMutableList().apply {

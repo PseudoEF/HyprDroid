@@ -10,6 +10,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -75,6 +77,7 @@ fun WorkspaceScreen(model: WorkspaceViewModel) {
                 placeBefore = model::placeBefore, sidebarPin = model::setSidebarItem,
                 sidebarRemove = model::removeSidebarItem, sidebarReorder = model::reorderSidebar,
                 sidebarLaunch = model::launchSidebar,
+                sidebarPlaceBefore = model::placeSidebarBefore,
                 presentation = model::setPresentation,
                 systemSettings = { action -> if (!openSystemSettings(context, action)) model.showMessage("Системные настройки недоступны.") },
             ))
@@ -105,6 +108,7 @@ data class ShellActions(
     val sidebarRemove: (String) -> Unit,
     val sidebarReorder: (String, Int) -> Unit,
     val sidebarLaunch: (WorkspaceItem.AppShortcut) -> Unit,
+    val sidebarPlaceBefore: (String, String?, () -> Unit) -> Unit,
     val presentation: (ShellPresentation, () -> Unit) -> Unit,
 )
 
@@ -276,11 +280,13 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
             }
         }
     }
-    AnimatedVisibility(visible = sidebarOpen, enter = fadeIn(), exit = fadeOut()) {
+    AnimatedVisibility(visible = sidebarOpen, enter = fadeIn(tween(180)), exit = fadeOut(tween(180))) {
         ModularSidebar(state, onClose = { sidebarOpen = false },
             onLaunch = { sidebarOpen = false; actions.sidebarLaunch(it) }, onPin = actions.sidebarPin,
             onRemove = actions.sidebarRemove, onReorder = actions.sidebarReorder,
-            panelModifier = Modifier.animateEnterExit(enter = slideInHorizontally { it }, exit = slideOutHorizontally { it }))
+            onPlaceBefore = actions.sidebarPlaceBefore,
+            panelModifier = Modifier.animateEnterExit(enter = slideInHorizontally(tween(240, easing = FastOutSlowInEasing)) { it },
+                exit = slideOutHorizontally(tween(200, easing = FastOutSlowInEasing)) { it }))
     }
     AnimatedVisibility(visible = drawerOpen, enter = slideInVertically { it / 3 } + fadeIn(), exit = slideOutVertically { it / 3 } + fadeOut()) {
         AppDrawer(state, selectingWorkspace, closeDrawer, launchApp,

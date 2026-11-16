@@ -63,10 +63,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: python3 scripts/reserve-version-codes.py
-      - name: Check out the actual v0.5.2 baseline for in-place upgrade
+      - name: Check out the actual v0.6 baseline for in-place upgrade
         uses: actions/checkout@v4
         with:
-          ref: b8114836f0b676dbacb5515af9151f80051fecb7
+          ref: a563ddbf0c4c23db43c3e3044d2701f42d472fd2
           path: .local/upgrade-baseline
           persist-credentials: false
       - name: Build sequential APKs and verify provenance

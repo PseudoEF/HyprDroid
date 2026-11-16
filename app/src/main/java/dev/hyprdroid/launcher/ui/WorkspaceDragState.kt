@@ -17,7 +17,7 @@ import kotlin.math.roundToInt
 
 /** Draft order belongs to this canvas; only a completed drag writes to DataStore. */
 @Stable
-internal class WorkspaceDragState(val grid: LazyGridState) {
+internal class WorkspaceDragState(val grid: LazyGridState, private val reserveRemoveTarget: Boolean = true) {
     var items by mutableStateOf(emptyList<WorkspaceItem>())
     var draggedId by mutableStateOf<String?>(null)
     var pointer by mutableStateOf(Offset.Zero)
@@ -32,7 +32,7 @@ internal class WorkspaceDragState(val grid: LazyGridState) {
                 position.y >= it.offset.y && position.y < it.offset.y + it.size.height
         } ?: return
         // Reserve the remove button's touch target.
-        if (position.x > hit.offset.x + hit.size.width - 48 * gridDensity && position.y < hit.offset.y + 48 * gridDensity) return
+        if (reserveRemoveTarget && position.x > hit.offset.x + hit.size.width - 48 * gridDensity && position.y < hit.offset.y + 48 * gridDensity) return
         val item = items.find { it.id == hit.key } ?: return
         if (item !is WorkspaceItem.AppShortcut) return
         original = items

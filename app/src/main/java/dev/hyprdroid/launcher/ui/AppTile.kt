@@ -37,12 +37,13 @@ fun AppTile(
     selected: Boolean = false, onRemove: (() -> Unit)? = null,
     iconSizeDp: Int = 48,
     dragEditing: Boolean = false,
+    editorMenuOnTap: Boolean = false, tileMinHeightDp: Int = 108,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val label = app?.label ?: component.substringBefore('/')
     Box(modifier) {
         val clickModifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
-            .then(if (dragEditing) Modifier.clickable(role = Role.Button, onClick = {}) else Modifier.combinedClickable(
+            .then(if (dragEditing) Modifier.clickable(role = Role.Button, onClickLabel = "Действия: $label", onClick = { if (editorMenuOnTap) menuOpen = true }) else Modifier.combinedClickable(
                 role = Role.Button, onClick = onClick, onClickLabel = label,
                 onLongClick = { menuOpen = true }, onLongClickLabel = "Действия: $label",
             ))
@@ -56,7 +57,7 @@ fun AppTile(
             }
         } else {
             Column(
-                clickModifier.heightIn(min = if (compact) 52.dp else 108.dp).padding(4.dp)
+                clickModifier.heightIn(min = if (compact) 52.dp else tileMinHeightDp.dp).padding(4.dp)
                     .then(if (compact) Modifier.semantics { contentDescription = label } else Modifier),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
