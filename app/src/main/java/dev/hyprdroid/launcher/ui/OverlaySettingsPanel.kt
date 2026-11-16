@@ -71,6 +71,7 @@ internal fun OverlaySettingsPanel(onClose: () -> Unit) {
                     && Settings.canDrawOverlays(context) && !running) OverlaySession.start(activity)
             }
             catch (_: java.io.IOException) { error = "Не удалось сохранить панель. Повторите попытку." }
+            catch (_: IllegalArgumentException) { error = "Конфигурация панели некорректна или превышает допустимое количество модулей." }
             finally { saving = false }
         }
     }
@@ -135,7 +136,7 @@ internal fun OverlaySettingsPanel(onClose: () -> Unit) {
             if (draft.modules.isEmpty()) Text("Панель пуста. Добавьте модуль ниже.")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PanelModule.entries.filter { it.supports(side) && it.name !in draft.modules }.forEach { module ->
-                    AssistChip(onClick = { draft = draft.copy(modules = draft.modules + module.name) }, enabled = !saving,
+                    AssistChip(onClick = { draft = draft.copy(modules = draft.modules + module.name) }, enabled = !saving && draft.modules.size < 64,
                         label = { Text("+ ${module.title}") }, modifier = Modifier.testTag("module-add-${module.name}"))
                 }
             }
@@ -147,9 +148,10 @@ internal fun OverlaySettingsPanel(onClose: () -> Unit) {
                     TextButton(onClick = binding::resume, enabled = !widgetBusy, modifier = Modifier.testTag("resume-widget")) { Text("Продолжить добавление") }
                     TextButton(onClick = binding::cancel, enabled = !widgetBusy, modifier = Modifier.testTag("cancel-widget")) { Text("Отменить добавление") }
                 } else {
-                    OutlinedButton(onClick = { widgetPicker = true }, enabled = current != null && draft == current && !saving && !widgetBusy,
+                    OutlinedButton(onClick = { widgetPicker = true }, enabled = current != null && draft == current && !saving && !widgetBusy && draft.widgets.size < 32 && draft.modules.size < 64,
                         modifier = Modifier.testTag("add-android-widget")) { Text("Добавить Android-виджет") }
                     if (current != null && draft != current) Text("Перед добавлением виджета сохраните изменения панели.", style = MaterialTheme.typography.bodySmall)
+                    if (draft.widgets.size >= 32 || draft.modules.size >= 64) Text("Достигнут предел элементов панели. Удалите ненужный модуль перед добавлением.", style = MaterialTheme.typography.bodySmall)
                 }
                 widgetError?.let { Text(it, color = Mocha.Red) }
             }
