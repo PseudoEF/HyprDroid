@@ -60,7 +60,8 @@ internal fun PanelAndroidWidget(widget: PanelWidget) {
                 val density = LocalDensity.current.density
                 BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     val minWidth = (if (info.resizeMode and AppWidgetProviderInfo.RESIZE_HORIZONTAL != 0) info.minResizeWidth else info.minWidth) / density
-                    val width = (maxWidth.value * widget.widthPercent / 100).coerceAtLeast(minOf(minWidth, maxWidth.value)).coerceAtMost(maxWidth.value)
+                    val limitWidth = if (Build.VERSION.SDK_INT >= 31 && info.maxResizeWidth > 0) minOf(maxWidth.value, info.maxResizeWidth / density) else maxWidth.value
+                    val width = (maxWidth.value * widget.widthPercent / 100).coerceAtLeast(minOf(minWidth, limitWidth)).coerceAtMost(limitWidth)
                     val minHeight = (if (info.resizeMode and AppWidgetProviderInfo.RESIZE_VERTICAL != 0) info.minResizeHeight else info.minHeight) / density
                     val requestedHeight = if (info.resizeMode and AppWidgetProviderInfo.RESIZE_VERTICAL == 0) info.minHeight / density else widget.heightDp.toFloat()
                     val maxHeight = if (Build.VERSION.SDK_INT >= 31 && info.maxResizeHeight > 0) (info.maxResizeHeight / density).coerceAtMost(600f) else 600f

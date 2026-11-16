@@ -66,7 +66,7 @@ jobs:
       - name: Check out the actual v0.6.2 baseline for in-place upgrade
         uses: actions/checkout@v4
         with:
-          ref: 96ee00f30cf03c8bb265e8c6267c461f52920d5b
+          ref: 1cc56d19682d1d8809c78ae353a200d8b6b88eb8
           path: .local/upgrade-baseline
           persist-credentials: false
       - name: Build sequential APKs and verify provenance

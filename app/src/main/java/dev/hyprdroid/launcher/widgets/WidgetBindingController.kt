@@ -50,6 +50,7 @@ class WidgetBindingController(private val activity: ComponentActivity) {
             override fun onResume(owner: LifecycleOwner) {
                 activity.lifecycleScope.launch {
                     try { widgets.cleanup(repository) }
+                    catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                     catch (_: Exception) { failure.value = "Не удалось сверить сохранённые виджеты; данные оставлены без изменений" }
                 }
             }

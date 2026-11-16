@@ -63,6 +63,7 @@ class UpgradePersistenceTest {
             shell.setSidebarItem(WorkspaceItem.AppShortcut(apps[1], "upgrade-shortcut-fixture"), true)
             shell.setPresentation(ShellPresentation(DesktopMode.CLEAN, DockVisibility.AUTO))
             shell.setOverlay(OverlaySettings(true, 67, 144, 24))
+            shell.reorderPanelModule(PanelSide.RIGHT, "QUICK_LAUNCH", -1)
             shell.setWallpaper(wallpaper)
             baseline.writeText(JSONObject().put("apps", JSONArray(apps)).put("uid", context.applicationInfo.uid)
                 .put("firstInstallTime", packageInfo.firstInstallTime).put("code", identity.versionCode)
@@ -95,6 +96,9 @@ class UpgradePersistenceTest {
             assertEquals(24, shell.settings.first().panels.right.insetDp)
             assertEquals(PanelScope.HOME, shell.settings.first().panels.left.scope)
             assertEquals(listOf("CLOCK", "DATE", "BATTERY"), shell.settings.first().panels.left.modules)
+            assertEquals(listOf("QUICK_LAUNCH", "SYSTEM_STATUS"), shell.settings.first().panels.right.modules)
+            assertTrue(shell.settings.first().panels.left.widgets.isEmpty())
+            assertNull(shell.settings.first().pendingWidget)
             dismissBackgroundPixelLauncherAnr()
             val scenario = ActivityScenario.launch(MainActivity::class.java)
             try {
