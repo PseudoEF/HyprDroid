@@ -31,7 +31,6 @@ class PanelWidgetHost private constructor(private val context: Context) {
     @Volatile private var references = 0
     internal val visibleConsumers get() = references
     private var watching = false
-    private val main = Handler(Looper.getMainLooper())
     private val packages = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) { changed() }
     }
@@ -65,8 +64,8 @@ class PanelWidgetHost private constructor(private val context: Context) {
         if (references == 0) {
             try { host.stopListening() } catch (_: RuntimeException) { }
             if (watching) { context.unregisterReceiver(packages); watching = false }
-            // A new slot may mount during this frame. Never clear its just-created host view.
-            main.post { if (references == 0) platform.forgetDetachedViews() }
+            // Slots acquire before creating a view. Clear old window contexts immediately at zero.
+            platform.forgetDetachedViews()
         }
     }
     fun retry() {

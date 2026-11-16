@@ -44,7 +44,7 @@ internal fun PanelAndroidWidget(widget: PanelWidget) {
         }
         val observer = LifecycleEventObserver { _, _ -> sync() }
         lifecycle.addObserver(observer); sync()
-        onDispose { lifecycle.removeObserver(observer); if (held) session.release() }
+        onDispose { lifecycle.removeObserver(observer); active = false; if (held) session.release() }
     }
     val info = remember(widget.appWidgetId, revision, generation) { session.info(widget.appWidgetId)?.takeIf {
         it.provider.flattenToString() == widget.provider && it.profile == Process.myUserHandle()
