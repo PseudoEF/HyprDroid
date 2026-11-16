@@ -93,14 +93,14 @@ fun ModularSidebar(
                         }
                         val candidates = state.sidebarEntries.filter { it.app.label.contains(search, ignoreCase = true) }
                         if (candidates.isEmpty()) item(key = "empty-search") { Text(if (state.loadingApps) "Загрузка…" else "Доступных ярлыков нет") }
-                        items(candidates, key = { it.item.id }) { entry ->
+                        items(candidates, key = { "quick:${it.item.id}" }) { entry ->
                             val pinned = items.any { it.id == entry.item.id }
                             AppTile(entry.app, entry.app.componentId, { onPin(entry.item, !pinned) }, emptyList(),
                                 list = true, selected = pinned, modifier = Modifier.padding(vertical = 4.dp).testTag("sidebar-choice-${entry.item.id}"))
                         }
                         } else {
                         if (items.isEmpty()) item(key = "empty-quick") { Text("Панель пуста. Нажмите «Редактировать», чтобы добавить приложения или ярлыки.", modifier = Modifier.padding(12.dp)) }
-                        itemsIndexed(items, key = { _, item -> item.id }) { index, item ->
+                        itemsIndexed(items, key = { _, item -> "quick:${item.id}" }) { index, item ->
                             val shortcut = item as? WorkspaceItem.AppShortcut
                             val entry = entries[item.id]
                             Column(Modifier.animateItem().testTag("sidebar-item-${item.id}")) {

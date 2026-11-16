@@ -91,7 +91,7 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
                 }
             } catch (_: IOException) {
                 mutableState.update { it.copy(shellError = true) }
-                showMessage("Не удалось прочитать dock и обои. Повторите чтение через меню панели.")
+                showMessage("Не удалось прочитать настройки панелей и обои. Повторите чтение через меню.")
             }
         }
     }

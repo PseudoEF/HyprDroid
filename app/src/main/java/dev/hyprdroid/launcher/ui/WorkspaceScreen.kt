@@ -235,7 +235,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
             add(AppMenuAction("Другой лаунчер", onClick = actions.otherLauncher))
             if (state.catalogError) add(AppMenuAction("Обновить приложения", onClick = actions.retryApps))
             if (state.storageError) add(AppMenuAction("Повторить чтение пространств", onClick = actions.retryWorkspace))
-            if (state.shellError) add(AppMenuAction("Повторить чтение dock и обоев", onClick = actions.retryShell))
+            if (state.shellError) add(AppMenuAction("Повторить чтение панелей и обоев", onClick = actions.retryShell))
         }
         Waybar(pager.currentPage, { index -> scope.launch { pager.animateScrollToPage(index) }; Unit }, panelMenu, Modifier.widthIn(max = 760.dp).fillMaxWidth(),
             onDrawer = openDrawer, onSidebar = { sidebarOpen = true })
