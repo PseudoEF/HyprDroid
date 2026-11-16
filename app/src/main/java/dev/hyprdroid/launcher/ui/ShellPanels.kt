@@ -17,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -44,12 +45,13 @@ fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>
     ShellSurface(modifier) {
         BoxWithConstraints {
             val density = LocalDensity.current
-            val largeText = density.fontScale > 1.35f && maxWidth < 420.dp
             val badgeSize = maxOf(26.dp, with(density) { MaterialTheme.typography.labelLarge.lineHeight.toDp() } + 4.dp)
             val targetSize = maxOf(48.dp, badgeSize + 8.dp)
+            val actions = 1 + listOf(onDrawer, onSidebar, onLeftPanel).count { it != null }
+            val separateClock = maxWidth < targetSize * WORKSPACE_COUNT + 48.dp * actions + 88.dp * density.fontScale + 12.dp
             Column {
                 Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Row(Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
+                    Row(Modifier.weight(1f).clipToBounds().horizontalScroll(rememberScrollState())) {
                         repeat(WORKSPACE_COUNT) { index ->
                             Box(
                                 Modifier.size(targetSize).selectable(selected = current == index, role = Role.Tab, onClick = { onSelect(index) })
@@ -62,7 +64,7 @@ fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>
                             }
                         }
                     }
-                    if (!largeText) ShellClock()
+                    if (!separateClock) ShellClock()
                     onDrawer?.let { IconButton(onClick = it) { DrawerGlyph("Открыть app drawer") } }
                     onSidebar?.let { IconButton(onClick = it, modifier = Modifier.testTag("sidebar-open")) { Icon(Icons.Default.Menu, "Открыть Sidebar") } }
                     onLeftPanel?.let { IconButton(onClick = it, modifier = Modifier.testTag("left-panel-open")) { Text("◧", color = Mocha.Lavender, modifier = Modifier.semantics { contentDescription = "Открыть левую панель" }) } }
@@ -75,7 +77,7 @@ fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>
                         }
                     }
                 }
-                if (largeText) Box(Modifier.align(Alignment.End).padding(end = 16.dp, bottom = 8.dp)) { ShellClock() }
+                if (separateClock) Box(Modifier.align(Alignment.End).padding(end = 16.dp, bottom = 8.dp)) { ShellClock() }
             }
         }
     }
