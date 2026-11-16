@@ -15,6 +15,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -86,7 +87,8 @@ internal fun OverlaySettingsPanel(onClose: () -> Unit) {
         finally { saving = false }
     } }
     BackHandler { if (preview) preview = false else if (!saving) onClose() }
-    Surface(color = Mocha.Base, contentColor = Mocha.Text, modifier = Modifier.fillMaxSize().testTag("overlay-settings")) {
+    Surface(color = Mocha.Base, contentColor = Mocha.Text, modifier = Modifier.fillMaxSize().testTag("overlay-settings")
+        .then(if (preview || widgetPicker) Modifier.clearAndSetSemantics { } else Modifier)) {
         Column(Modifier.safeDrawingPadding().padding(12.dp)) {
             Text("Настройки панелей", style = MaterialTheme.typography.titleLarge)
             FlowRow {

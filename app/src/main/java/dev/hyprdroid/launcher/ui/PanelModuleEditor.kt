@@ -58,7 +58,10 @@ internal fun PanelModuleEditor(draft: PanelSettings, onChange: (PanelSettings) -
                         PanelAndroidWidget(widget, interactive = false, onResize = if (enabled) resize else null)
                     }
                     WidgetSizeControls(widget, enabled, resize)
-                } else if (inlinePreview) PanelStatusModule(id)
+                } else if (inlinePreview) {
+                    if (id == "QUICK_LAUNCH") Text("Ярлыки доступны через «Редактировать» в обычной панели Quick Launch.", style = MaterialTheme.typography.bodySmall)
+                    else PanelStatusModule(id)
+                }
             }
             HorizontalDivider()
         }
