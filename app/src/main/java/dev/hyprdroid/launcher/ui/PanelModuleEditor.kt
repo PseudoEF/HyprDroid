@@ -2,6 +2,8 @@ package dev.hyprdroid.launcher.ui
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -30,11 +32,13 @@ internal fun PanelModuleEditor(draft: PanelSettings, onChange: (PanelSettings) -
     if (draft.modules.isEmpty()) Text("Панель пуста. Добавьте модуль в настройках содержимого.")
     draft.modules.forEachIndexed { index, id ->
         val expanded = selected == id
+        val bringIntoView = remember(id) { BringIntoViewRequester() }
+        LaunchedEffect(expanded) { if (expanded) { withFrameNanos { }; bringIntoView.bringIntoView() } }
         Column(Modifier.fillMaxWidth().animateContentSize().testTag("panel-module-row-$id")) {
             ListItem(headlineContent = { Text(draft.moduleTitle(id), maxLines = 2) },
                 supportingContent = { if (expanded) Text("Выбран · настройки раскрыты") },
                 trailingContent = { Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, null) },
-                modifier = Modifier.clickable(enabled, onClickLabel = "Настройки ${draft.moduleTitle(id)}") { selected = if (expanded) null else id }
+                modifier = Modifier.bringIntoViewRequester(bringIntoView).clickable(enabled, onClickLabel = "Настройки ${draft.moduleTitle(id)}") { selected = if (expanded) null else id }
                     .testTag("module-select-$id"))
             if (expanded) Column(Modifier.padding(horizontal = 8.dp).testTag("module-details-$id")) {
                 FlowRow {

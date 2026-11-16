@@ -99,7 +99,7 @@ fun ModularSidebar(
     val closeSign = if (side == PanelSide.RIGHT) 1f else -1f
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
-    val dismiss = { keyboard?.hide(); focus.clearFocus(force = true); onClose() }
+    val dismiss = { if (!savingModules) { keyboard?.hide(); focus.clearFocus(force = true); onClose() } }
     DisposableEffect(Unit) { onDispose { keyboard?.hide() } }
     val grid = rememberLazyGridState()
     val drag = remember(grid) { WorkspaceDragState(grid, reserveRemoveTarget = false) }
@@ -116,7 +116,7 @@ fun ModularSidebar(
 
     BoxWithConstraints(Modifier.fillMaxSize().imePadding().testTag("$tag-overlay")) {
         val heightLimit = maxHeight * .8f
-        val panelWidth = (maxWidth * (if (moduleEditing) editorDraft.widthPercent else state.shell?.panels?.get(side)?.widthPercent ?: 80) / 100f).coerceAtMost(600.dp)
+        val panelWidth = ((maxWidth - 24.dp).coerceAtLeast(1.dp) * (if (moduleEditing) editorDraft.widthPercent else state.shell?.panels?.get(side)?.widthPercent ?: 80) / 100f).coerceAtMost(600.dp)
         Box(Modifier.fillMaxSize().background(Mocha.Base.copy(alpha = .45f)).testTag("$tag-scrim")
             .clickable(onClickLabel = closeLabel, onClick = dismiss))
         Surface(color = Mocha.Mantle.copy(alpha = .97f), contentColor = Mocha.Text,
