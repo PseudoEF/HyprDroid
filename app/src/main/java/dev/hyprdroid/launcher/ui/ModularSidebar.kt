@@ -40,6 +40,7 @@ fun ModularSidebar(
     onPin: (WorkspaceItem.AppShortcut, Boolean) -> Unit, onRemove: (String) -> Unit,
     onReorder: (String, Int) -> Unit, onPlaceBefore: (String, String?, () -> Unit) -> Unit,
     panelModifier: Modifier = Modifier,
+    onStopOverlay: (() -> Unit)? = null,
 ) {
     var editing by rememberSaveable { mutableStateOf(false) }
     var adding by rememberSaveable { mutableStateOf(false) }
@@ -81,6 +82,7 @@ fun ModularSidebar(
                     Text("Sidebar", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                     IconButton(onClick = dismiss) { Icon(Icons.Default.Close, "Закрыть Sidebar") }
                 }
+                onStopOverlay?.let { stop -> TextButton(onClick = stop, modifier = Modifier.testTag("stop-overlay")) { Text("Отключить overlay") } }
                 if (SidebarModule.QUICK_LAUNCH in modules) FlowRow {
                     TextButton(onClick = { editing = !editing; adding = false }, enabled = enabled) { Text(if (editing) "Готово" else "Редактировать") }
                     if (editing) TextButton(onClick = { adding = !adding }, enabled = enabled) { Text(if (adding) "К панели" else "Добавить ярлык") }

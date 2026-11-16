@@ -63,6 +63,20 @@ class OverlaySidebarTest {
             device.findObject(By.desc("Закрыть Sidebar")).click()
             assertTrue(device.wait(Until.hasObject(By.desc("Открыть глобальную Sidebar")), 5_000))
             assertEquals(before, runBlocking { repository.settings.first().sidebar })
+            device.findObject(By.desc("Открыть глобальную Sidebar")).click()
+            val stop = device.wait(Until.findObject(By.text("Отключить overlay")), 5_000)
+            assertNotNull(stop)
+            stop!!.click()
+            waitFor { !OverlaySession.running.value }
+            assertFalse(runBlocking { repository.settings.first().overlay.enabled })
+            // A disabled session can be started again only from an explicitly visible launcher.
+            context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            waitFor { device.currentPackageName == context.packageName }
+            runBlocking { repository.setOverlay(OverlaySettings(enabled = true)) }
+            scenario.onActivity { assertTrue(OverlaySession.start(it)) }
+            waitFor { OverlaySession.running.value }
+            context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            assertTrue(device.wait(Until.hasObject(By.desc("Открыть глобальную Sidebar")), 8_000))
             permission("deny")
             waitFor { !OverlaySession.running.value }
             assertFalse(device.hasObject(By.desc("Открыть глобальную Sidebar")))

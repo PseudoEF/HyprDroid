@@ -71,6 +71,7 @@ internal fun OverlaySettingsPanel(onClose: () -> Unit) {
             Text("Эксперимент · v0.6.2", color = Mocha.Mauve)
             Text("Правая зона открывает Quick Shell вне HyprDroid. Слева остаётся системный Back. В самом лаунчере работает прежняя Sidebar.", Modifier.padding(vertical = 12.dp))
             Text("Панель отключена по умолчанию. Для работы нужны разрешение «Поверх других приложений» и foreground-служба с уведомлением. Панель не читает экран и не определяет открытые приложения.")
+            Text("Если Android скрывает уведомление, отключение доступно в самой панели, здесь и в системном списке активных приложений.", style = MaterialTheme.typography.bodySmall)
             Text(if (allowed) "Разрешение выдано" else "Разрешение не выдано", modifier = Modifier.padding(top = 12.dp).testTag("overlay-permission"))
             OutlinedButton(onClick = {
                 try { context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))) }

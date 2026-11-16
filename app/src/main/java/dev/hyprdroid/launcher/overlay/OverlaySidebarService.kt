@@ -73,12 +73,7 @@ class OverlaySidebarService : Service() {
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == STOP) {
-            removeWindow()
-            scope.launch {
-                try { repository.setOverlay(repository.settings.first().overlay.copy(enabled = false)) }
-                catch (_: java.io.IOException) { OverlaySession.failed("Панель остановлена; не удалось сохранить отключение") }
-                finally { stopSelf() }
-            }
+            disableOverlay()
             return START_NOT_STICKY
         }
         if (!Settings.canDrawOverlays(this)) { stopSelf(); return START_NOT_STICKY }
@@ -131,7 +126,8 @@ class OverlaySidebarService : Service() {
                         ShellTheme {
                             Box(Modifier.fillMaxSize()) {
                                 ModularSidebar(state, ::closePanel, { closePanel(); model.launchSidebar(it) }, model::setSidebarItem,
-                                    model::removeSidebarItem, model::reorderSidebar, model::placeSidebarBefore)
+                                    model::removeSidebarItem, model::reorderSidebar, model::placeSidebarBefore,
+                                    onStopOverlay = ::disableOverlay)
                                 state.message?.let { Text(it) }
                             }
                         }
@@ -167,6 +163,14 @@ class OverlaySidebarService : Service() {
         current.animate().alpha(0f).setDuration(150).withEndAction {
             if (root === current) { panel = false; refreshVisibility() }
         }.start()
+    }
+    private fun disableOverlay() {
+        removeWindow()
+        scope.launch {
+            try { repository.setOverlay(repository.settings.first().overlay.copy(enabled = false)) }
+            catch (_: java.io.IOException) { OverlaySession.failed("Панель остановлена; не удалось сохранить отключение") }
+            finally { stopSelf() }
+        }
     }
     private fun removeWindow() {
         root?.let { view -> view.animate().cancel(); try { windows.removeViewImmediate(view) } catch (_: IllegalArgumentException) { } }
