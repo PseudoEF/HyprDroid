@@ -137,9 +137,11 @@ class OverlaySidebarService : Service() {
                         val state by model.state.collectAsState()
                         ShellTheme {
                             Box(Modifier.fillMaxSize()) {
+                                CompositionLocalProvider(LocalGlobalWidgetSurface provides true) {
                                 ModularSidebar(state, ::closePanel, { closePanel(); model.launchSidebar(it) }, model::setSidebarItem,
                                     model::removeSidebarItem, model::reorderSidebar, model::placeSidebarBefore,
                                     onStopOverlay = ::disableOverlay, side = side)
+                                }
                                 state.message?.let { Text(it) }
                             }
                         }

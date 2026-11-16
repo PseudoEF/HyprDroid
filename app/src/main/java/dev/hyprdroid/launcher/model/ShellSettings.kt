@@ -27,6 +27,7 @@ data class ShellSettings(
     val presentation: ShellPresentation = ShellPresentation(),
     val overlay: OverlaySettings = OverlaySettings(),
     val panelConfiguration: PanelsSettings? = null,
+    val pendingWidget: PendingPanelWidget? = null,
 ) {
     // Lazy migration preserves the existing overlay switch, geometry and enabled right modules.
     val panels: PanelsSettings get() = panelConfiguration ?: PanelsSettings(right = PanelSettings(

@@ -18,6 +18,8 @@ import dev.hyprdroid.launcher.model.OverlaySettings
 import dev.hyprdroid.launcher.model.PanelSide
 import dev.hyprdroid.launcher.model.PanelSettings
 import dev.hyprdroid.launcher.model.SidebarModule
+import dev.hyprdroid.launcher.model.PendingPanelWidget
+import dev.hyprdroid.launcher.model.WidgetBindingStage
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import dev.hyprdroid.launcher.model.placeItemBefore
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +52,7 @@ class ShellRepository(private val store: DataStore<Preferences>) {
     private val overlayHeight = intPreferencesKey("overlay_height")
     private val overlayInset = intPreferencesKey("overlay_inset")
     private val panels = stringPreferencesKey("panels_configuration")
+    private val pendingWidget = stringPreferencesKey("pending_panel_widget")
     val settings = store.data.map(::decode).flowOn(Dispatchers.Default)
 
     suspend fun setOverlay(value: OverlaySettings) {
@@ -84,12 +87,41 @@ class ShellRepository(private val store: DataStore<Preferences>) {
         }
     }
 
-    suspend fun setPanel(side: PanelSide, value: PanelSettings) {
+    suspend fun setPanel(side: PanelSide, value: PanelSettings, previous: PanelSettings? = null) {
         store.edit { data ->
             val current = decode(data)
-            val next = current.panels.with(side, value.validated())
+            // Retain widgets added after this UI draft was opened, including late configuration results.
+            val added = if (previous == null) emptyList() else current.panels[side].widgets.filter { widget -> previous.widgets.none { it.appWidgetId == widget.appWidgetId } && value.widgets.none { it.appWidgetId == widget.appWidgetId } }
+            val merged = value.copy(widgets = value.widgets + added, modules = value.modules + added.map { it.moduleId })
+            val next = current.panels.with(side, merged.validated())
             data[panels] = PanelsCodec.encode(next)
             ShellPresentationCodec.write(data, current.presentation.copy(sidebarModules = SidebarModule.entries.filter { it.name in next.right.modules }.toSet()))
+        }
+    }
+    suspend fun savePendingWidget(value: PendingPanelWidget) {
+        store.edit { data ->
+            val current = decode(data)
+            if (current.pendingWidget?.widget?.appWidgetId?.let { it != value.widget.appWidgetId } == true) throw IOException("Another widget is pending")
+            data[pendingWidget] = PanelsCodec.encodePending(value)
+        }
+    }
+    suspend fun cancelPendingWidget(id: Int) {
+        store.edit { data -> if (decode(data).pendingWidget?.widget?.appWidgetId == id) data.remove(pendingWidget) }
+    }
+    suspend fun commitPendingWidget(id: Int) {
+        store.edit { data ->
+            val current = decode(data)
+            val pending = current.pendingWidget?.takeIf { it.widget.appWidgetId == id && it.stage == WidgetBindingStage.COMMIT } ?: return@edit
+            val panel = current.panels[pending.side]
+            val existing = panel.widgets.find { it.appWidgetId == id }
+            if (existing != null && existing != pending.widget) throw IOException("Conflicting widget identity")
+            if (existing == null) {
+                if (pending.widget.moduleId in panel.modules) throw IOException("Conflicting module identity")
+                val next = panel.copy(modules = panel.modules + pending.widget.moduleId, widgets = panel.widgets + pending.widget).validated()
+                data[panels] = PanelsCodec.encode(current.panels.with(pending.side, next))
+            }
+            data.remove(pendingWidget)
+            ShellPresentationCodec.write(data, current.presentation)
         }
     }
     suspend fun reorderPanelModule(side: PanelSide, id: String, delta: Int) {
@@ -171,6 +203,7 @@ class ShellRepository(private val store: DataStore<Preferences>) {
             overlay = OverlaySettings(preferences[overlayEnabled] ?: false, preferences[overlayPosition] ?: 50,
                 preferences[overlayHeight] ?: 160, preferences[overlayInset] ?: 0).validated(),
             panelConfiguration = preferences[panels]?.let(PanelsCodec::decode),
+            pendingWidget = preferences[pendingWidget]?.let(PanelsCodec::decodePending),
         )
     }
 }

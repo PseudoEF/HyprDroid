@@ -24,6 +24,8 @@ import dev.hyprdroid.launcher.overlay.OverlaySession
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import dev.hyprdroid.launcher.widgets.LocalWidgetBinding
+import dev.hyprdroid.launcher.widgets.PanelWidgetHost
 
 /** One small editor for both panels. Geometry/modules are an explicit draft; overlay opt-in is separate. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -44,6 +46,10 @@ internal fun OverlaySettingsPanel(onClose: () -> Unit) {
     val running by OverlaySession.running.collectAsState()
     val serviceError by OverlaySession.error.collectAsState()
     var saving by remember { mutableStateOf(false) }
+    var widgetPicker by rememberSaveable { mutableStateOf(false) }
+    val binding = LocalWidgetBinding.current
+    val widgetBusy = binding?.busy?.collectAsState()?.value ?: false
+    val widgetError = binding?.error?.collectAsState()?.value
     val scope = rememberCoroutineScope()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
@@ -54,10 +60,12 @@ internal fun OverlaySettingsPanel(onClose: () -> Unit) {
     fun persistPanel() {
         val destination = side
         val value = draft
+        val base = current
         scope.launch {
             saving = true
             try {
-                repository.setPanel(destination, value); error = null
+                repository.setPanel(destination, value, base); error = null
+                PanelWidgetHost.get(context).cleanup(repository)
                 val latest = repository.settings.first()
                 if (activity != null && latest.overlay.enabled && (latest.panels.left.scope.apps || latest.panels.right.scope.apps)
                     && Settings.canDrawOverlays(context) && !running) OverlaySession.start(activity)
@@ -110,14 +118,18 @@ internal fun OverlaySettingsPanel(onClose: () -> Unit) {
             Text("Скрытый маркер оставляет сенсорную зону активной. Увеличьте отступ, если системный Back имеет приоритет. Широкая зона может мешать жестам приложения.", style = MaterialTheme.typography.bodySmall)
             Text("Модули · порядок сверху вниз", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
             draft.modules.forEachIndexed { index, id ->
-                val title = PanelModule.entries.find { it.name == id }?.title ?: "Недоступный модуль: $id"
+                val widget = draft.widgets.find { it.moduleId == id }
+                val title = widget?.title ?: PanelModule.entries.find { it.name == id }?.title ?: "Недоступный модуль: $id"
                 Column(Modifier.fillMaxWidth().testTag("panel-module-row-$id")) {
                     Text(title, color = Mocha.Lavender)
                     FlowRow {
                         TextButton(onClick = { move(id, -1) }, enabled = !saving && index > 0, modifier = Modifier.testTag("module-up-$id")) { Text("Выше") }
                         TextButton(onClick = { move(id, 1) }, enabled = !saving && index < draft.modules.lastIndex, modifier = Modifier.testTag("module-down-$id")) { Text("Ниже") }
-                        TextButton(onClick = { draft = draft.copy(modules = draft.modules - id) }, enabled = !saving) { Text("Убрать") }
+                        TextButton(onClick = { draft = draft.copy(modules = draft.modules - id, widgets = draft.widgets.filterNot { it.moduleId == id }) }, enabled = !saving) { Text("Убрать") }
                     }
+                    widget?.let { item -> WidgetSizeControls(item, !saving && !widgetBusy) { resized ->
+                        draft = draft.copy(widgets = draft.widgets.map { if (it.appWidgetId == resized.appWidgetId) resized else it })
+                    } }
                 }
             }
             if (draft.modules.isEmpty()) Text("Панель пуста. Добавьте модуль ниже.")
@@ -128,6 +140,19 @@ internal fun OverlaySettingsPanel(onClose: () -> Unit) {
                 }
             }
             Button(onClick = ::persistPanel, enabled = current != null && !saving, modifier = Modifier.testTag("save-panel")) { Text("Сохранить панель") }
+            if (binding != null) {
+                val pending = saved?.pendingWidget
+                if (pending != null) {
+                    Text("Незавершённое добавление: ${pending.widget.title}")
+                    TextButton(onClick = binding::resume, enabled = !widgetBusy, modifier = Modifier.testTag("resume-widget")) { Text("Продолжить добавление") }
+                    TextButton(onClick = binding::cancel, enabled = !widgetBusy, modifier = Modifier.testTag("cancel-widget")) { Text("Отменить добавление") }
+                } else {
+                    OutlinedButton(onClick = { widgetPicker = true }, enabled = current != null && draft == current && !saving && !widgetBusy,
+                        modifier = Modifier.testTag("add-android-widget")) { Text("Добавить Android-виджет") }
+                    if (current != null && draft != current) Text("Перед добавлением виджета сохраните изменения панели.", style = MaterialTheme.typography.bodySmall)
+                }
+                widgetError?.let { Text(it, color = Mocha.Red) }
+            }
             HorizontalDivider(Modifier.padding(vertical = 12.dp))
             Text("Поверх приложений", style = MaterialTheme.typography.titleMedium)
             Text("Home работает без разрешения. Для других приложений выберите и сохраните соответствующий режим, затем выдайте разрешение Android и включите службу. Панели не читают чужие окна.", style = MaterialTheme.typography.bodySmall)
@@ -149,6 +174,10 @@ internal fun OverlaySettingsPanel(onClose: () -> Unit) {
             TextButton(onClick = onClose, modifier = Modifier.testTag("overlay-settings-close")) { Text("Назад") }
         }
     }
+    if (widgetPicker && binding != null) WidgetPicker(onClose = { widgetPicker = false }, onChoose = { info ->
+        widgetPicker = false
+        binding.add(side, info)
+    })
 }
 
 @Composable

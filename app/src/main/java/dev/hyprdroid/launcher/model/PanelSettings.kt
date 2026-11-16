@@ -18,11 +18,14 @@ data class PanelSettings(
     val heightDp: Int = 160, val positionPercent: Int = 50, val insetDp: Int = 0,
     val visibility: MarkerVisibility = MarkerVisibility.TRANSLUCENT,
     val modules: List<String> = listOf("SYSTEM_STATUS", "QUICK_LAUNCH"),
+    val widgets: List<PanelWidget> = emptyList(),
 ) {
     fun validated(): PanelSettings {
         require(modules.size <= 64 && modules.distinct().size == modules.size && modules.all { it.isNotBlank() && it.length <= 100 })
+        require(widgets.size <= 32 && widgets.map { it.appWidgetId }.distinct().size == widgets.size)
+        require(widgets.all { it.moduleId in modules })
         return copy(markerWidthDp = markerWidthDp.coerceIn(1, 12), touchWidthDp = touchWidthDp.coerceIn(12, 64),
-            heightDp = heightDp.coerceIn(80, 200), positionPercent = positionPercent.coerceIn(10, 90), insetDp = insetDp.coerceIn(0, 64))
+            heightDp = heightDp.coerceIn(80, 200), positionPercent = positionPercent.coerceIn(10, 90), insetDp = insetDp.coerceIn(0, 64), widgets = widgets.map { it.validated() })
     }
 }
 data class PanelsSettings(val left: PanelSettings = PanelSettings(modules = listOf("CLOCK", "DATE", "BATTERY")),

@@ -1,6 +1,10 @@
 package dev.hyprdroid.launcher
 
 import android.os.Bundle
+import android.content.Intent
+import androidx.compose.runtime.CompositionLocalProvider
+import dev.hyprdroid.launcher.widgets.LocalWidgetBinding
+import dev.hyprdroid.launcher.widgets.WidgetBindingController
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -13,8 +17,10 @@ import dev.hyprdroid.launcher.ui.WorkspaceScreen
 import dev.hyprdroid.launcher.ui.WorkspaceViewModel
 
 class MainActivity : ComponentActivity() {
+    private lateinit var widgetBinding: WidgetBindingController
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        widgetBinding = WidgetBindingController(this)
         dev.hyprdroid.launcher.overlay.OverlaySession.attach(this)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
@@ -26,7 +32,11 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val model: WorkspaceViewModel = viewModel()
-            WorkspaceScreen(model)
+            CompositionLocalProvider(LocalWidgetBinding provides widgetBinding) { WorkspaceScreen(model) }
         }
+    }
+    @Deprecated("Android widget host configuration uses the platform result contract")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (!widgetBinding.onActivityResult(requestCode, resultCode)) super.onActivityResult(requestCode, resultCode, data)
     }
 }

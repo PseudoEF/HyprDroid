@@ -55,6 +55,7 @@ fun ModularSidebar(
     val storedItems = state.shell?.sidebar.orEmpty()
     val enabled = state.shell != null && !state.shellError
     val modules = state.shell?.panels?.get(side)?.modules.orEmpty()
+    val androidWidgets = state.shell?.panels?.get(side)?.widgets.orEmpty().associateBy { it.moduleId }
     val tag = if (side == PanelSide.RIGHT) "sidebar" else "left-panel"
     val closeLabel = if (side == PanelSide.RIGHT) "Закрыть Sidebar" else "Закрыть левую панель"
     val closeSign = if (side == PanelSide.RIGHT) 1f else -1f
@@ -91,6 +92,7 @@ fun ModularSidebar(
                     IconButton(onClick = dismiss) { Icon(Icons.Default.Close, closeLabel) }
                 }
                 onStopOverlay?.let { stop -> TextButton(onClick = stop, modifier = Modifier.testTag("stop-overlay")) { Text("Отключить overlay") } }
+                if (LocalGlobalWidgetSurface.current && androidWidgets.isNotEmpty()) Text("Android может ограничивать действия виджетов в overlay. Привязка и настройка доступны в Home.", style = MaterialTheme.typography.bodySmall, color = Mocha.Subtext)
                 if ("QUICK_LAUNCH" in modules && side == PanelSide.RIGHT) FlowRow {
                     TextButton(onClick = { editing = !editing; adding = false }, enabled = enabled) { Text(if (editing) "Готово" else "Редактировать") }
                     if (editing) TextButton(onClick = { adding = !adding }, enabled = enabled) { Text(if (adding) "К панели" else "Добавить ярлык") }
@@ -146,7 +148,9 @@ fun ModularSidebar(
                                         }.testTag("sidebar-item-${item.id}"))
                             }
                         }
-                    } else if (!adding && !editing) item(key = PanelModuleKey(module), span = { GridItemSpan(maxLineSpan) }) { PanelStatusModule(module) }
+                    } else if (!adding && !editing) item(key = PanelModuleKey(module), span = { GridItemSpan(maxLineSpan) }) {
+                        androidWidgets[module]?.let { PanelAndroidWidget(it) } ?: PanelStatusModule(module)
+                    }
                     }
                     if (modules.isEmpty()) item(key = SidebarChrome.EMPTY, span = { GridItemSpan(maxLineSpan) }) { Text("Модули скрыты. Настройте их через меню верхней панели.") }
                 }
