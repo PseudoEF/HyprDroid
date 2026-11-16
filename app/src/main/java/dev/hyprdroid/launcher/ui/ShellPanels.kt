@@ -47,9 +47,9 @@ fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>
             val density = LocalDensity.current
             val badgeSize = maxOf(26.dp, with(density) { MaterialTheme.typography.labelLarge.lineHeight.toDp() } + 4.dp)
             val targetSize = maxOf(48.dp, badgeSize + 8.dp)
-            val actions = 1 + listOf(onDrawer, onSidebar, onLeftPanel).count { it != null }
-            val separateClock = maxWidth < targetSize * WORKSPACE_COUNT + 48.dp * actions + 88.dp * density.fontScale + 12.dp
-            Column {
+            // Keep one row: panel actions also remain available in the existing overflow menu.
+            val showRight = maxWidth >= 340.dp && density.fontScale <= 1.35f
+            val showLeft = maxWidth >= 480.dp && density.fontScale <= 1.35f
                 Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Row(Modifier.weight(1f).clipToBounds().horizontalScroll(rememberScrollState())) {
                         repeat(WORKSPACE_COUNT) { index ->
@@ -64,10 +64,10 @@ fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>
                             }
                         }
                     }
-                    if (!separateClock) ShellClock()
+                    ShellClock()
                     onDrawer?.let { IconButton(onClick = it) { DrawerGlyph("Открыть app drawer") } }
-                    onSidebar?.let { IconButton(onClick = it, modifier = Modifier.testTag("sidebar-open")) { Icon(Icons.Default.Menu, "Открыть Sidebar") } }
-                    onLeftPanel?.let { IconButton(onClick = it, modifier = Modifier.testTag("left-panel-open")) { Text("◧", color = Mocha.Lavender, modifier = Modifier.semantics { contentDescription = "Открыть левую панель" }) } }
+                    if (showRight) onSidebar?.let { IconButton(onClick = it, modifier = Modifier.testTag("sidebar-open")) { Icon(Icons.Default.Menu, "Открыть Sidebar") } }
+                    if (showLeft) onLeftPanel?.let { IconButton(onClick = it, modifier = Modifier.testTag("left-panel-open")) { Text("◧", color = Mocha.Lavender, modifier = Modifier.semantics { contentDescription = "Открыть левую панель" }) } }
                     Box {
                         IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "Меню оболочки") }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -77,8 +77,6 @@ fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>
                         }
                     }
                 }
-                if (separateClock) Box(Modifier.align(Alignment.End).padding(end = 16.dp, bottom = 8.dp)) { ShellClock() }
-            }
         }
     }
 }
@@ -95,7 +93,8 @@ private fun ShellClock() {
             }
         }
     }
-    Text(DateFormat.getTimeFormat(context).format(Date(now)), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.labelLarge, color = Mocha.Text)
+    Text(DateFormat.getTimeFormat(context).format(Date(now)), maxLines = 1, softWrap = false,
+        fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.labelLarge, color = Mocha.Text)
 }
 
 @Composable
