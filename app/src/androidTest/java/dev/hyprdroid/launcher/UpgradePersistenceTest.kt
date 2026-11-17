@@ -69,6 +69,9 @@ class UpgradePersistenceTest {
             shell.setPresentation(ShellPresentation(DesktopMode.CLEAN, DockVisibility.AUTO, SidebarModule.entries.toSet()))
             shell.setOverlay(OverlaySettings(true, 67, 144, 24))
             shell.reorderPanelModule(PanelSide.RIGHT, "QUICK_LAUNCH", -1)
+            shell.setQuickSettings(QuickSettingsConfig(listOf("QS_VOLUME", "QS_WIFI", "QS_BRIGHTNESS")))
+            val right = shell.settings.first().panels.right
+            shell.setPanel(PanelSide.RIGHT, right.copy(modules = right.modules + "QS_TORCH"))
             val image = android.graphics.Bitmap.createBitmap(2, 2, android.graphics.Bitmap.Config.ARGB_8888)
             image.eraseColor(android.graphics.Color.rgb(30, 70, 100))
             wallpaperFile.outputStream().use { assertTrue(image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) }
@@ -115,7 +118,8 @@ class UpgradePersistenceTest {
             assertEquals(PanelScope.HOME, shell.settings.first().panels.left.scope)
             val widgetId = original.getInt("widgetId")
             assertEquals(listOf("CLOCK", "DATE", "BATTERY", "ANDROID_WIDGET:$widgetId"), shell.settings.first().panels.left.modules)
-            assertEquals(listOf("QUICK_LAUNCH", "SYSTEM_STATUS"), shell.settings.first().panels.right.modules)
+            assertEquals(listOf("QUICK_LAUNCH", "SYSTEM_STATUS", "QS_TORCH"), shell.settings.first().panels.right.modules)
+            assertEquals(listOf("QS_VOLUME", "QS_WIFI", "QS_BRIGHTNESS"), shell.quickSettings.first().topbar)
             assertEquals(listOf(widgetId), shell.settings.first().panels.left.widgets.map { it.appWidgetId })
             assertEquals(80, shell.settings.first().panels.left.widthPercent)
             assertNotNull(PanelWidgetHost.get(context).info(widgetId))

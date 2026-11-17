@@ -25,7 +25,7 @@ cp "$RUNNER_TEMP/hyprdroid-distribution/HyprDroid-0.8.0-$CODE_B.json" "$report/b
 adb install "$RUNNER_TEMP/hyprdroid-upgrade/a.apk"
 adb install "$RUNNER_TEMP/hyprdroid-upgrade/test.apk"
 adb shell appwidget grantbind --package "$package" --user 0
-fixture seed 10063 0.7.2 c14d40702e18122ecd667a4eca0863f24fde4e14
+fixture seed 10075 0.8.0 b013adfc3df9a54eb936a952c5607f1076fa7a60
 adb shell appwidget revokebind --package "$package" --user 0
 # Simulate an already opted-in installation, including Android's actual special permission.
 adb shell appops set "$package" SYSTEM_ALERT_WINDOW allow
@@ -42,4 +42,4 @@ cmp "$report/datastore-before.sha256" "$report/datastore-after.sha256"
 fixture verify "$CODE_B" 0.8.0 "$HYPRDROID_BUILD_COMMIT"
 adb shell appops get "$package" SYSTEM_ALERT_WINDOW > "$report/overlay-permission-after.txt"
 adb shell dumpsys package "$package" > "$report/package-after.txt"
-echo "Update v0.7.2 (10063) -> v0.8.0 ($CODE_B) succeeded; UID, firstInstallTime and DataStore preserved" | tee "$report/result.txt"
+echo "Update v0.8.0 (10075) -> v0.8.0 ($CODE_B) succeeded; UID, firstInstallTime and DataStore preserved" | tee "$report/result.txt"
