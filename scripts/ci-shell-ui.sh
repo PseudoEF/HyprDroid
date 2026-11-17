@@ -10,7 +10,7 @@ trap collect_artifacts EXIT
 if [ "${HYPRDROID_UI_SUITE:-all}" = wallpaper ]; then
   ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.MinimalWallpaperTest --no-daemon --stacktrace
 elif [ "${HYPRDROID_UI_SUITE:-all}" = topbar ]; then
-  ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.TopbarOverlayTest,dev.hyprdroid.launcher.PowerMenuTest --no-daemon --stacktrace
+  ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.TopbarOverlayTest,dev.hyprdroid.launcher.PowerMenuTest,dev.hyprdroid.launcher.PowerActionTest --no-daemon --stacktrace
 elif [ "${HYPRDROID_UI_SUITE:-all}" = quicksettings ]; then
   ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.QuickSettingsUiTest,dev.hyprdroid.launcher.QuickSettingsStateTest,dev.hyprdroid.launcher.OverlaySidebarTest --no-daemon --stacktrace
 else

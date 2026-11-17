@@ -54,6 +54,10 @@ class TopbarOverlayTest {
             assertTrue(device.findObject(By.text("Home")).visibleBounds.right <= device.displayWidth)
             device.setOrientationNatural()
             captureShellScreen("v09-global-topbar")
+            runBlocking { repo.setTopbar { it.copy(appRules = emptyMap()) } }
+            assertTrue("Auto hides the fixture's declared Game category", device.wait(Until.gone(By.text("Home")), 8_000))
+            runBlocking { repo.setTopbar { it.copy(appRules = mapOf(target to AppBarRule.SHOW)) } }
+            assertTrue(device.wait(Until.hasObject(By.text("Home")), 8_000))
             runBlocking { repo.setTopbar { it.copy(appRules = mapOf(target to AppBarRule.HIDE)) } }
             assertTrue(device.wait(Until.gone(By.text("Home")), 8_000))
             val notification = context.getSystemService(NotificationManager::class.java).activeNotifications.first { it.id == 62 }.notification
