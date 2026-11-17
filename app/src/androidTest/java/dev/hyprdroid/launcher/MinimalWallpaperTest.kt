@@ -39,6 +39,18 @@ class MinimalWallpaperTest {
         compose.onNodeWithContentDescription("Меню оболочки").performClick()
         compose.onNodeWithText(item, substring = false).performScrollTo().performClick()
     }
+    private fun clickDocument(selector: BySelector, timeout: Long = 8_000): Boolean {
+        val deadline = android.os.SystemClock.uptimeMillis() + timeout
+        while (android.os.SystemClock.uptimeMillis() < deadline) {
+            device.waitForIdle(1_000)
+            try {
+                val node = device.wait(Until.findObject(selector), 1_000) ?: continue
+                node.click()
+                return true
+            } catch (_: StaleObjectException) { /* DocumentsUI reloads roots as providers finish loading. */ }
+        }
+        return false
+    }
     private fun image(scenario: ActivityScenario<MainActivity>): ImageView? {
         var result: ImageView? = null
         scenario.onActivity { activity ->
@@ -84,15 +96,15 @@ class MinimalWallpaperTest {
             assertTrue(state().presentation.sidebarTopbar)
 
             menu("Выбрать изображение…")
-            var choice = device.wait(Until.findObject(By.text(name)), 5_000)
-            if (choice == null) {
-                device.wait(Until.findObject(By.desc("Show roots")), 5_000)?.click()
-                device.wait(Until.findObject(By.text("Images")), 5_000)?.click()
-                device.wait(Until.findObject(By.text("HyprDroidTests")), 5_000)?.click()
-                choice = device.wait(Until.findObject(By.text(name)), 8_000)
+            var picked = clickDocument(By.text(name), 4_000)
+            if (!picked) {
+                assertTrue(clickDocument(By.desc("Show roots")))
+                assertTrue(clickDocument(By.text("Images")))
+                assertTrue(clickDocument(By.text("HyprDroidTests")))
+                picked = clickDocument(By.text(name))
             }
-            assertNotNull("System file picker must list the local GIF", choice)
-            choice!!.click()
+            if (!picked) captureShellScreen("v072-picker-failure")
+            assertTrue("System file picker must list the local GIF", picked)
             await("animated-wallpaper")
             compose.waitUntil(10_000) { (image(scenario)?.drawable as? AnimatedImageDrawable)?.isRunning == true }
             imported = Uri.parse(requireNotNull(state().wallpaperUri))
