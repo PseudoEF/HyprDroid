@@ -17,6 +17,42 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class OverlaySidebarTest {
+    @Test fun sharedQuickTilesRenderOverAnotherAppAndSettingsDismissThePanel() {
+        dismissBackgroundPixelLauncherAnr()
+        val repository = ShellRepository(context)
+        val original = runBlocking { repository.settings.first() }
+        permission("allow")
+        runBlocking {
+            repository.setPanel(PanelSide.LEFT, original.panels.left.copy(scope = PanelScope.EVERYWHERE, modules = listOf("QS_WIFI"), widgets = emptyList()))
+            repository.setPanel(PanelSide.RIGHT, original.panels.right.copy(scope = PanelScope.EVERYWHERE, modules = listOf("QS_VOLUME"), widgets = emptyList()))
+            repository.setOverlay(OverlaySettings(enabled = true))
+        }
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
+        try {
+            scenario.onActivity { assertTrue(OverlaySession.start(it)) }
+            waitFor { OverlaySession.running.value }
+            context.startActivity(Intent().setClassName(context.packageName + ".test", OverlayTestHostActivity::class.java.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            val right = device.wait(Until.findObject(By.desc("Открыть глобальную Sidebar")), 8_000)
+            assertNotNull(right); right!!.click()
+            assertTrue(device.wait(Until.hasObject(By.text("Громкость")), 8_000))
+            captureShellScreen("v08-quick-settings-overlay")
+            device.pressBack()
+            val left = device.wait(Until.findObject(By.desc("Открыть глобальную левую панель")), 8_000)
+            assertNotNull(left); left!!.click()
+            val wifi = device.wait(Until.findObject(By.text("Wi-Fi")), 8_000)
+            assertNotNull(wifi); wifi!!.click()
+            assertTrue("Public Settings Panel must open", device.wait(Until.hasObject(By.pkg("com.android.settings")), 8_000))
+            assertFalse("Tile must dismiss its overlay before system settings", device.hasObject(By.desc("Закрыть левую панель")))
+        } finally {
+            context.stopService(Intent(context, OverlaySidebarService::class.java))
+            runBlocking {
+                repository.setOverlay(original.overlay)
+                repository.setPanel(PanelSide.LEFT, original.panels.left)
+                repository.setPanel(PanelSide.RIGHT, original.panels.right)
+            }
+            scenario.close(); permission("default")
+        }
+    }
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
     private val device get() = UiDevice.getInstance(instrumentation)

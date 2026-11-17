@@ -44,7 +44,7 @@ class QuickSettingsController private constructor(private val context: Context) 
         torch = null; torchAvailable = false
         cameraRegistered = runCatching { camera.registerTorchCallback(callback, handler); true }.getOrDefault(false)
         listOf(Settings.System.SCREEN_BRIGHTNESS, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.ACCELEROMETER_ROTATION).forEach {
-            context.contentResolver.registerContentObserver(Settings.System.getUriFor(it), false, observer)
+            runCatching { context.contentResolver.registerContentObserver(Settings.System.getUriFor(it), false, observer) }
         }
         receiverRegistered = runCatching {
             ContextCompat.registerReceiver(context, receiver, IntentFilter().apply {
