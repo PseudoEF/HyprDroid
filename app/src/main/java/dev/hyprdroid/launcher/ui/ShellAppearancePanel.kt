@@ -23,7 +23,8 @@ internal fun ShellAppearancePanel(value: ShellPresentation, saving: Boolean, onC
         Surface(color = Mocha.Mantle, contentColor = Mocha.Text, shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, Mocha.Outline),
             modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(12.dp).widthIn(max = 600.dp).fillMaxWidth().heightIn(max = 460.dp)) {
             Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
-                Text("Рабочий стол и панели", style = MaterialTheme.typography.titleLarge)
+                Text("Рабочий стол и панели", style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).sidebarClosingGesture(enabled = !saving, onClose = onCancel).testTag("appearance-dismiss-gesture"))
                 Text("Предпросмотр · Back отменяет изменения", style = MaterialTheme.typography.bodySmall, color = Mocha.Subtext)
                 Row {
                     DesktopMode.entries.forEach { mode ->
@@ -31,6 +32,26 @@ internal fun ShellAppearancePanel(value: ShellPresentation, saving: Boolean, onC
                             label = { Text(if (mode == DesktopMode.CLEAN) "Clean" else "Classic") }, modifier = Modifier.padding(end = 8.dp).testTag("desktop-mode-${mode.name}"))
                     }
                 }
+                ButtonVisibilitySetting("Drawer в Topbar", "drawer-topbar", value.drawerTopbar, !saving) { onChange(value.copy(drawerTopbar = it)) }
+                ButtonVisibilitySetting("Drawer в Dock", "drawer-dock", value.drawerDock, !saving) { onChange(value.copy(drawerDock = it)) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(value.sidebarTopbar, { onChange(value.copy(sidebarTopbar = it)) }, enabled = !saving, modifier = Modifier.testTag("sidebar-topbar"))
+                    Text("Кнопка Sidebar в Topbar")
+                }
+                Text("Жесты и пункты меню остаются доступны при скрытых кнопках.", style = MaterialTheme.typography.bodySmall)
+                Text("Масштабирование обоев", style = MaterialTheme.typography.titleMedium)
+                WallpaperScale.entries.forEach { scale ->
+                    Row(Modifier.fillMaxWidth().clickable(enabled = !saving) { onChange(value.copy(wallpaperScale = scale)) }
+                        .testTag("wallpaper-scale-${scale.name}"), verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(value.wallpaperScale == scale, { onChange(value.copy(wallpaperScale = scale)) }, enabled = !saving)
+                        Text(when (scale) { WallpaperScale.CROP -> "Заполнить с обрезкой"; WallpaperScale.FIT -> "Вписать целиком"; WallpaperScale.STRETCH -> "Растянуть" })
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(value.wallpaperMotion, { onChange(value.copy(wallpaperMotion = it)) }, enabled = !saving, modifier = Modifier.testTag("wallpaper-motion"))
+                    Text("Анимация GIF на рабочем столе")
+                }
+                Text("GIF: до 24 МиБ, декодирование до 1024 px. Анимация останавливается вне Home, под панелями и в энергосбережении.", style = MaterialTheme.typography.bodySmall)
                 Text("Dock", style = MaterialTheme.typography.titleMedium)
                 if (value.dockVisibility == DockVisibility.AUTO) Text("Скрывается через 3,5 секунды. Касание фона снова показывает dock.", style = MaterialTheme.typography.bodySmall)
                 DockVisibility.entries.forEach { visibility ->
@@ -56,4 +77,15 @@ internal fun ShellAppearancePanel(value: ShellPresentation, saving: Boolean, onC
             }
         }
     }
+}
+
+@Composable
+private fun ButtonVisibilitySetting(label: String, tag: String, value: ShellButtonVisibility, enabled: Boolean, onChange: (ShellButtonVisibility) -> Unit) {
+    Text(label, style = MaterialTheme.typography.titleSmall)
+    Row {
+        ShellButtonVisibility.entries.forEach { choice -> FilterChip(choice == value, { onChange(choice) }, enabled = enabled,
+            label = { Text(when (choice) { ShellButtonVisibility.AUTO -> "Авто"; ShellButtonVisibility.SHOWN -> "Вкл"; ShellButtonVisibility.HIDDEN -> "Выкл" }) },
+            modifier = Modifier.testTag("$tag-${choice.name}")) }
+    }
+    if (value == ShellButtonVisibility.AUTO) Text("В Clean скрыто, в Classic показано", style = MaterialTheme.typography.bodySmall)
 }

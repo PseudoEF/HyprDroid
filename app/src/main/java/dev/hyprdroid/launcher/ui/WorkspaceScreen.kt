@@ -51,6 +51,8 @@ fun WorkspaceScreen(model: WorkspaceViewModel) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val snackbar = remember { SnackbarHostState() }
+    var backdrop by remember { mutableStateOf(ShellPresentation()) }
+    var desktopVisible by remember { mutableStateOf(false) }
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) model.chooseWallpaper(uri)
     }
@@ -64,7 +66,7 @@ fun WorkspaceScreen(model: WorkspaceViewModel) {
     }
     ShellTheme {
         Box(Modifier.fillMaxSize()) {
-            WallpaperLayer(state.shell?.wallpaperUri) { model.showMessage("Изображение недоступно. Показаны системные обои; выберите другой фон через меню.") }
+            WallpaperLayer(state.shell?.wallpaperUri, backdrop.wallpaperScale, backdrop.wallpaperMotion, desktopVisible) { model.showMessage("Изображение недоступно. Показаны системные обои; выберите другой фон через меню.") }
             ShellHome(state, ShellActions(
                 launch = model::launch, pin = model::setPinned, favorite = model::setFavorite,
                 selectWorkspace = model::selectWorkspace, gridLayout = model::setGridLayout,
@@ -82,7 +84,7 @@ fun WorkspaceScreen(model: WorkspaceViewModel) {
                 sidebarPlaceBefore = model::placeSidebarBefore,
                 presentation = model::setPresentation,
                 systemSettings = { action -> if (!openSystemSettings(context, action)) model.showMessage("Системные настройки недоступны.") },
-            ))
+            ), onBackdropState = { value, visible -> backdrop = value; desktopVisible = visible })
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).safeDrawingPadding().imePadding().padding(12.dp))
         }
     }
@@ -115,7 +117,7 @@ data class ShellActions(
 )
 
 @Composable
-fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
+fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (ShellPresentation, Boolean) -> Unit = { _, _ -> }) {
     var aboutOpen by rememberSaveable { mutableStateOf(false) }
     // Construct the pager only after preferences load, so its initial page is the persisted one.
     if (state.settings == null) {
@@ -139,6 +141,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
     var controlOpen by rememberSaveable { mutableStateOf(false) }
     var sidebarOpen by rememberSaveable { mutableStateOf(false) }
+    var shellMenuOpen by remember { mutableStateOf(false) }
     var leftPanelOpen by rememberSaveable { mutableStateOf(false) }
     val panels = state.shell?.panels ?: PanelsSettings()
     var overlaySettingsOpen by rememberSaveable { mutableStateOf(false) }
@@ -198,7 +201,9 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
     LaunchedEffect(pager, workspaceReady) {
         if (workspaceReady) snapshotFlow { pager.settledPage }.distinctUntilChanged().collect(actions.selectWorkspace)
     }
-    val overlayOpen = leftPanelOpen || overlaySettingsOpen || drawerOpen || controlOpen || sidebarOpen || aboutOpen || presentationPreview != null || appearanceWorkspace != null || orderWorkspace != null
+    val overlayOpen = shellMenuOpen || leftPanelOpen || overlaySettingsOpen || drawerOpen || controlOpen || sidebarOpen || aboutOpen || presentationPreview != null || appearanceWorkspace != null || orderWorkspace != null
+    SideEffect { onBackdropState(presentation, !overlayOpen && !editing) }
+    DisposableEffect(Unit) { onDispose { onBackdropState(presentation, false) } }
     LaunchedEffect(panels) {
         if (!panels.left.scope.home) leftPanelOpen = false
         if (!panels.right.scope.home) sidebarOpen = false
@@ -259,8 +264,10 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
             if (state.shellError) add(AppMenuAction("Повторить чтение панелей и обоев", onClick = actions.retryShell))
         }
         Waybar(pager.currentPage, { index -> scope.launch { pager.animateScrollToPage(index) }; Unit }, panelMenu, Modifier.widthIn(max = 760.dp).fillMaxWidth(),
-            onDrawer = openDrawer, onSidebar = { if (panels.right.scope.home) sidebarOpen = true else overlaySettingsOpen = true },
-            onLeftPanel = { if (panels.left.scope.home) leftPanelOpen = true else overlaySettingsOpen = true })
+            onDrawer = if (presentation.drawerTopbar.visible(presentation.desktopMode)) openDrawer else null,
+            onSidebar = if (presentation.sidebarTopbar) ({ if (panels.right.scope.home) sidebarOpen = true else overlaySettingsOpen = true }) else null,
+            onLeftPanel = { if (panels.left.scope.home) leftPanelOpen = true else overlaySettingsOpen = true },
+            onMenuVisibilityChanged = { shellMenuOpen = it })
         Spacer(Modifier.height(12.dp))
         HorizontalPager(state = pager, modifier = Modifier.weight(1f).widthIn(max = 960.dp).fillMaxWidth().testTag("home-pager"),
             userScrollEnabled = !overlayOpen && !dragging) { page ->
@@ -290,11 +297,12 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions) {
                 onOrder = { orderWorkspace = pager.currentPage }, onAppearance = { appearanceWorkspace = pager.currentPage },
                 modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth())
         }
-        AnimatedVisibility(presentation.dockVisibility != DockVisibility.HIDDEN &&
+        AnimatedVisibility((favorites.isNotEmpty() || presentation.drawerDock.visible(presentation.desktopMode)) && presentation.dockVisibility != DockVisibility.HIDDEN &&
             (presentation.dockVisibility == DockVisibility.ALWAYS || autoDockShown || editing)) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.testTag("favorite-dock")) {
                 Spacer(Modifier.height(12.dp))
-                FavoriteDock(favorites.sortedBy { appsById[it]?.label ?: it }, appsById, launchApp, appMenu, openDrawer)
+                FavoriteDock(favorites.sortedBy { appsById[it]?.label ?: it }, appsById, launchApp, appMenu, openDrawer,
+                    showDrawer = presentation.drawerDock.visible(presentation.desktopMode))
             }
         }
     }

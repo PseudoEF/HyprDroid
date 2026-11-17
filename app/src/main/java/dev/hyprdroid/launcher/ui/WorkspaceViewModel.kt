@@ -21,6 +21,11 @@ import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.flow.first
+import dev.hyprdroid.launcher.data.AnimatedWallpaperFiles
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
@@ -41,6 +46,7 @@ data class WorkspaceUiState(
 )
 
 class WorkspaceViewModel(application: Application) : AndroidViewModel(application) {
+    private val wallpaperOperations = AnimatedWallpaperFiles.operations
     private val repository = WorkspaceRepository(application)
     private val shellRepository = ShellRepository(application)
     private val catalog = LauncherCatalog(application)
@@ -52,6 +58,13 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
     private var stopObserving: (() -> Unit)? = null
 
     init {
+        viewModelScope.launch {
+            try { wallpaperOperations.withLock {
+                val keep = shellRepository.settings.first().wallpaperUri
+                withContext(Dispatchers.IO) { AnimatedWallpaperFiles.cleanup(getApplication(), keep) }
+            } } catch (cancelled: CancellationException) { throw cancelled }
+              catch (_: Exception) { /* Unknown/unreadable stores must not trigger cleanup. */ }
+        }
         retryStorage()
         retryShellStorage()
         try {
@@ -148,33 +161,49 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun chooseWallpaper(uri: Uri) {
         viewModelScope.launch {
-            val previous = mutableState.value.shell?.wallpaperUri
+            wallpaperOperations.withLock {
+            var previous: String? = null
             var saved = false
+            var imported: Uri? = null
+            var staticGranted = false
             try {
-                withContext(Dispatchers.IO) {
-                    getApplication<Application>().contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    decodeWallpaper(getApplication(), uri, maxDimension = 64).recycle()
+                previous = shellRepository.settings.first().wallpaperUri
+                withContext(NonCancellable) {
+                    withContext(Dispatchers.IO) {
+                        if (AnimatedWallpaperFiles.isGif(getApplication(), uri)) {
+                            imported = AnimatedWallpaperFiles.import(getApplication(), uri)
+                        } else {
+                            getApplication<Application>().contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            staticGranted = true
+                            decodeWallpaper(getApplication(), uri, maxDimension = 64).recycle()
+                        }
+                    }
+                    changeWallpaper((imported ?: uri).toString())
+                    saved = true
                 }
-                changeWallpaper(uri.toString())
-                saved = true
             } catch (error: CancellationException) {
                 throw error
             } catch (_: IOException) {
-                showMessage("Не удалось открыть или сохранить изображение. Предыдущий фон сохранён.")
+                showMessage("Не удалось открыть фон. GIF: до 24 МиБ и 8192 px по стороне. Предыдущий фон сохранён.")
+            } catch (_: OutOfMemoryError) {
+                showMessage("Недостаточно памяти для этого изображения. Выберите файл меньшего размера.")
             } catch (_: RuntimeException) {
                 showMessage("Изображение недоступно. Выберите другой файл.")
             } finally {
-                if (!saved && uri.toString() != previous) releaseImagePermission(uri)
+                if (!saved) imported?.let { AnimatedWallpaperFiles.remove(getApplication(), it) }
+                if (!saved && staticGranted && uri.toString() != previous) releaseImagePermission(uri)
+            }
             }
         }
     }
 
-    fun useSystemWallpaper() = save { changeWallpaper(null) }
+    fun useSystemWallpaper() = save { wallpaperOperations.withLock { changeWallpaper(null) } }
 
     private suspend fun changeWallpaper(uri: String?) {
-        val previous = mutableState.value.shell?.wallpaperUri
+        val previous = shellRepository.settings.first().wallpaperUri
         shellRepository.setWallpaper(uri)
         if (previous != null && previous != uri) {
+            withContext(Dispatchers.IO) { AnimatedWallpaperFiles.remove(getApplication(), Uri.parse(previous)) }
             releaseImagePermission(Uri.parse(previous))
         }
     }

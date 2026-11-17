@@ -5,6 +5,10 @@ const val MAX_DOCK_APPS = 4
 enum class DesktopMode { CLEAN, CLASSIC }
 enum class DockVisibility { ALWAYS, AUTO, HIDDEN }
 enum class SidebarModule { QUICK_LAUNCH, SYSTEM_STATUS }
+enum class ShellButtonVisibility { AUTO, SHOWN, HIDDEN;
+    fun visible(mode: DesktopMode) = this == SHOWN || this == AUTO && mode == DesktopMode.CLASSIC
+}
+enum class WallpaperScale { CROP, FIT, STRETCH }
 
 /** Optional overlay geometry; Android may further restrict the gesture exclusion. */
 data class OverlaySettings(val enabled: Boolean = false, val positionPercent: Int = 50,
@@ -17,6 +21,11 @@ data class ShellPresentation(
     val desktopMode: DesktopMode = DesktopMode.CLEAN,
     val dockVisibility: DockVisibility = DockVisibility.ALWAYS,
     val sidebarModules: Set<SidebarModule> = SidebarModule.entries.toSet(),
+    val drawerTopbar: ShellButtonVisibility = ShellButtonVisibility.AUTO,
+    val drawerDock: ShellButtonVisibility = ShellButtonVisibility.AUTO,
+    val sidebarTopbar: Boolean = true,
+    val wallpaperScale: WallpaperScale = WallpaperScale.CROP,
+    val wallpaperMotion: Boolean = true,
 )
 
 /** Presentation is independent of workspace contents and quick-launch records. */

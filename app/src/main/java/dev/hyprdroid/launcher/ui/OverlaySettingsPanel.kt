@@ -90,7 +90,8 @@ internal fun OverlaySettingsPanel(onClose: () -> Unit) {
     Surface(color = Mocha.Base, contentColor = Mocha.Text, modifier = Modifier.fillMaxSize().testTag("overlay-settings")
         .then(if (preview || widgetPicker) Modifier.clearAndSetSemantics { } else Modifier)) {
         Column(Modifier.safeDrawingPadding().padding(12.dp)) {
-            Text("Настройки панелей", style = MaterialTheme.typography.titleLarge)
+            Text("Настройки панелей", style = MaterialTheme.typography.titleLarge, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                .sidebarClosingGesture(enabled = !saving && !preview && !widgetPicker, onClose = onClose).testTag("panel-settings-dismiss-gesture"))
             FlowRow {
                 PanelSide.entries.forEach { value -> FilterChip(side == value, { side = value }, enabled = !saving && !widgetBusy,
                     label = { Text(if (value == PanelSide.LEFT) "Левая" else "Правая") }, modifier = Modifier.testTag("panel-tab-${value.name}")) }

@@ -22,7 +22,7 @@ fun AboutScreen(onClose: () -> Unit) {
     val info = remember(context) { readBuildIdentity(context) }
     Surface(color = Mocha.Base, contentColor = Mocha.Text, modifier = Modifier.fillMaxSize().blockHomeBehind().testTag("about-screen")) {
         Column(Modifier.fillMaxSize().safeDrawingPadding().padding(20.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(Modifier.widthIn(max = 640.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.widthIn(max = 640.dp).fillMaxWidth().sidebarClosingGesture(onClose = onClose), verticalAlignment = Alignment.CenterVertically) {
                 Text("О приложении", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                 IconButton(onClick = onClose) { Icon(Icons.Default.Close, "Закрыть сведения о приложении") }
             }
