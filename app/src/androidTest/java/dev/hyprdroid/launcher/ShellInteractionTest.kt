@@ -96,8 +96,10 @@ class ShellInteractionTest {
             compose.onNodeWithTag("workspace-app-$third").performTouchInput { longClick() }
             compose.onNodeWithText("Добавить в dock").performClick()
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("dock-app-$third").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithTag("dock-app-$third").performTouchInput { longClick() }
-            compose.onNodeWithText("Убрать из dock").performClick()
+            compose.onNodeWithContentDescription("Меню оболочки").performClick()
+            compose.onNodeWithText("Настроить dock").performScrollTo().performClick()
+            compose.onNodeWithContentDescription("Убрать из dock: $third").performClick()
+            compose.onNodeWithContentDescription("Закрыть настройки dock").performClick()
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("dock-app-$third").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithTag("workspace-app-$third").assertExists()
 

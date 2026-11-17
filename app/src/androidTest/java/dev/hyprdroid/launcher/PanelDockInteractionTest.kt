@@ -6,6 +6,7 @@ import android.os.SystemClock
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.*
@@ -54,13 +55,19 @@ class PanelDockInteractionTest {
             val origin = grid.fetchSemanticsNode().boundsInRoot.topLeft
             val start = compose.onNodeWithTag("dock-app-${apps[0]}").fetchSemanticsNode().boundsInRoot.center - origin
             val end = compose.onNodeWithTag("dock-app-${apps[2]}").fetchSemanticsNode().boundsInRoot.center - origin
+            grid.performTouchInput { down(start) }
+            SystemClock.sleep(750)
+            grid.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Перетаскивание приложения"))
             grid.performTouchInput {
-                down(start); advanceEventTime(900)
                 for (step in 1..12) moveTo(start + (end - start) * (step / 12f), 30)
                 up()
             }
             val expected = listOf(apps[1], apps[2], apps[0])
-            compose.waitUntil(8_000) { runBlocking { repo.settings.first().dockComponents == expected } }
+            try { compose.waitUntil(8_000) { runBlocking { repo.settings.first().dockComponents == expected } } }
+            catch (error: AssertionError) {
+                captureShellScreen("dock-drag-failure")
+                throw AssertionError("Dock expected=$expected, actual=${runBlocking { repo.settings.first().dockComponents }}", error)
+            }
             assertEquals(context.packageName, device.currentPackageName)
             // A cancelled drag keeps the last committed order.
             grid.performTouchInput { down(Offset(26f, 26f)); advanceEventTime(900); moveBy(Offset(40f, 0f)); cancel() }

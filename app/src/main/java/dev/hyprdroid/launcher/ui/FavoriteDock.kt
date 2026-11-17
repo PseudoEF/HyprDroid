@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import dev.hyprdroid.launcher.data.LauncherApp
@@ -38,7 +39,8 @@ fun FavoriteDock(components: List<String>, apps: Map<String, LauncherApp>, onLau
     DisposableEffect(drag) { onDispose { drag.finish(false) } }
     ShellSurface(modifier.width((52 * count + 12).dp).widthIn(max = 440.dp), highlighted = drag.draggedId != null) {
         LazyVerticalGrid(columns = GridCells.Fixed(count), state = grid, userScrollEnabled = false,
-            contentPadding = PaddingValues(6.dp), modifier = Modifier.height(64.dp).workspaceDrag(drag, enabled).testTag("dock-grid")) {
+            contentPadding = PaddingValues(6.dp), modifier = Modifier.height(64.dp).workspaceDrag(drag, enabled).testTag("dock-grid")
+                .semantics { stateDescription = if (drag.draggedId != null) "Перетаскивание приложения" else "Dock" }) {
             items(drag.items, key = { it.id }) { item ->
                 val component = (item as WorkspaceItem.AppShortcut).componentId
                 val dragging = drag.draggedId == item.id

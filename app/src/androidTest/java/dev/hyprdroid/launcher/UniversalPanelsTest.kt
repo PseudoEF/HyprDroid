@@ -181,7 +181,7 @@ class UniversalPanelsTest {
             device.pressBack()
             assertTrue(device.wait(Until.hasObject(By.desc("Открыть глобальную левую панель")), 5_000))
             runBlocking {
-                repository.setPanel(PanelSide.LEFT, PanelsSettings().left.copy(scope = PanelScope.EVERYWHERE, visibility = MarkerVisibility.HIDDEN,
+                repository.setPanel(PanelSide.LEFT, PanelsSettings().left.copy(scope = PanelScope.EVERYWHERE, activation = PanelActivation.TAP_SWIPE, visibility = MarkerVisibility.HIDDEN,
                     modules = listOf("BATTERY", "DATE", "CLOCK")))
                 repository.setPanel(PanelSide.RIGHT, PanelsSettings().right.copy(scope = PanelScope.EVERYWHERE))
             }
@@ -209,7 +209,7 @@ class UniversalPanelsTest {
             scenario.onActivity { activity ->
                 PanelSide.entries.forEach { side ->
                     var opened = 0
-                    val target = OverlayEdgeView(activity, side, PanelSettings()) { opened++ }
+                    val target = OverlayEdgeView(activity, side, PanelSettings(activation = PanelActivation.TAP_SWIPE)) { opened++ }
                     val start = 200f
                     val distance = 100 * activity.resources.displayMetrics.density * if (side == PanelSide.LEFT) 1 else -1
                     fun event(action: Int, x: Float, y: Float) {
