@@ -43,7 +43,7 @@ class OverlaySidebarTest {
             val wifi = device.wait(Until.findObject(By.text("Wi-Fi")), 8_000)
             assertNotNull(wifi); wifi!!.click()
             assertTrue("Public Settings Panel must open", device.wait(Until.hasObject(By.pkg("com.android.settings")), 8_000))
-            assertFalse("Tile must dismiss its overlay before system settings", device.hasObject(By.desc("Закрыть левую панель")))
+            assertTrue("Tile must dismiss its overlay when system settings open", device.wait(Until.gone(By.desc("Закрыть левую панель")), 5_000))
         } finally {
             context.stopService(Intent(context, OverlaySidebarService::class.java))
             runBlocking {

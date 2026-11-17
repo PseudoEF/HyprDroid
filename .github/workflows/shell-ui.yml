@@ -12,7 +12,7 @@ on:
       suite:
         description: UI suite (pull requests always run all tests)
         type: choice
-        options: [all, wallpaper]
+        options: [all, wallpaper, quicksettings]
         default: all
 permissions:
   contents: read
