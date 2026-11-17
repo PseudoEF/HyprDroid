@@ -56,7 +56,7 @@ class PanelWidgetsPersistenceTest {
         raw.getJSONObject("left").remove("widgets"); raw.getJSONObject("right").remove("widgets")
         val migrated = PanelsCodec.decode(raw.toString())
         assertEquals(original, migrated)
-        assertEquals(3, JSONObject(PanelsCodec.encode(migrated)).getInt("version"))
+        assertEquals(4, JSONObject(PanelsCodec.encode(migrated)).getInt("version"))
     }
     @Test fun malformedOrDuplicatedWidgetRecordsAreRejectedAndUnknownModulesRemainData() {
         val panel = PanelsSettings().left.copy(modules = listOf(widget.moduleId, "ANDROID_WIDGET:future"), widgets = listOf(widget))

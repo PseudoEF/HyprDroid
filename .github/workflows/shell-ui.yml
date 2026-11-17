@@ -43,7 +43,9 @@ jobs:
         run: sudo chmod 666 /dev/kvm
       - uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: ${{ inputs.api_level || '35' }}
+          # Compile with the pinned SDK35; Android17 images use the minor-version package name.
+          api-level: 35
+          system-image-api-level: ${{ inputs.api_level == '37' && '37.0' || '35' }}
           arch: x86_64
           target: google_apis
           profile: pixel_6
