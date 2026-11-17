@@ -51,7 +51,8 @@ class WidgetProcessRestoreTest {
             val gif = AnimatedWallpaperFiles.importGif(context, android.net.Uri.fromFile(input))
             repository.setWallpaper(gif.toString()); input.delete()
             file.writeText(JSONObject().put("id", id).put("provider", provider.flattenToString()).put("panels", PanelsCodec.encode(previous))
-                .put("gif", gif.put("sessions", SessionsCodec.write(previousSessions)).put("assigned", org.json.JSONArray(assigned)).toString()).put("previousWallpaper", oldWallpaper ?: JSONObject.NULL).toString())
+                .put("gif", gif.toString()).put("previousWallpaper", oldWallpaper ?: JSONObject.NULL)
+                .put("sessions", SessionsCodec.write(previousSessions)).put("assigned", org.json.JSONArray(assigned)).toString())
         } else {
             assertEquals("verify", phase)
             val fixture = JSONObject(file.readText())

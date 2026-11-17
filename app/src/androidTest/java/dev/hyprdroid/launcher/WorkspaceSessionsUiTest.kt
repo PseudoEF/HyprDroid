@@ -30,6 +30,7 @@ class WorkspaceSessionsUiTest {
                 compose.onNodeWithTag("sessions-enabled").assertIsOff().performClick()
                 compose.waitUntil(10_000) { runBlocking { repository.sessions.first().enabled } }
                 compose.onNodeWithTag("sessions-enabled").performClick()
+                compose.waitUntil(10_000) { runBlocking { !repository.sessions.first().enabled } }
             }
             runBlocking {
                 repository.setSessions { it.assign(0, apps[0].componentId, true).assign(0, apps[1].componentId, true).assign(1, apps[1].componentId, true) }
