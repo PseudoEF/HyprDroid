@@ -43,6 +43,7 @@ class TopbarOverlayTest {
             context.startActivity(Intent().setClassName(target, OverlayTestHostActivity::class.java.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             assertTrue(device.wait(Until.hasObject(By.text("Home")), 12_000))
             assertFalse("Workspace selectors must not appear over another app", device.hasObject(By.desc("Рабочее пространство 1")))
+            assertFalse("Home-only side panels must not expose dead global actions", device.hasObject(By.desc("Открыть Sidebar")))
             device.wait(Until.findObject(By.text("Outside taps: 0")), 5_000)!!.click()
             assertTrue(device.wait(Until.hasObject(By.text("Outside taps: 1")), 5_000))
             val input = device.findObject(By.desc("Keyboard fixture")); input.click(); input.text = "focus retained"

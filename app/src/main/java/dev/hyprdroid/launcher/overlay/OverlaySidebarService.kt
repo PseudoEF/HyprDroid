@@ -123,6 +123,7 @@ class OverlaySidebarService : Service() {
                 try {
                     combine(repository.settings, repository.topbar) { shell, bar -> shell to bar }.distinctUntilChanged().collect { (shell, bar) ->
                         settings = shell.overlay; panels = shell.panels; topbar.settings = bar
+                        topbar.sides = PanelSide.entries.filter { panels[it].scope.apps }.toSet()
                         if (openSide?.let { !panels[it].scope.apps } == true) openSide = null
                         if (!settings.enabled || (PanelSide.entries.none { panels[it].scope.apps } && bar.mode == dev.hyprdroid.launcher.model.TopbarMode.HOME_ONLY)) stopSelf() else refreshVisibility()
                     }

@@ -26,6 +26,7 @@ internal class TopbarOverlay(private val context: Context, private val windows: 
     private val onHome: () -> Unit, private val onMenu: () -> Unit, private val onSide: (PanelSide) -> Unit,
     private val onQuick: () -> Unit, private val onSettings: () -> Unit) {
     var settings = TopbarSettings()
+    var sides: Set<PanelSide> = emptySet()
     private val hints = ForegroundHints(context)
     private val owner = OverlayOwner()
     private var view: View? = null
@@ -68,7 +69,7 @@ internal class TopbarOverlay(private val context: Context, private val windows: 
         }
         val available = (width - left - right - dp(16)).coerceAtLeast(dp(120))
         val barWidth = (available * settings.widthPercent / 100).coerceAtLeast(dp(160).coerceAtMost(available)).coerceAtMost(dp(760))
-        val next = listOf(state, barWidth, top, left, right, settings.heightDp, settings.opacityPercent)
+        val next = listOf(state, barWidth, top, left, right, settings.heightDp, settings.opacityPercent, sides)
         if (next == key) { view?.visibility = if (ime) View.INVISIBLE else View.VISIBLE; owner.visible(state == BarVisibility.BAR && !ime); return }
         remove(); key = next
         if (state == BarVisibility.NONE) { ime = false; return }
@@ -88,7 +89,8 @@ internal class TopbarOverlay(private val context: Context, private val windows: 
             val compose = ComposeView(context).apply { setContent { ShellTheme {
                 Box(Modifier.heightIn(min = settings.heightDp.dp)) {
                     Waybar(0, {}, emptyList(), Modifier.fillMaxWidth(), home = false, onHome = onHome,
-                        onSidebar = { onSide(PanelSide.RIGHT) }, onLeftPanel = { onSide(PanelSide.LEFT) }, onSettings = onSettings,
+                        onSidebar = if (PanelSide.RIGHT in sides) ({ onSide(PanelSide.RIGHT) }) else null,
+                        onLeftPanel = if (PanelSide.LEFT in sides) ({ onSide(PanelSide.LEFT) }) else null, onSettings = onSettings,
                         onMenuRequest = onMenu)
                 }
             } } }
