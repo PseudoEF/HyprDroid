@@ -26,6 +26,17 @@ private fun workspaceStoreFor(context: Context): DataStore<Preferences> {
 class WorkspaceRepository(private val store: DataStore<Preferences>) {
     constructor(context: Context) : this(workspaceStoreFor(context))
     val settings = store.data.map(WorkspaceCodec::decode).flowOn(Dispatchers.Default)
+    val sessions = store.data.map { SessionsCodec.read(it[sessionKey]) }.flowOn(Dispatchers.Default)
+    val sessionEvents = store.data.map { SessionsCodec.events(it[eventKey]) }.flowOn(Dispatchers.Default)
+    suspend fun setSessions(transform: (dev.hyprdroid.launcher.model.WorkspaceSessions) -> dev.hyprdroid.launcher.model.WorkspaceSessions) {
+        store.edit { it[sessionKey] = SessionsCodec.write(transform(SessionsCodec.read(it[sessionKey]))) }
+    }
+    suspend fun recordSession(event: dev.hyprdroid.launcher.model.SessionEvent) {
+        store.edit { it[eventKey] = SessionsCodec.writeEvents(SessionsCodec.events(it[eventKey]) + event) }
+    }
+    suspend fun clearSessionEvents() { store.edit { it.remove(eventKey) } }
+    private val sessionKey = androidx.datastore.preferences.core.stringPreferencesKey("workspace_sessions_v1")
+    private val eventKey = androidx.datastore.preferences.core.stringPreferencesKey("workspace_session_events_v1")
 
     suspend fun setPinned(workspaceId: Int, componentId: String, pinned: Boolean) = update { it.withPinned(workspaceId, componentId, pinned) }
     suspend fun removePackages(packages: Set<String>) = update { it.withoutPackages(packages) }

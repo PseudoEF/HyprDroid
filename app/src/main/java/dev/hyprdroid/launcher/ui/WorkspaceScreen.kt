@@ -119,6 +119,7 @@ data class ShellActions(
 @Composable
 fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (ShellPresentation, Boolean) -> Unit = { _, _ -> }) {
     var aboutOpen by rememberSaveable { mutableStateOf(false) }
+    var sessionsOpen by rememberSaveable { mutableStateOf(false) }
     // Construct the pager only after preferences load, so its initial page is the persisted one.
     if (state.settings == null) {
         BackHandler { aboutOpen = false }
@@ -201,7 +202,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
     LaunchedEffect(pager, workspaceReady) {
         if (workspaceReady) snapshotFlow { pager.settledPage }.distinctUntilChanged().collect(actions.selectWorkspace)
     }
-    val overlayOpen = shellMenuOpen || leftPanelOpen || overlaySettingsOpen || drawerOpen || controlOpen || sidebarOpen || aboutOpen || presentationPreview != null || appearanceWorkspace != null || orderWorkspace != null
+    val overlayOpen = sessionsOpen || shellMenuOpen || leftPanelOpen || overlaySettingsOpen || drawerOpen || controlOpen || sidebarOpen || aboutOpen || presentationPreview != null || appearanceWorkspace != null || orderWorkspace != null
     SideEffect { onBackdropState(presentation, !overlayOpen && !editing) }
     DisposableEffect(Unit) { onDispose { onBackdropState(presentation, false) } }
     LaunchedEffect(panels) {
@@ -227,6 +228,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
             leftPanelOpen -> leftPanelOpen = false
             overlaySettingsOpen -> overlaySettingsOpen = false
             presentationPreview != null -> if (!savingPresentation) closePresentation()
+            sessionsOpen -> sessionsOpen = false
             aboutOpen -> aboutOpen = false
             sidebarOpen -> sidebarOpen = false
             drawerOpen -> closeDrawer()
@@ -247,6 +249,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
         val panelMenu = buildList {
             add(AppMenuAction("Рабочий стол и панели", shellReady, openPresentation))
             add(AppMenuAction("О приложении") { aboutOpen = true })
+            add(AppMenuAction("Workspace Sessions") { sessionsOpen = true })
             add(AppMenuAction("Все приложения", onClick = openDrawer))
             add(AppMenuAction("Control Center", onClick = openControl))
             add(AppMenuAction("Sidebar", panels.right.scope.home) { sidebarOpen = true })
@@ -328,6 +331,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
     }
     if (controlOpen) ControlCenter(onClose = { controlOpen = false }, onSettings = actions.systemSettings)
     if (aboutOpen) AboutScreen { aboutOpen = false }
+    if (sessionsOpen) WorkspaceSessionsScreen(pager.currentPage, onClose = { sessionsOpen = false })
     if (overlaySettingsOpen) OverlaySettingsPanel { overlaySettingsOpen = false }
     presentationPreview?.let { draft -> ShellAppearancePanel(draft, savingPresentation,
         onChange = { presentationPreview = it }, onCancel = closePresentation,

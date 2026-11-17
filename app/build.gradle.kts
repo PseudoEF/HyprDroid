@@ -5,9 +5,9 @@ plugins {
 }
 val distribution = providers.environmentVariable("HYPRDROID_DISTRIBUTION").orNull == "true"
 // Local builds stay ahead of v0.6 (8); distributed codes must be allocated by CI.
-val buildCode = requireNotNull(providers.gradleProperty("buildVersionCode").orElse("14").get().toLongOrNull()) { "Invalid versionCode" }
+val buildCode = requireNotNull(providers.gradleProperty("buildVersionCode").orElse("15").get().toLongOrNull()) { "Invalid versionCode" }
 require(buildCode in 1..2_100_000_000L) { "buildVersionCode must be within Android's supported range" }
-val buildName = providers.gradleProperty("buildVersionName").orElse("0.7.2").get()
+val buildName = providers.gradleProperty("buildVersionName").orElse("0.7.3").get()
 require(buildName.matches(Regex("[0-9A-Za-z.+_-]{1,100}")))
 val buildCommit = providers.environmentVariable("HYPRDROID_BUILD_COMMIT").orElse(providers.provider {
     runCatching { providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.get().trim() }.getOrDefault("unknown")
