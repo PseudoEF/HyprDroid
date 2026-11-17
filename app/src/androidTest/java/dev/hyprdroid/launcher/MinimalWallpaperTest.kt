@@ -1,6 +1,7 @@
 package dev.hyprdroid.launcher
 
 import android.content.ContentValues
+import android.content.Intent
 import android.graphics.drawable.AnimatedImageDrawable
 import android.net.Uri
 import android.os.Environment
@@ -8,7 +9,6 @@ import android.provider.MediaStore
 import android.widget.ImageView
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -126,9 +126,11 @@ class MinimalWallpaperTest {
             device.pressBack(); gone("app-drawer")
             compose.waitUntil(8_000) { (image(scenario)?.drawable as? AnimatedImageDrawable)?.isRunning == true }
             val retained = image(scenario)!!.drawable as AnimatedImageDrawable
-            scenario.moveToState(Lifecycle.State.CREATED)
+            @Suppress("DEPRECATION")
+            scenario.onActivity { it.startActivityForResult(Intent().setClassName(context.packageName + ".test", OverlayTestHostActivity::class.java.name), 123) }
+            assertTrue(device.wait(Until.hasObject(By.pkg(context.packageName + ".test")), 8_000))
             assertFalse(retained.isRunning)
-            scenario.moveToState(Lifecycle.State.RESUMED)
+            device.pressBack()
             await("animated-wallpaper")
             scenario.recreate(); await("animated-wallpaper")
             compose.waitUntil(10_000) { (image(scenario)?.drawable as? AnimatedImageDrawable)?.isRunning == true }
