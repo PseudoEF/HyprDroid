@@ -68,7 +68,7 @@ fun WorkspaceScreen(model: WorkspaceViewModel, requestedScreen: String? = null, 
         Box(Modifier.fillMaxSize()) {
             WallpaperLayer(state.shell?.wallpaperUri, backdrop.wallpaperScale, backdrop.wallpaperMotion, desktopVisible) { model.showMessage("Изображение недоступно. Показаны системные обои; выберите другой фон через меню.") }
             ShellHome(state, ShellActions(
-                launch = model::launch, pin = model::setPinned, favorite = model::setFavorite,
+                launch = model::launch, pin = model::setPinned, favorite = model::setFavorite, dockPlaceBefore = model::placeFavoriteBefore,
                 selectWorkspace = model::selectWorkspace, gridLayout = model::setGridLayout,
                 chooseWallpaper = {
                     try { photoPicker.launch(arrayOf("image/*")) }
@@ -94,6 +94,7 @@ data class ShellActions(
     val launch: (String) -> Unit,
     val pin: (Int, String, Boolean) -> Unit,
     val favorite: (String, Boolean) -> Unit,
+    val dockPlaceBefore: (String, String?) -> Unit,
     val selectWorkspace: (Int) -> Unit,
     val gridLayout: (Int, Boolean) -> Unit,
     val chooseWallpaper: () -> Unit,
@@ -121,6 +122,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
     var aboutOpen by rememberSaveable { mutableStateOf(false) }
     var quickEditorOpen by rememberSaveable { mutableStateOf(false) }
     var powerOpen by rememberSaveable { mutableStateOf(false) }
+    var dockEditorOpen by rememberSaveable { mutableStateOf(false) }
     // Construct the pager only after preferences load, so its initial page is the persisted one.
     if (state.settings == null) {
         BackHandler { aboutOpen = false }
@@ -159,6 +161,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
     var presentationPreview by remember { mutableStateOf<ShellPresentation?>(null) }
     var savingPresentation by remember { mutableStateOf(false) }
     var autoDockShown by remember { mutableStateOf(true) }
+    var dockDragging by remember { mutableStateOf(false) }
     var dockPulse by remember { mutableIntStateOf(0) }
     // Do not flash Classic pins while a saved Clean preference is still loading.
     val presentation = presentationPreview ?: state.shell?.presentation ?: ShellPresentation(if (state.shellError) DesktopMode.CLASSIC else DesktopMode.CLEAN)
@@ -207,7 +210,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
     LaunchedEffect(pager, workspaceReady) {
         if (workspaceReady) snapshotFlow { pager.settledPage }.distinctUntilChanged().collect(actions.selectWorkspace)
     }
-    val overlayOpen = powerOpen || quickEditorOpen || shellMenuOpen || leftPanelOpen || overlaySettingsOpen || drawerOpen || controlOpen || sidebarOpen || aboutOpen || presentationPreview != null || appearanceWorkspace != null || orderWorkspace != null
+    val overlayOpen = dockEditorOpen || powerOpen || quickEditorOpen || shellMenuOpen || leftPanelOpen || overlaySettingsOpen || drawerOpen || controlOpen || sidebarOpen || aboutOpen || presentationPreview != null || appearanceWorkspace != null || orderWorkspace != null
     SideEffect { onBackdropState(presentation, !overlayOpen && !editing) }
     DisposableEffect(Unit) { onDispose { onBackdropState(presentation, false) } }
     LaunchedEffect(panels) {
@@ -222,14 +225,15 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
         homeLifecycle.addObserver(observer)
         onDispose { homeLifecycle.removeObserver(observer) }
     }
-    LaunchedEffect(presentation.dockVisibility, autoDockShown, dockPulse, editing, overlayOpen) {
-        if (presentation.dockVisibility == DockVisibility.AUTO && autoDockShown && !editing && !overlayOpen) {
+    LaunchedEffect(presentation.dockVisibility, autoDockShown, dockPulse, editing, overlayOpen, dockDragging) {
+        if (presentation.dockVisibility == DockVisibility.AUTO && autoDockShown && !editing && !overlayOpen && !dockDragging) {
             delay(3_500); autoDockShown = false
         }
     }
     // HOME is the navigation root. Back closes local UI but never finishes the launcher window.
     BackHandler {
         when {
+            dockEditorOpen -> dockEditorOpen = false
             leftPanelOpen -> leftPanelOpen = false
             overlaySettingsOpen -> overlaySettingsOpen = false
             presentationPreview != null -> if (!savingPresentation) closePresentation()
@@ -258,6 +262,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
             add(AppMenuAction("Quick Settings · редактор") { quickEditorOpen = true })
             add(AppMenuAction("Все приложения", onClick = openDrawer))
             add(AppMenuAction("Quick Settings", onClick = openControl))
+            add(AppMenuAction("Настроить dock", shellReady) { dockEditorOpen = true })
             add(AppMenuAction("Sidebar", panels.right.scope.home) { sidebarOpen = true })
             add(AppMenuAction("Левая панель", panels.left.scope.home) { leftPanelOpen = true })
             add(AppMenuAction("Настройки панелей", shellReady) { overlaySettingsOpen = true })
@@ -310,7 +315,8 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
             (presentation.dockVisibility == DockVisibility.ALWAYS || autoDockShown || editing)) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.testTag("favorite-dock")) {
                 Spacer(Modifier.height(12.dp))
-                FavoriteDock(favorites.sortedBy { appsById[it]?.label ?: it }, appsById, launchApp, appMenu, openDrawer,
+                FavoriteDock(state.shell?.dockComponents.orEmpty(), appsById, launchApp, appMenu, openDrawer,
+                    onPlaceBefore = actions.dockPlaceBefore, enabled = shellReady && !overlayOpen, onDragging = { dockDragging = it },
                     showDrawer = presentation.drawerDock.visible(presentation.desktopMode))
             }
         }
@@ -341,6 +347,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
     if (aboutOpen) AboutScreen { aboutOpen = false }
     if (quickEditorOpen) QuickSettingsEditor { quickEditorOpen = false }
     if (powerOpen) PowerMenu { powerOpen = false }
+    if (dockEditorOpen) DockEditor(state, actions.favorite, actions.dockPlaceBefore) { dockEditorOpen = false }
     if (overlaySettingsOpen) OverlaySettingsPanel { overlaySettingsOpen = false }
     presentationPreview?.let { draft -> ShellAppearancePanel(draft, savingPresentation,
         onChange = { presentationPreview = it }, onCancel = closePresentation,

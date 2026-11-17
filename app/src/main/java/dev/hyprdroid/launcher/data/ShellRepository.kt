@@ -45,6 +45,7 @@ class ShellRepository(private val store: DataStore<Preferences>) {
     constructor(context: Context) : this(shellStoreFor(context))
     private val version = intPreferencesKey("schema_version")
     private val favorites = stringSetPreferencesKey("favorites")
+    private val favoriteOrder = stringPreferencesKey("favorites_order")
     private val wallpaper = stringPreferencesKey("wallpaper_uri")
     private val sidebar = stringPreferencesKey("sidebar_items")
     private val overlayEnabled = booleanPreferencesKey("overlay_enabled")
@@ -177,12 +178,26 @@ class ShellRepository(private val store: DataStore<Preferences>) {
     }
 
     suspend fun setFavorite(component: String, enabled: Boolean) {
+        require(dev.hyprdroid.launcher.model.validComponent(component))
         store.edit { preferences ->
             val current = decode(preferences)
             val apps = current.favorites
             if (enabled && component !in apps && apps.size >= MAX_DOCK_APPS) throw DockFullException()
             preferences[favorites] = if (enabled) apps + component else apps - component
+            preferences[favoriteOrder] = DockOrderCodec.write(if (enabled && component !in apps) current.dockComponents + component else current.dockComponents.filter { enabled || it != component })
             ShellPresentationCodec.write(preferences, current.presentation)
+        }
+    }
+
+    suspend fun placeFavoriteBefore(component: String, before: String?) {
+        store.edit { data ->
+            val current = decode(data)
+            if (component !in current.favorites || component == before) return@edit
+            // A relative move applies to current data: concurrent removals are never resurrected.
+            val order = current.dockComponents.toMutableList().apply { remove(component) }
+            val index = before?.let(order::indexOf)?.takeIf { it >= 0 } ?: order.size
+            order.add(index, component)
+            data[favoriteOrder] = DockOrderCodec.write(order)
         }
     }
 
@@ -198,6 +213,7 @@ class ShellRepository(private val store: DataStore<Preferences>) {
         store.edit { preferences ->
             val current = decode(preferences)
             preferences[favorites] = current.favorites.filterNot { it.substringBefore('/') in packages }.toSet()
+            preferences[favoriteOrder] = DockOrderCodec.write(current.dockComponents.filterNot { it.substringBefore('/') in packages })
             preferences[sidebar] = WorkspaceCodec.encodeItems(current.sidebar.filterNot {
                 it is WorkspaceItem.AppShortcut && it.componentId.substringBefore('/') in packages
             })
@@ -217,6 +233,7 @@ class ShellRepository(private val store: DataStore<Preferences>) {
                 preferences[overlayHeight] ?: 160, preferences[overlayInset] ?: 0).validated(),
             panelConfiguration = preferences[panels]?.let(PanelsCodec::decode),
             pendingWidget = preferences[pendingWidget]?.let(PanelsCodec::decodePending),
+            favoriteOrder = DockOrderCodec.read(preferences[favoriteOrder]),
         )
     }
 }

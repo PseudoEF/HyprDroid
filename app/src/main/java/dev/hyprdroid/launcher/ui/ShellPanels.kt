@@ -111,24 +111,6 @@ private fun ShellClock() {
 }
 
 @Composable
-fun FavoriteDock(
-    components: List<String>, apps: Map<String, LauncherApp>,
-    onLaunch: (String) -> Unit, menu: (String) -> List<AppMenuAction>,
-    onDrawer: () -> Unit, modifier: Modifier = Modifier,
-    showDrawer: Boolean = true,
-) {
-    if (components.isEmpty() && !showDrawer) return
-    ShellSurface(modifier.widthIn(max = 440.dp)) {
-        Row(Modifier.horizontalScroll(rememberScrollState()).padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            components.forEach { component ->
-                AppTile(apps[component], component, onClick = { onLaunch(component) }, menu = menu(component), compact = true, modifier = Modifier.width(52.dp).testTag("dock-app-$component"))
-            }
-            if (showDrawer) IconButton(onClick = onDrawer, modifier = Modifier.size(52.dp)) { DrawerGlyph() }
-        }
-    }
-}
-
-@Composable
 fun DrawerGlyph(description: String = "Все приложения") {
     Canvas(Modifier.size(22.dp).semantics { contentDescription = description }) {
         val side = size.width * .38f

@@ -37,7 +37,9 @@ data class ShellSettings(
     val overlay: OverlaySettings = OverlaySettings(),
     val panelConfiguration: PanelsSettings? = null,
     val pendingWidget: PendingPanelWidget? = null,
+    val favoriteOrder: List<String> = emptyList(),
 ) {
+    val dockComponents: List<String> get() = favoriteOrder.filter { it in favorites } + (favorites - favoriteOrder.toSet()).sorted()
     // Lazy migration preserves the existing overlay switch, geometry and enabled right modules.
     val panels: PanelsSettings get() = panelConfiguration ?: PanelsSettings(right = PanelSettings(
         scope = if (overlay.enabled) PanelScope.EVERYWHERE else PanelScope.HOME,

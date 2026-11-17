@@ -38,12 +38,14 @@ fun AppTile(
     iconSizeDp: Int = 48,
     dragEditing: Boolean = false,
     editorMenuOnTap: Boolean = false, tileMinHeightDp: Int = 108,
+    longPressMenu: Boolean = true,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val label = app?.label ?: component.substringBefore('/')
     Box(modifier) {
         val clickModifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
-            .then(if (dragEditing) Modifier.clickable(role = Role.Button, onClickLabel = if (editorMenuOnTap) "Действия: $label" else label, onClick = { if (editorMenuOnTap) menuOpen = true }) else Modifier.combinedClickable(
+            .then(if (!longPressMenu) Modifier.clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
+            else if (dragEditing) Modifier.clickable(role = Role.Button, onClickLabel = if (editorMenuOnTap) "Действия: $label" else label, onClick = { if (editorMenuOnTap) menuOpen = true }) else Modifier.combinedClickable(
                 role = Role.Button, onClick = onClick, onClickLabel = label,
                 onLongClick = { menuOpen = true }, onLongClickLabel = "Действия: $label",
             ))
