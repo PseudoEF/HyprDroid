@@ -132,6 +132,12 @@ internal fun OverlaySettingsPanel(onClose: () -> Unit) {
                         PanelSlider("Ширина маркера", draft.markerWidthDp, 1f..12f, !saving) { draft = draft.copy(markerWidthDp = it) }
                     }
                     PanelCategory.GESTURES -> {
+                        Text("Открытие панели", style = MaterialTheme.typography.titleMedium)
+                        FlowRow { PanelActivation.entries.forEach { mode ->
+                            FilterChip(draft.activation == mode, { draft = draft.copy(activation = mode) }, enabled = !saving,
+                                label = { Text(mode.title) }, modifier = Modifier.testTag("panel-activation-${mode.name}"))
+                        } }
+                        PanelSlider("Длина свайпа", draft.swipeThresholdDp, 24f..96f, !saving) { draft = draft.copy(swipeThresholdDp = it) }
                         PanelSlider("Ширина сенсорной зоны", draft.touchWidthDp, 12f..64f, !saving) { draft = draft.copy(touchWidthDp = it) }
                         PanelSlider("Высота зоны", draft.heightDp, 80f..200f, !saving) { draft = draft.copy(heightDp = it) }
                         PanelSlider("Положение по высоте", draft.positionPercent, 10f..90f, !saving, "%") { draft = draft.copy(positionPercent = it) }

@@ -7,6 +7,7 @@ enum class PanelScope(val title: String, val home: Boolean, val apps: Boolean) {
 enum class MarkerVisibility(val title: String, val alpha: Int) {
     NORMAL("Обычный", 255), TRANSLUCENT("Полупрозрачный", 160), HIDDEN("Скрытый", 0),
 }
+enum class PanelActivation(val title: String) { SWIPE_ONLY("Swipe only"), TAP_SWIPE("Tap + Swipe") }
 /** Known, locally rendered modules. Unknown IDs remain data and are never executed. */
 enum class PanelModule(val title: String) {
     QUICK_LAUNCH("Quick Launch"), SYSTEM_STATUS("System Status"), CLOCK("Часы"), DATE("Дата"), BATTERY("Батарея"),
@@ -22,12 +23,14 @@ data class PanelSettings(
     val modules: List<String> = listOf("SYSTEM_STATUS", "QUICK_LAUNCH"),
     val widgets: List<PanelWidget> = emptyList(),
     val widthPercent: Int = 80,
+    val activation: PanelActivation = PanelActivation.SWIPE_ONLY,
+    val swipeThresholdDp: Int = 48,
 ) {
     fun validated(): PanelSettings {
         require(modules.size <= 64 && modules.distinct().size == modules.size && modules.all { it.isNotBlank() && it.length <= 100 })
         require(widgets.size <= 32 && widgets.map { it.appWidgetId }.distinct().size == widgets.size)
         require(widgets.all { it.moduleId in modules })
-        return copy(widthPercent = widthPercent.coerceIn(50, 100), markerWidthDp = markerWidthDp.coerceIn(1, 12), touchWidthDp = touchWidthDp.coerceIn(12, 64),
+        return copy(swipeThresholdDp = swipeThresholdDp.coerceIn(24, 96), widthPercent = widthPercent.coerceIn(50, 100), markerWidthDp = markerWidthDp.coerceIn(1, 12), touchWidthDp = touchWidthDp.coerceIn(12, 64),
             heightDp = heightDp.coerceIn(80, 200), positionPercent = positionPercent.coerceIn(10, 90), insetDp = insetDp.coerceIn(0, 64), widgets = widgets.map { it.validated() })
     }
 }

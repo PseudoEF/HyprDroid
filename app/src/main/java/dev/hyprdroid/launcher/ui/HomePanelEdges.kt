@@ -26,7 +26,8 @@ internal fun panelZone(width: Float, height: Float, density: Float, side: PanelS
 internal fun Modifier.homePanelGesture(side: PanelSide, value: PanelSettings, enabled: Boolean, open: () -> Unit): Modifier {
     val density = LocalDensity.current.density
     val zone = { w: Float, h: Float -> panelZone(w, h, density, side, value) }
-    val input = sidebarSwipeGesture(enabled, if (side == PanelSide.LEFT) 1f else -1f, zone, open)
+    val input = sidebarSwipeGesture(enabled, if (side == PanelSide.LEFT) 1f else -1f, zone, open,
+        thresholdDp = value.swipeThresholdDp, tapEnabled = value.activation == PanelActivation.TAP_SWIPE)
     return if (!enabled) input else input.systemGestureExclusion { coordinates ->
         val area = zone(coordinates.size.width.toFloat(), coordinates.size.height.toFloat())
         Rect(area.left, area.top, area.right, area.bottom)

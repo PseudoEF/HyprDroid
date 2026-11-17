@@ -15,12 +15,14 @@ internal fun Modifier.sidebarClosingGesture(enabled: Boolean = true, sign: Float
     sidebarSwipeGesture(enabled, sign, { width, height -> SidebarActivationZone(0f, width, 0f, height) }, onClose)
 
 @Composable
-internal fun Modifier.sidebarSwipeGesture(enabled: Boolean, sign: Float, zone: (Float, Float) -> SidebarActivationZone, action: () -> Unit): Modifier {
+internal fun Modifier.sidebarSwipeGesture(enabled: Boolean, sign: Float, zone: (Float, Float) -> SidebarActivationZone, action: () -> Unit,
+    thresholdDp: Int = 48, tapEnabled: Boolean = false): Modifier {
     val active by rememberUpdatedState(enabled)
     val bounds by rememberUpdatedState(zone)
     val complete by rememberUpdatedState(action)
+    val tap by rememberUpdatedState(tapEnabled)
     val density = LocalDensity.current
-    val threshold = with(density) { 48.dp.toPx() }
+    val threshold = with(density) { thresholdDp.dp.toPx() }
     val minimumLock = with(density) { 4.dp.toPx() }
     return pointerInput(sign, threshold, minimumLock) {
         awaitEachGesture {
@@ -39,7 +41,9 @@ internal fun Modifier.sidebarSwipeGesture(enabled: Boolean, sign: Float, zone: (
                     if (policy.rejected) break
                     if (!change.pressed) {
                         if (policy.owned) change.consume()
-                        if (policy.finish(event.type == PointerEventType.Release)) complete()
+                        val released = event.type == PointerEventType.Release
+                        val isTap = !policy.owned && released && tap && travel.getDistance() < viewConfiguration.touchSlop
+                        if (policy.finish(released) || isTap) complete()
                         break
                     }
                     if (policy.owned) change.consume()

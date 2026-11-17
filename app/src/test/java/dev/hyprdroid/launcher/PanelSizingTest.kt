@@ -8,6 +8,17 @@ import org.junit.Test
 
 class PanelSizingTest {
     private val widget = PanelWidget(9, "example.widgets/.Clock", "Clock", 50, 180)
+    @Test fun gesturesMigrateToSwipeOnlyAndIndependentChoicesRoundTrip() {
+        val source = PanelsSettings(left = PanelSettings(activation = PanelActivation.TAP_SWIPE, swipeThresholdDp = 72))
+        assertEquals(source, PanelsCodec.decode(PanelsCodec.encode(source)))
+        val old = JSONObject(PanelsCodec.encode(source)).put("version", 3)
+        val restored = PanelsCodec.decode(old.toString())
+        assertEquals(PanelActivation.SWIPE_ONLY, restored.left.activation)
+        assertEquals(48, restored.left.swipeThresholdDp)
+        assertEquals(source.left.modules, restored.left.modules)
+        assertEquals(24, PanelSettings(swipeThresholdDp = 0).validated().swipeThresholdDp)
+        assertEquals(96, PanelSettings(swipeThresholdDp = 200).validated().swipeThresholdDp)
+    }
     @Test fun oldPanelDocumentKeepsWidgetsAndGetsIndependentDefaultWidth() {
         val source = PanelsSettings(left = PanelSettings(modules = listOf(widget.moduleId, "future"), widgets = listOf(widget), widthPercent = 95))
         val old = JSONObject(PanelsCodec.encode(source)).put("version", 2)

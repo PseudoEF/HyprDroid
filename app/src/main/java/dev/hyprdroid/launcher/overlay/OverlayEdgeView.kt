@@ -11,6 +11,7 @@ import android.view.ViewConfiguration
 import kotlin.math.abs
 import dev.hyprdroid.launcher.model.PanelSettings
 import dev.hyprdroid.launcher.model.PanelSide
+import dev.hyprdroid.launcher.model.PanelActivation
 
 /** A bounded, visible touch target. Never installs a full-screen transparent input catcher. */
 internal class OverlayEdgeView(context: Context, private val side: PanelSide, private val settings: PanelSettings, private val open: () -> Unit) : View(context) {
@@ -45,7 +46,9 @@ internal class OverlayEdgeView(context: Context, private val side: PanelSide, pr
             }
             MotionEvent.ACTION_UP -> {
                 val dx = (event.rawX - x) * if (side == PanelSide.RIGHT) 1 else -1; val dy = event.rawY - y
-                if (!rejected && (dx < -48 * resources.displayMetrics.density && -dx > abs(dy) * 1.3f || abs(dx) < slop && abs(dy) < slop)) performClick()
+                val swipe = dx < -settings.swipeThresholdDp * resources.displayMetrics.density && -dx > abs(dy) * 1.3f
+                val tap = settings.activation == PanelActivation.TAP_SWIPE && abs(dx) < slop && abs(dy) < slop
+                if (!rejected && (swipe || tap)) performClick()
                 return true
             }
         }
