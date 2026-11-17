@@ -114,7 +114,7 @@ internal fun TopbarSettingsPanel(onClose: () -> Unit) {
                 }
                 TextButton(onClick = { runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))) } }) { Text("Разрешение поверх приложений") }
                 TextButton(onClick = { openSystemSettings(context, Settings.ACTION_USAGE_ACCESS_SETTINGS) }) { Text("Доступ к статистике для Auto/исключений") }
-                Text("Usage Access используется только для текущего пакета/категории в памяти. Без него Auto не знает активное приложение; таймер, ручное скрытие и Home доступны.")
+                Text("Usage Access используется только для текущего пакета/категории в памяти. Без него Auto не знает активное приложение. При Always hide и неизвестном пакете панель скрывается консервативно; восстановление и Home доступны.")
                 if (Build.VERSION.SDK_INT >= 33) TextButton(onClick = { context.startActivity(Intent(context, dev.hyprdroid.launcher.quicksettings.TilePermissionActivity::class.java).putExtra("notifications", true)) }) { Text("Разрешить уведомление восстановления") }
                 Text("При блокировке/выключении экрана overlay убирается. Клавиатура не теряет фокус; сигнал её видимости ограничен собственными Insets. Если уведомления отключены, вернуть панель можно через Home.")
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }

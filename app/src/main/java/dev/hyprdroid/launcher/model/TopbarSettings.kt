@@ -19,6 +19,7 @@ fun TopbarSettings.visibility(home: Boolean, safe: Boolean, ime: Boolean, app: S
     if (!safe || home || mode == TopbarMode.HOME_ONLY || ime) return BarVisibility.NONE
     val rule = appRules[app] ?: AppBarRule.AUTO
     if (!temporaryReveal) {
+        if (app == null && appRules.values.any { it == AppBarRule.HIDE }) return BarVisibility.NONE
         if (manuallyHidden || rule == AppBarRule.HIDE) return BarVisibility.NONE
         if (contextAware && rule == AppBarRule.AUTO && category in setOf(ForegroundCategory.GAME, ForegroundCategory.VIDEO)) return BarVisibility.NONE
         if (mode == TopbarMode.AUTO_HIDE && idle && rule != AppBarRule.SHOW) return BarVisibility.REVEAL

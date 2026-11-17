@@ -37,11 +37,13 @@ internal class TopbarOverlay(private val context: Context, private val windows: 
     private var safe = false
     private var home = true
     private var suspended = false
+    private var destroyed = false
     private var previousPackage: String? = null
     var foregroundPackage: String? = null; private set
     private var category = ForegroundCategory.UNKNOWN
     fun reveal() { lastTouch = SystemClock.elapsedRealtime(); revealUntil = lastTouch + 20_000; key = null; render() }
     fun update(home: Boolean, safe: Boolean, suspended: Boolean) {
+        if (this.home != home) lastTouch = SystemClock.elapsedRealtime()
         this.home = home; this.safe = safe; this.suspended = suspended
         if (!safe || home || settings.mode == TopbarMode.HOME_ONLY || (!settings.contextAware && settings.appRules.isEmpty())) { hints.reset(); foregroundPackage = null; category = ForegroundCategory.UNKNOWN }
         else hints.sample().let { (pkg, type) ->
@@ -51,6 +53,7 @@ internal class TopbarOverlay(private val context: Context, private val windows: 
         render()
     }
     private fun render() {
+        if (destroyed) return
         val now = SystemClock.elapsedRealtime()
         val protected = foregroundPackage in setOf(context.packageName, "com.android.settings", "com.android.systemui", "com.android.permissioncontroller", "com.google.android.permissioncontroller")
         val state = settings.visibility(home, safe && !suspended && !protected, false, foregroundPackage, category, now - lastTouch >= 6000, now < revealUntil)
@@ -68,7 +71,7 @@ internal class TopbarOverlay(private val context: Context, private val windows: 
         val next = listOf(state, barWidth, top, left, right, settings.heightDp, settings.opacityPercent)
         if (next == key) { view?.visibility = if (ime) View.INVISIBLE else View.VISIBLE; owner.visible(state == BarVisibility.BAR && !ime); return }
         remove(); key = next
-        if (state == BarVisibility.NONE) return
+        if (state == BarVisibility.NONE) { ime = false; return }
         val holder = object : FrameLayout(context) {
             override fun dispatchTouchEvent(event: MotionEvent): Boolean { if (event.actionMasked == MotionEvent.ACTION_DOWN) lastTouch = SystemClock.elapsedRealtime(); return super.dispatchTouchEvent(event) }
         }
@@ -117,5 +120,5 @@ internal class TopbarOverlay(private val context: Context, private val windows: 
         owner.visible(false)
     }
     fun clear() { key = null; remove(); ime = false }
-    fun destroy() { clear(); owner.destroy() }
+    fun destroy() { destroyed = true; clear(); owner.destroy() }
 }

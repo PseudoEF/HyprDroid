@@ -32,7 +32,7 @@ internal class ForegroundHints(private val context: Context) {
             val pkg = foreground
             val category = if (pkg == null) ForegroundCategory.UNKNOWN else {
                 val info = context.packageManager.getApplicationInfo(pkg, 0)
-                when (info.category) { ApplicationInfo.CATEGORY_GAME -> ForegroundCategory.GAME; ApplicationInfo.CATEGORY_VIDEO -> ForegroundCategory.VIDEO; else -> ForegroundCategory.NORMAL }
+                when (info.category) { ApplicationInfo.CATEGORY_GAME -> ForegroundCategory.GAME; ApplicationInfo.CATEGORY_VIDEO -> ForegroundCategory.VIDEO; ApplicationInfo.CATEGORY_UNDEFINED -> ForegroundCategory.UNKNOWN; else -> ForegroundCategory.NORMAL }
             }
             pkg to category
         } catch (_: Exception) { null to ForegroundCategory.UNKNOWN }
