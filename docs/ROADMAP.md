@@ -226,5 +226,5 @@
 - [x] Общий Waybar, ограниченное нефокусируемое окно, Home only/Always/Auto-hide, размер/непрозрачность.
 - [x] Добровольный package-only Usage Access, Game/Video эвристика, сохранённые Auto/Show/Hide и ручное восстановление уведомлением.
 - [x] Сохранены боковые панели, master-overlay, Quick Settings, виджеты, GIF и ключи данных/подписи.
-- [ ] Подтвердить unit, взаимодействие с отдельным приложением, Power Dialog, полный UI и подписанное обновление с APK10083.
+- [x] Подтверждены [assembleDebug и unit](https://github.com/PseudoEF/HyprDroid/actions/runs/44078608075), [25 UI-тестов и восстановление после force-stop/reinstall](https://github.com/PseudoEF/HyprDroid/actions/runs/44078608027), [подписанный APK10091 и обновление с APK10083](https://github.com/PseudoEF/HyprDroid/actions/runs/44073953591).
 - [ ] Проверить реальные игры/видео/PiP/IME, Android15–17 и OEM на физическом телефоне.

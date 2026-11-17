@@ -6,7 +6,7 @@
 - Общий Waybar в Home и ограниченном overlay, три режима, размер/непрозрачность, Auto/Show/Hide по приложениям и уведомление восстановления.
 - Добровольный Usage Access только для текущего пакета/категории; эвристика Game/Video не выдаётся за fullscreen detection.
 - Power Menu через опциональную AccessibilityService только для GLOBAL_ACTION_POWER_DIALOG; без событий, окон, чтения контента или привилегированных команд.
-- Аддитивные настройки; прежние панели, Quick Settings, виджеты/GIF и подпись сохранены. Проверки CI ожидаются; [ограничения](docs/TOPBAR_POWER.md).
+- Аддитивные настройки; прежние панели, Quick Settings, виджеты/GIF и подпись сохранены. Подтверждены [сборка и unit](https://github.com/PseudoEF/HyprDroid/actions/runs/44078608075), [25 UI-тестов с процессным восстановлением](https://github.com/PseudoEF/HyprDroid/actions/runs/44078608027), [подписанное обновление 10083 → 10091](https://github.com/PseudoEF/HyprDroid/actions/runs/44073953591). Физический телефон не проверен; [ограничения](docs/TOPBAR_POWER.md).
 
 ### Quick Settings v0.8
 - Доработка PR: прежний Control Center стал единой шторкой с сеткой 2×N, отдельными ползунками, часами/датой/батареей и закрытием вверх/Back/снаружи. Шестерёнка Topbar открывает настройки; редактор сокращён до checkbox и порядка.

@@ -46,12 +46,16 @@ PowerDialogService — только GLOBAL_ACTION_POWER_DIALOG по явному
 
 Аддитивный JSON v1 `topbar_overlay_configuration` внутри прежнего shell DataStore. Неизвестные версии/некорректные параметры не перезаписываются. Master overlay, panel/widget схемы, workspace, Quick Settings, GIF, applicationId и цепочка подписи сохранены. Разрешения хранятся Android, не выдаются из DataStore.
 
-Тесты должны подтвердить реальные касания в отдельном приложении, фокус EditText, поворот, Game/override, ручное восстановление через уведомление, screen-off, отказ Accessibility и настоящий GLOBAL_ACTION_POWER_DIALOG без нажатий выключения/перезагрузки. Полный UI, подписанная сборка и обновление поверх APK10083 пока ожидаются. Физические Android15–17/OEM, браузерное fullscreen-видео, PiP и несколько RESUMED Activity требуют ручной проверки.
+[Целевой UI-прогон Android15](https://github.com/PseudoEF/HyprDroid/actions/runs/44078615598) подтвердил реальные касания в отдельном приложении, фокус EditText, поворот, Game/override, восстановление через уведомление, screen-off, отказ Accessibility и настоящий GLOBAL_ACTION_POWER_DIALOG с нулевыми capabilities/events/flags. Тест закрывает системный диалог через Back, не нажимая выключение/перезагрузку. Отдельные seed/verify после force-stop и `adb install -r` подтвердили восстановление параметров TopBar, Quick Settings, GIF и настоящего RemoteViews-виджета.
+
+[Подписанная сборка 10091 и обновление поверх APK10083](https://github.com/PseudoEF/HyprDroid/actions/runs/44073953591) сохранили UID, firstInstallTime и хэши обоих DataStore. Физические Android15–17/OEM, браузерное fullscreen-видео, PiP и несколько RESUMED Activity требуют ручной проверки. Локально Java/JDK отсутствует.
+
+[Полная UI-регрессия](https://github.com/PseudoEF/HyprDroid/actions/runs/44078608027): 25 тестов, без ошибок и пропусков, плюс отдельные фазы восстановления; [assembleDebug и unit-тесты](https://github.com/PseudoEF/HyprDroid/actions/runs/44078608075) также успешны.
 
 ## Источники Android 15–17
 
 - [AccessibilityService / GLOBAL_ACTION_POWER_DIALOG](https://developer.android.com/reference/android/accessibilityservice/AccessibilityService), [метаданные AccessibilityService](https://developer.android.com/guide/topics/ui/accessibility/service).
 - [TYPE_APPLICATION_OVERLAY и флаги окон](https://developer.android.com/reference/android/view/WindowManager.LayoutParams), [WindowInsets](https://developer.android.com/reference/android/view/WindowInsets).
 - [UsageStatsManager](https://developer.android.com/reference/android/app/usage/UsageStatsManager), [ApplicationInfo categories](https://developer.android.com/reference/android/content/pm/ApplicationInfo).
-- [Android15: более узкое исключение фонового FGS-start с SAW](https://developer.android.com/about/versions/15/behavior-changes-15#fgs-types), [FGS specialUse](https://developer.android.com/develop/background-work/services/fgs/service-types#special-use).
+- [Android15: более узкое исключение фонового FGS-start с SAW](https://developer.android.com/about/versions/15/behavior-changes-15), [FGS specialUse](https://developer.android.com/develop/background-work/services/fgs/service-types#special-use).
 - [Android16: изменения для всех приложений](https://developer.android.com/about/versions/16/behavior-changes-all), [Android17: изменения](https://developer.android.com/about/versions/17/behavior-changes-all), [Android17 background audio](https://developer.android.com/about/versions/17/changes/bg-audio). Ограничения аудио могут затронуть ползунок в глобальном Quick Settings: ошибки/неизменившееся состояние не выдаются за успех, системный экран остаётся fallback. Точный OEM/fullscreen статус эти API не предоставляют.
