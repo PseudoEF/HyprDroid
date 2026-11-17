@@ -104,7 +104,9 @@ class QuickSettingsController private constructor(private val context: Context) 
                 val next = if (Settings.System.getInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 0) 1 else 0
                 check(Settings.System.putInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, next)); refresh(); false
             } else settings(tile)
-            QuickTile.VOLUME -> { audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_SAME, AudioManager.FLAG_SHOW_UI); false }
+            QuickTile.VOLUME -> if (audio.isVolumeFixed) settings(tile) else {
+                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_SAME, AudioManager.FLAG_SHOW_UI); false
+            }
             else -> settings(tile, panel = tile == QuickTile.WIFI)
         }
     } catch (_: Exception) { message("Действие недоступно; используйте системные настройки"); settings(tile) }

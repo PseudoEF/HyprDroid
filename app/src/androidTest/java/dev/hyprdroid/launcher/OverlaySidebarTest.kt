@@ -21,6 +21,7 @@ class OverlaySidebarTest {
         dismissBackgroundPixelLauncherAnr()
         val repository = ShellRepository(context)
         val original = runBlocking { repository.settings.first() }
+        assertTrue("Use an isolated emulator without user widgets", original.panels.left.widgets.isEmpty() && original.panels.right.widgets.isEmpty())
         permission("allow")
         runBlocking {
             repository.setPanel(PanelSide.LEFT, original.panels.left.copy(scope = PanelScope.EVERYWHERE, modules = listOf("QS_WIFI"), widgets = emptyList()))

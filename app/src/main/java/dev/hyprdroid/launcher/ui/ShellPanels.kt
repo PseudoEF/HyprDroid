@@ -45,7 +45,8 @@ fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>
     onMenuVisibilityChanged: (Boolean) -> Unit = {}) {
     var menuOpen by remember { mutableStateOf(false) }
     var quickOpen by remember { mutableStateOf(false) }
-    SideEffect { onMenuVisibilityChanged(menuOpen || quickOpen) }
+    val popupOpen = menuOpen || quickOpen
+    SideEffect { onMenuVisibilityChanged(popupOpen) }
     DisposableEffect(Unit) { onDispose { onMenuVisibilityChanged(false) } }
     ShellSurface(modifier) {
         BoxWithConstraints {
