@@ -216,3 +216,15 @@ Unit-тесты дополнены чтением схемы панелей v2 �
 Две отдельные инструментальные фазы того же запуска завершились `OK (1 test)` каждая. После создания виджета и приватного GIF выполняются force-stop и `adb install -r` того же тестового APK. В новом процессе восстанавливаются URI/файл GIF и AnimatedImageDrawable, прежний widget ID/RemoteViews/размер/порядок; очистка при запуске сохраняет выбранный GIF. Артефакт `HyprDroid-shell-ui` содержит XML, phase-отчёты и снимки. Тестовые поставщики и GIF-фикстура не входят в пользовательский APK. Проверенный код приложения совпадает с подписанным `c14d407`; далее менялись тесты, CI-проверки и документация. Для ручной целевой проверки workflow Android shell UI поддерживает suite=wallpaper; PR всегда запускает полный набор.
 
 Контракт нативного воспроизведения: [ImageDecoder](https://developer.android.com/reference/android/graphics/ImageDecoder), [AnimatedImageDrawable](https://developer.android.com/reference/android/graphics/drawable/AnimatedImageDrawable). Нативный stop/start может начинать GIF заново; сохранение точной позиции кадра не заявляется.
+
+## Workspace Sessions v0.7.3
+
+Локальный `./gradlew :app:assembleDebug` не выполняется: JDK/java отсутствует. Проверка перенесена в существующий CI, Gradle Wrapper и набор версий инструментов сохранены.
+
+- [Подписанная сборка и unit-тесты](https://github.com/PseudoEF/HyprDroid/actions/runs/44042575917): SUCCESS, APK **0.7.3 / 10067**, исходники `ac121ea07ac8f5edf9a43b70185549eb71bbec27`. [Artifact APK](https://github.com/PseudoEF/HyprDroid/actions/runs/44042575917/artifacts/14310048431).
+- APK SHA-256: `d52a60e8bfbc62f70f2bd9a65983a2b754cea22bd9c448ca7d0f6bb2a3a0ea0e`. applicationId прежний; сертификат совпадает с `config/debug-signing-cert.sha256`. About содержит версию, код и указанный коммит.
+- Тот же запуск проверил `adb install -r` с реальной исходной v0.7.2 (`c14d407`, 10063), подписанной тем же ключом. UID/firstInstallTime и побайтовые SHA-256 обоих DataStore совпали; настоящий widget ID, статичный PNG, overlay-настройки и About проверены. Две фазы UpgradePersistenceTest: OK. [Отчёт обновления](https://github.com/PseudoEF/HyprDroid/actions/runs/44042575917/artifacts/14309653903).
+- [Расширенные UI-тесты](https://github.com/PseudoEF/HyprDroid/actions/runs/44042880304): **20 tests, 0 failures/errors/skipped**, исходники `9f89653` (после APK менялись только тесты). Проверены отправка публичного запуска Settings, недоступная Activity, выключатель и независимость назначений от иконок, прежние панели/жесты/виджеты/GIF.
+- После полного UI-набора две отдельные фазы force-stop/reinstall: OK. Сохранены назначенные пары разных workspace, enabled-флаг и запись журнала, прежние GIF-файл и ID Android-виджета. [UI artifact](https://github.com/PseudoEF/HyprDroid/actions/runs/44042880304/artifacts/14310317964).
+
+Проверки выполнены на эмуляторе API 35. Они **не подтверждают** автоматическое создание реальной пары чужих приложений, отсутствие новых задач у всех поставщиков или поддержку на Android 16/17 и Pixel 9. Порядок физической проверки — в [WORKSPACE_SESSIONS](WORKSPACE_SESSIONS.md).
