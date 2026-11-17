@@ -34,6 +34,7 @@ class PowerMenuTest {
                 compose.onNodeWithText("Настроить доступ").assertExists()
                 captureShellScreen("v09-power-no-access")
                 UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
+                compose.waitUntil(10_000) { compose.onAllNodesWithTag("power-menu").fetchSemanticsNodes().isEmpty() }
                 compose.onNodeWithTag("power-menu").assertDoesNotExist()
             }
         } finally { runBlocking { repo.setPresentation(previous) } }

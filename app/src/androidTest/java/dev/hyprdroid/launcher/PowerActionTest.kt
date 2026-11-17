@@ -57,9 +57,15 @@ class PowerActionTest {
                 if (node.text?.toString() in setOf("Power off", "Restart")) return true
                 return (0 until node.childCount).any { find(node.getChild(it), depth + 1) }
             }
-            await { automation.windows.any { window -> window.root?.let { it.packageName?.toString() == "com.android.systemui" && find(it) } == true } }
-            automation.injectInputEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK), true)
-            automation.injectInputEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK), true)
+            fun nativeMenuVisible() = automation.windows.any { window -> window.root?.let { it.packageName?.toString() == "com.android.systemui" && find(it) } == true }
+            await { nativeMenuVisible() }
+            // Wait for SystemUI's entrance animation; never leave its modal window
+            // over later tests. Synthetic key events need real uptime timestamps.
+            SystemClock.sleep(500)
+            val down = SystemClock.uptimeMillis()
+            assertTrue(automation.injectInputEvent(KeyEvent(down, down, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK, 0), true))
+            assertTrue(automation.injectInputEvent(KeyEvent(down, SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK, 0), true))
+            await { !nativeMenuVisible() }
         } finally {
             if (previous == "null" || previous.isEmpty()) shell("settings delete secure enabled_accessibility_services") else shell("settings put secure enabled_accessibility_services $previous")
             if (oldEnabled == "null") shell("settings delete secure accessibility_enabled") else shell("settings put secure accessibility_enabled $oldEnabled")
