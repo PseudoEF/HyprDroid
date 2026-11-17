@@ -63,7 +63,7 @@ internal class TopbarOverlay(private val context: Context, private val windows: 
         if (Build.VERSION.SDK_INT >= 30) {
             val bounds = windows.currentWindowMetrics
             width = bounds.bounds.width()
-            val insets = bounds.windowInsets.getInsetsIgnoringVisibility(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+            val insets = bounds.windowInsets.getInsetsIgnoringVisibility(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout())
             left = insets.left; right = insets.right; top = insets.top
         }
         val available = (width - left - right - dp(16)).coerceAtLeast(dp(120))
