@@ -32,6 +32,9 @@ class WidgetProcessRestoreTest {
         if (phase == "seed") {
             assertFalse(file.exists())
             val previous = repository.settings.first().panels
+            val previousQuickSettings = repository.quickSettings.first()
+            repository.setQuickSettings(QuickSettingsConfig(listOf("QS_VOLUME", "QS_WIFI")))
+            repository.setPanel(PanelSide.LEFT, previous.left.copy(modules = previous.left.modules + "QS_BRIGHTNESS"))
             assertTrue(previous.left.widgets.isEmpty() && previous.right.widgets.isEmpty())
             val id = session.host.allocateAppWidgetId()
             val provider = ComponentName(context.packageName + ".test", FixtureWidgetProvider::class.java.name)
@@ -45,15 +48,18 @@ class WidgetProcessRestoreTest {
             val gif = AnimatedWallpaperFiles.importGif(context, android.net.Uri.fromFile(input))
             repository.setWallpaper(gif.toString()); input.delete()
             file.writeText(JSONObject().put("id", id).put("provider", provider.flattenToString()).put("panels", PanelsCodec.encode(previous))
-                .put("gif", gif.toString()).put("previousWallpaper", oldWallpaper ?: JSONObject.NULL).toString())
+                .put("gif", gif.toString()).put("previousWallpaper", oldWallpaper ?: JSONObject.NULL)
+                .put("quickSettings", QuickSettingsCodec.write(previousQuickSettings)).toString())
         } else {
             assertEquals("verify", phase)
             val fixture = JSONObject(file.readText())
+            assertEquals(listOf("QS_VOLUME", "QS_WIFI"), repository.quickSettings.first().topbar)
             val gif = android.net.Uri.parse(fixture.getString("gif"))
             assertEquals(gif.toString(), repository.settings.first().wallpaperUri)
             assertTrue(File(requireNotNull(gif.path)).isFile)
             val id = fixture.getInt("id")
             val saved = repository.settings.first().panels.left
+            assertTrue("QS_BRIGHTNESS" in saved.modules)
             assertEquals(listOf(id), saved.widgets.map { it.appWidgetId })
             assertTrue(saved.modules.contains("ANDROID_WIDGET:$id"))
             assertEquals(85, saved.widgets.single().widthPercent)
@@ -90,6 +96,7 @@ class WidgetProcessRestoreTest {
             repository.setPanel(PanelSide.LEFT, original.left)
             repository.setPanel(PanelSide.RIGHT, original.right)
             repository.setWallpaper(if (fixture.isNull("previousWallpaper")) null else fixture.getString("previousWallpaper"))
+            repository.setQuickSettings(QuickSettingsCodec.read(fixture.getString("quickSettings")))
             AnimatedWallpaperFiles.remove(context, gif)
             session.cleanup(repository)
             assertFalse(session.host.appWidgetIds.contains(id))
