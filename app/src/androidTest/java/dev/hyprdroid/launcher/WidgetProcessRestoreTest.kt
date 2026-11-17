@@ -39,10 +39,19 @@ class WidgetProcessRestoreTest {
             val widget = PanelWidget(id, provider.flattenToString(), "Process restore fixture", 85, 180)
             repository.savePendingWidget(PendingPanelWidget(PanelSide.LEFT, widget, WidgetBindingStage.COMMIT))
             repository.commitPendingWidget(id)
-            file.writeText(JSONObject().put("id", id).put("provider", provider.flattenToString()).put("panels", PanelsCodec.encode(previous)).toString())
+            val oldWallpaper = repository.settings.first().wallpaperUri
+            assertFalse("Use an isolated fixture, never replace a user's private GIF", oldWallpaper?.let { AnimatedWallpaperFiles.isOwned(context, android.net.Uri.parse(it)) } == true)
+            val input = File(context.cacheDir, "process-wallpaper.gif").apply { writeBytes(wallpaperTestGif()) }
+            val gif = AnimatedWallpaperFiles.importGif(context, android.net.Uri.fromFile(input))
+            repository.setWallpaper(gif.toString()); input.delete()
+            file.writeText(JSONObject().put("id", id).put("provider", provider.flattenToString()).put("panels", PanelsCodec.encode(previous))
+                .put("gif", gif.toString()).put("previousWallpaper", oldWallpaper ?: JSONObject.NULL).toString())
         } else {
             assertEquals("verify", phase)
             val fixture = JSONObject(file.readText())
+            val gif = android.net.Uri.parse(fixture.getString("gif"))
+            assertEquals(gif.toString(), repository.settings.first().wallpaperUri)
+            assertTrue(File(requireNotNull(gif.path)).isFile)
             val id = fixture.getInt("id")
             val saved = repository.settings.first().panels.left
             assertEquals(listOf(id), saved.widgets.map { it.appWidgetId })
@@ -58,6 +67,17 @@ class WidgetProcessRestoreTest {
             val scenario = ActivityScenario.launch(MainActivity::class.java)
             try {
                 compose.waitUntil(15_000) { compose.onAllNodesWithContentDescription("Меню оболочки").fetchSemanticsNodes().isNotEmpty() }
+                compose.waitUntil(10_000) { compose.onAllNodesWithTag("animated-wallpaper").fetchSemanticsNodes().isNotEmpty() }
+                scenario.onActivity { activity ->
+                    var restored = false
+                    fun inspect(view: android.view.View) {
+                        if (view is android.widget.ImageView && view.tag == "animated-wallpaper-view") restored = view.drawable is android.graphics.drawable.AnimatedImageDrawable
+                        if (view is android.view.ViewGroup) for (index in 0 until view.childCount) inspect(view.getChildAt(index))
+                    }
+                    inspect(activity.window.decorView)
+                    assertTrue("Private GIF must decode after the process restarts", restored)
+                }
+                captureShellScreen("v072-gif-after-process-restart")
                 compose.onNodeWithContentDescription("Меню оболочки").performClick()
                 compose.onNodeWithText("Левая панель", substring = false).performClick()
                 compose.waitUntil(10_000) { compose.onAllNodesWithTag("left-panel").fetchSemanticsNodes().isNotEmpty() }
@@ -69,6 +89,8 @@ class WidgetProcessRestoreTest {
             val original = PanelsCodec.decode(fixture.getString("panels"))
             repository.setPanel(PanelSide.LEFT, original.left)
             repository.setPanel(PanelSide.RIGHT, original.right)
+            repository.setWallpaper(if (fixture.isNull("previousWallpaper")) null else fixture.getString("previousWallpaper"))
+            AnimatedWallpaperFiles.remove(context, gif)
             session.cleanup(repository)
             assertFalse(session.host.appWidgetIds.contains(id))
             file.delete()
