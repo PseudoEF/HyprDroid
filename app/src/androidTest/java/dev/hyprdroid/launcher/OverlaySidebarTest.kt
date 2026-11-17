@@ -24,8 +24,8 @@ class OverlaySidebarTest {
         assertTrue("Use an isolated emulator without user widgets", original.panels.left.widgets.isEmpty() && original.panels.right.widgets.isEmpty())
         permission("allow")
         runBlocking {
-            repository.setPanel(PanelSide.LEFT, original.panels.left.copy(scope = PanelScope.EVERYWHERE, modules = listOf("QS_WIFI"), widgets = emptyList()))
-            repository.setPanel(PanelSide.RIGHT, original.panels.right.copy(scope = PanelScope.EVERYWHERE, modules = listOf("QS_VOLUME"), widgets = emptyList()))
+            repository.setPanel(PanelSide.LEFT, original.panels.left.copy(scope = PanelScope.EVERYWHERE, activation = PanelActivation.TAP_SWIPE, modules = listOf("QS_WIFI"), widgets = emptyList()))
+            repository.setPanel(PanelSide.RIGHT, original.panels.right.copy(scope = PanelScope.EVERYWHERE, activation = PanelActivation.TAP_SWIPE, modules = listOf("QS_VOLUME"), widgets = emptyList()))
             repository.setOverlay(OverlaySettings(enabled = true))
         }
         val scenario = ActivityScenario.launch(MainActivity::class.java)
@@ -77,7 +77,7 @@ class OverlaySidebarTest {
         runBlocking { repository.setOverlay(OverlaySettings()) }
         runBlocking {
             repository.setPanel(PanelSide.LEFT, PanelsSettings().left)
-            repository.setPanel(PanelSide.RIGHT, PanelSettings(scope = PanelScope.EVERYWHERE))
+            repository.setPanel(PanelSide.RIGHT, PanelSettings(scope = PanelScope.EVERYWHERE, activation = PanelActivation.TAP_SWIPE))
         }
         permission("deny")
         val scenario = ActivityScenario.launch(MainActivity::class.java)

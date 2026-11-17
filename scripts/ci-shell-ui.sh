@@ -6,9 +6,16 @@ collect_artifacts() {
     adb pull /sdcard/Download/hyprdroid-shell .local/shell-ui/ || true
 }
 trap collect_artifacts EXIT
+if [ "${HYPRDROID_TEST_API:-35}" = 37 ]; then
+  adb shell cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.gestural
+  adb shell settings get secure navigation_mode > .local/shell-ui/navigation-mode.txt
+  grep -q '^2' .local/shell-ui/navigation-mode.txt
+fi
 # Keep seeded workspaces installed for the font-size and orientation previews.
 if [ "${HYPRDROID_UI_SUITE:-all}" = wallpaper ]; then
   ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.MinimalWallpaperTest --no-daemon --stacktrace
+elif [ "${HYPRDROID_UI_SUITE:-all}" = interaction ]; then
+  ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.PanelDockInteractionTest,dev.hyprdroid.launcher.OverlaySidebarTest --no-daemon --stacktrace
 elif [ "${HYPRDROID_UI_SUITE:-all}" = topbar ]; then
   ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.TopbarOverlayTest,dev.hyprdroid.launcher.PowerMenuTest,dev.hyprdroid.launcher.PowerActionTest --no-daemon --stacktrace
 elif [ "${HYPRDROID_UI_SUITE:-all}" = quicksettings ]; then

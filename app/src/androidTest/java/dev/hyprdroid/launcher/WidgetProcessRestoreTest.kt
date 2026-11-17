@@ -33,11 +33,17 @@ class WidgetProcessRestoreTest {
             assertFalse(file.exists())
             val previous = repository.settings.first().panels
             val previousQuickSettings = repository.quickSettings.first()
+            val previousDock = repository.settings.first().dockComponents
+            val dockApps = LauncherCatalog(context).load().take(2).map { it.componentId }
+            previousDock.forEach { repository.setFavorite(it, false) }
+            dockApps.forEach { repository.setFavorite(it, true) }
+            repository.placeFavoriteBefore(dockApps[1], dockApps[0])
             val previousTopbar = repository.topbar.first()
             repository.setTopbar { dev.hyprdroid.launcher.model.TopbarSettings(widthPercent = 72, heightDp = 64, opacityPercent = 75,
                 appRules = mapOf("example.restore" to dev.hyprdroid.launcher.model.AppBarRule.HIDE)) }
             repository.setQuickSettings(QuickSettingsConfig(listOf("QS_VOLUME", "QS_WIFI")))
-            repository.setPanel(PanelSide.LEFT, previous.left.copy(modules = previous.left.modules + "QS_BRIGHTNESS"))
+            repository.setPanel(PanelSide.LEFT, previous.left.copy(modules = previous.left.modules + "QS_BRIGHTNESS",
+                activation = PanelActivation.TAP_SWIPE, swipeThresholdDp = 72))
             assertTrue(previous.left.widgets.isEmpty() && previous.right.widgets.isEmpty())
             val id = session.host.allocateAppWidgetId()
             val provider = ComponentName(context.packageName + ".test", FixtureWidgetProvider::class.java.name)
@@ -52,6 +58,7 @@ class WidgetProcessRestoreTest {
             repository.setWallpaper(gif.toString()); input.delete()
             file.writeText(JSONObject().put("id", id).put("provider", provider.flattenToString()).put("panels", PanelsCodec.encode(previous))
                 .put("gif", gif.toString()).put("previousWallpaper", oldWallpaper ?: JSONObject.NULL)
+                .put("dock", org.json.JSONArray(dockApps.reversed())).put("previousDock", org.json.JSONArray(previousDock))
                 .put("quickSettings", QuickSettingsCodec.write(previousQuickSettings)).put("topbar", TopbarCodec.write(previousTopbar)).toString())
         } else {
             assertEquals("verify", phase)
@@ -66,6 +73,10 @@ class WidgetProcessRestoreTest {
             assertTrue(File(requireNotNull(gif.path)).isFile)
             val id = fixture.getInt("id")
             val saved = repository.settings.first().panels.left
+            assertEquals(PanelActivation.TAP_SWIPE, saved.activation)
+            assertEquals(72, saved.swipeThresholdDp)
+            val dock = fixture.getJSONArray("dock")
+            assertEquals(List(dock.length()) { dock.getString(it) }, repository.settings.first().dockComponents)
             assertTrue("QS_BRIGHTNESS" in saved.modules)
             assertEquals(listOf(id), saved.widgets.map { it.appWidgetId })
             assertTrue(saved.modules.contains("ANDROID_WIDGET:$id"))
@@ -111,6 +122,9 @@ class WidgetProcessRestoreTest {
             repository.setWallpaper(if (fixture.isNull("previousWallpaper")) null else fixture.getString("previousWallpaper"))
             repository.setQuickSettings(QuickSettingsCodec.read(fixture.getString("quickSettings")))
             repository.setTopbar { TopbarCodec.read(fixture.getString("topbar")) }
+            repository.settings.first().favorites.forEach { repository.setFavorite(it, false) }
+            val oldDock = fixture.getJSONArray("previousDock")
+            for (index in 0 until oldDock.length()) repository.setFavorite(oldDock.getString(index), true)
             AnimatedWallpaperFiles.remove(context, gif)
             session.cleanup(repository)
             assertFalse(session.host.appWidgetIds.contains(id))

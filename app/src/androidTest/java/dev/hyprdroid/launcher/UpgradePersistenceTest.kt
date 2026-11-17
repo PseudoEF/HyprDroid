@@ -71,8 +71,11 @@ class UpgradePersistenceTest {
             shell.reorderPanelModule(PanelSide.RIGHT, "QUICK_LAUNCH", -1)
             shell.setQuickSettings(QuickSettingsConfig(listOf("QS_VOLUME", "QS_WIFI", "QS_BRIGHTNESS")))
             shell.setTopbar { TopbarSettings(TopbarMode.ALWAYS, appRules = mapOf("example.legacy" to AppBarRule.SHOW)) }
-            val right = shell.settings.first().panels.right
-            shell.setPanel(PanelSide.RIGHT, right.copy(modules = right.modules + "QS_TORCH"))
+            // Seed also runs against the pinned old APK: avoid generated copy signatures
+            // when the current PanelSettings adds optional fields.
+            val panelDocument = JSONObject(PanelsCodec.encode(shell.settings.first().panels))
+            panelDocument.getJSONObject("right").getJSONArray("modules").put("QS_TORCH")
+            shell.setPanel(PanelSide.RIGHT, PanelsCodec.decode(panelDocument.toString()).right)
             val image = android.graphics.Bitmap.createBitmap(2, 2, android.graphics.Bitmap.Config.ARGB_8888)
             image.eraseColor(android.graphics.Color.rgb(30, 70, 100))
             wallpaperFile.outputStream().use { assertTrue(image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) }

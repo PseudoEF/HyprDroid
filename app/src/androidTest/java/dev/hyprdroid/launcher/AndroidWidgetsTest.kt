@@ -108,7 +108,7 @@ class AndroidWidgetsTest {
             choose(false, approveBind = false)
             compose.waitUntil(8_000) { state().pendingWidget == null }
             assertTrue(state().panels.left.widgets.isEmpty())
-            assertTrue(session.host.appWidgetIds.isEmpty())
+            compose.waitUntil(8_000) { session.host.appWidgetIds.isEmpty() }
             choose(true)
             waitText("Fixture widget configuration")
             val cancelled = state().pendingWidget!!.widget.appWidgetId
@@ -188,7 +188,7 @@ class AndroidWidgetsTest {
             device.pressBack(); gone("left-panel")
 
             runBlocking {
-                repository.setPanel(PanelSide.LEFT, state().panels.left.copy(scope = PanelScope.EVERYWHERE))
+                repository.setPanel(PanelSide.LEFT, state().panels.left.copy(scope = PanelScope.EVERYWHERE, activation = PanelActivation.TAP_SWIPE))
                 repository.setOverlay(state().overlay.copy(enabled = true))
             }
             shell("appops set ${context.packageName} SYSTEM_ALERT_WINDOW allow")
