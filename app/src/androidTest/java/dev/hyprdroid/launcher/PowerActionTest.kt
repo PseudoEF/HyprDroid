@@ -46,6 +46,11 @@ class PowerActionTest {
             assertEquals(0, info.eventTypes)
             assertEquals(0, info.capabilities)
             assertEquals(0, info.flags)
+            // Only instrumentation inspects SystemUI to verify the result. The product
+            // service above retains zero window capabilities, flags and event types.
+            automation.serviceInfo = automation.serviceInfo.apply {
+                flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+            }
             scenario.onActivity { assertTrue(PowerDialogService.showPowerDialog()) }
             fun find(node: AccessibilityNodeInfo?, depth: Int = 0): Boolean {
                 if (node == null || depth > 20) return false
