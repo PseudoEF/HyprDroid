@@ -27,11 +27,17 @@ class WidgetProcessRestoreTest {
         val phase = InstrumentationRegistry.getArguments().getString("widgetPhase") ?: error("Explicit widget phase required")
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val repository = ShellRepository(context)
+        val workspaces = WorkspaceRepository(context)
         val session = PanelWidgetHost.get(context)
         val file = File(context.filesDir, "widget-process-fixture.json")
         if (phase == "seed") {
             assertFalse(file.exists())
             val previous = repository.settings.first().panels
+            val previousSessions = workspaces.sessions.first()
+            val assigned = LauncherCatalog(context).load().take(2).map { it.componentId }
+            assertEquals(2, assigned.size)
+            workspaces.setSessions { WorkspaceSessions(true).assign(0, assigned[0], true).assign(0, assigned[1], true).assign(1, assigned[1], true) }
+            workspaces.recordSession(SessionEvent(73L, 0, "fixture", "unverified"))
             assertTrue(previous.left.widgets.isEmpty() && previous.right.widgets.isEmpty())
             val id = session.host.allocateAppWidgetId()
             val provider = ComponentName(context.packageName + ".test", FixtureWidgetProvider::class.java.name)
@@ -45,10 +51,15 @@ class WidgetProcessRestoreTest {
             val gif = AnimatedWallpaperFiles.importGif(context, android.net.Uri.fromFile(input))
             repository.setWallpaper(gif.toString()); input.delete()
             file.writeText(JSONObject().put("id", id).put("provider", provider.flattenToString()).put("panels", PanelsCodec.encode(previous))
-                .put("gif", gif.toString()).put("previousWallpaper", oldWallpaper ?: JSONObject.NULL).toString())
+                .put("gif", gif.put("sessions", SessionsCodec.write(previousSessions)).put("assigned", org.json.JSONArray(assigned)).toString()).put("previousWallpaper", oldWallpaper ?: JSONObject.NULL).toString())
         } else {
             assertEquals("verify", phase)
             val fixture = JSONObject(file.readText())
+            val restoredSessions = workspaces.sessions.first()
+            assertTrue(restoredSessions.enabled)
+            assertEquals(List(2) { fixture.getJSONArray("assigned").getString(it) }, restoredSessions.apps[0])
+            assertEquals(listOf(fixture.getJSONArray("assigned").getString(1)), restoredSessions.apps[1])
+            assertTrue(workspaces.sessionEvents.first().any { it.time == 73L && it.result == "unverified" })
             val gif = android.net.Uri.parse(fixture.getString("gif"))
             assertEquals(gif.toString(), repository.settings.first().wallpaperUri)
             assertTrue(File(requireNotNull(gif.path)).isFile)
@@ -93,6 +104,8 @@ class WidgetProcessRestoreTest {
             AnimatedWallpaperFiles.remove(context, gif)
             session.cleanup(repository)
             assertFalse(session.host.appWidgetIds.contains(id))
+            workspaces.setSessions { SessionsCodec.read(fixture.getString("sessions")) }
+            workspaces.clearSessionEvents()
             file.delete()
         }
     }

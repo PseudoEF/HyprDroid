@@ -43,7 +43,13 @@ fun WorkspaceSessionsScreen(initialWorkspace: Int, onClose: () -> Unit, model: S
             } }
             item { Text("Назначения независимы от иконок рабочего стола. Изменения сохраняются сразу. Переключение workspace не останавливает и не запускает приложения автоматически.") }
             item { Row { Text("Включить сессии", Modifier.weight(1f)); Switch(settings?.enabled == true, model::enabled, enabled = settings != null, modifier = Modifier.testTag("sessions-enabled")) } }
-            item { Row { repeat(WORKSPACE_COUNT) { index -> TextButton(onClick = { workspace = index }) { Text(if (workspace == index) "[${index + 1}]" else "${index + 1}") } } }
+            item {
+                Row {
+                    repeat(WORKSPACE_COUNT) { index ->
+                        TextButton(onClick = { workspace = index }) { Text(if (workspace == index) "[${index + 1}]" else "${index + 1}") }
+                    }
+                }
+            }
             val value = settings
             if (value != null) {
                 val assigned = value.apps[workspace]
