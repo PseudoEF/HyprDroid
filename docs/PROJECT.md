@@ -2,7 +2,7 @@
 
 ## Назначение
 
-HyprDroid Mobile — экспериментальная Android HOME-оболочка, вдохновлённая Hyprland. Минимальная версия Android — 10 (API 29), compileSdk/targetSdk — 35. Для использования не нужны root, Shizuku, ADB, AccessibilityService, разблокировка загрузчика или опасные разрешения.
+HyprDroid Mobile — экспериментальная Android HOME-оболочка, вдохновлённая Hyprland. Минимальная версия Android — 10 (API 29), compileSdk/targetSdk — 35. Базовый лаунчер работает без root, Shizuku, ADB, AccessibilityService, разблокировки загрузчика или опасных разрешений. Отдельные Quick Settings используют добровольный доступ, описанный ниже.
 
 Инструкции — в [README](../README.md), состояние задач — в [ROADMAP](ROADMAP.md), результаты тестирования — в [BUILD](BUILD.md).
 

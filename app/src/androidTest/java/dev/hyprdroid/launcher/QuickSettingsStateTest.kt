@@ -28,6 +28,8 @@ class QuickSettingsStateTest {
         val audio = context.getSystemService(AudioManager::class.java)
         val volume = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
         val controller = QuickSettingsController.get(context)
+        val declared = context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_PERMISSIONS).requestedPermissions.orEmpty()
+        assertFalse("Media controls must not request unrelated audio-routing access", Manifest.permission.MODIFY_AUDIO_SETTINGS in declared)
         fun await(condition: () -> Boolean) {
             val deadline = SystemClock.uptimeMillis() + 8_000
             while (!condition() && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50)
