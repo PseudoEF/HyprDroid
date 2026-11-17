@@ -67,7 +67,7 @@ internal class TopbarOverlay(private val context: Context, private val windows: 
             left = insets.left; right = insets.right; top = insets.top
         }
         val available = (width - left - right - dp(16)).coerceAtLeast(dp(120))
-        val barWidth = (available * settings.widthPercent / 100).coerceAtMost(dp(760))
+        val barWidth = (available * settings.widthPercent / 100).coerceAtLeast(dp(160).coerceAtMost(available)).coerceAtMost(dp(760))
         val next = listOf(state, barWidth, top, left, right, settings.heightDp, settings.opacityPercent)
         if (next == key) { view?.visibility = if (ime) View.INVISIBLE else View.VISIBLE; owner.visible(state == BarVisibility.BAR && !ime); return }
         remove(); key = next

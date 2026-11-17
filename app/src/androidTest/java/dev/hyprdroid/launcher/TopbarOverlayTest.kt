@@ -53,6 +53,10 @@ class TopbarOverlayTest {
             assertTrue(device.wait(Until.hasObject(By.text("Home")), 8_000))
             assertTrue(device.findObject(By.text("Home")).visibleBounds.right <= device.displayWidth)
             device.setOrientationNatural()
+            runBlocking { repo.setTopbar { it.copy(widthPercent = 50) } }
+            assertTrue(device.wait(Until.hasObject(By.desc("Меню оболочки")), 8_000))
+            assertTrue(device.findObject(By.desc("Меню оболочки")).visibleBounds.right <= device.displayWidth)
+            runBlocking { repo.setTopbar { it.copy(widthPercent = 96) } }
             captureShellScreen("v09-global-topbar")
             runBlocking { repo.setTopbar { it.copy(appRules = emptyMap()) } }
             assertTrue("Auto hides the fixture's declared Game category", device.wait(Until.gone(By.text("Home")), 8_000))

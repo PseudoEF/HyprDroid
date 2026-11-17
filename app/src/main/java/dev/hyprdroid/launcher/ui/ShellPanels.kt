@@ -70,8 +70,8 @@ fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>
                             }
                         }
                     }
-                    ShellClock()
-                    onSettings?.let { IconButton(onClick = it, modifier = Modifier.testTag("topbar-settings")) { Icon(Icons.Default.Settings, "Настройки HyprDroid") } }
+                    if (home || maxWidth >= 260.dp) ShellClock()
+                    if (home || maxWidth >= 260.dp) onSettings?.let { IconButton(onClick = it, modifier = Modifier.testTag("topbar-settings")) { Icon(Icons.Default.Settings, "Настройки HyprDroid") } }
                     onDrawer?.let { IconButton(onClick = it) { DrawerGlyph("Открыть app drawer") } }
                     if (showRight) onSidebar?.let { IconButton(onClick = it, modifier = Modifier.testTag("sidebar-open")) { Icon(Icons.Default.Menu, "Открыть Sidebar") } }
                     if (showLeft) onLeftPanel?.let { IconButton(onClick = it, modifier = Modifier.testTag("left-panel-open")) { Text("◧", color = Mocha.Lavender, modifier = Modifier.semantics { contentDescription = "Открыть левую панель" }) } }
