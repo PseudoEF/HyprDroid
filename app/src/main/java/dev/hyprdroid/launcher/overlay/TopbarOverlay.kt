@@ -41,7 +41,7 @@ internal class TopbarOverlay(private val context: Context, private val windows: 
     private var previousPackage: String? = null
     var foregroundPackage: String? = null; private set
     private var category = ForegroundCategory.UNKNOWN
-    fun reveal() { lastTouch = SystemClock.elapsedRealtime(); revealUntil = lastTouch + 20_000; key = null; render() }
+    fun reveal() { ime = false; lastTouch = SystemClock.elapsedRealtime(); revealUntil = lastTouch + 20_000; key = null; render() }
     fun update(home: Boolean, safe: Boolean, suspended: Boolean) {
         if (this.home != home) lastTouch = SystemClock.elapsedRealtime()
         this.home = home; this.safe = safe; this.suspended = suspended

@@ -15,6 +15,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.hyprdroid.launcher.data.ShellRepository
 import dev.hyprdroid.launcher.model.QuickSettingsConfig
@@ -46,7 +48,7 @@ fun ControlCenter(onClose: () -> Unit, onEdit: () -> Unit, onPower: (() -> Unit)
                             Text(java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(Date(status.now)), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("quick-date"))
                             Text("Батарея · ${status.battery?.let { "$it%" } ?: "недоступно"}${if (status.charging) " · зарядка" else ""}", style = MaterialTheme.typography.bodySmall)
                         }
-                        onPower?.let { action -> IconButton(onClick = action, modifier = Modifier.testTag("power-open")) { Text("⏻", color = Mocha.Mauve) } }
+                        onPower?.let { action -> IconButton(onClick = action, modifier = Modifier.testTag("power-open").semantics { contentDescription = "Питание" }) { Text("⏻", color = Mocha.Mauve) } }
                         IconButton(onClick = onEdit) { Icon(Icons.Default.Settings, "Настроить Quick Settings") }
                         IconButton(onClick = onClose) { Icon(Icons.Default.Close, "Закрыть Control Center") }
                     }

@@ -4,6 +4,8 @@ import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,7 +24,7 @@ fun PowerMenu(onClose: () -> Unit) {
     Box(Modifier.fillMaxSize().testTag("power-menu")) {
         Box(Modifier.fillMaxSize().background(Mocha.Base.copy(alpha = .6f)).clickable(onClick = onClose))
         ShellSurface(Modifier.align(Alignment.Center).safeDrawingPadding().padding(20.dp).widthIn(max = 440.dp).fillMaxWidth()) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Питание", style = MaterialTheme.typography.headlineSmall)
                 Text("Выключение и перезагрузка выполняются только в системном меню Android.")
                 if (!available) Text("Чтобы открыть его отсюда, включите необязательную службу «HyprDroid · системное меню питания» в специальных возможностях. Она не читает экраны и не отслеживает приложения. Можно пользоваться физическими кнопками устройства.")
