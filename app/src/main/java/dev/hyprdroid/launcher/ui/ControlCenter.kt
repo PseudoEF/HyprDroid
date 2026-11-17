@@ -38,7 +38,7 @@ fun ControlCenter(onClose: () -> Unit, onEdit: () -> Unit) {
         BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().padding(12.dp)) {
             ShellSurface(Modifier.align(Alignment.TopCenter).widthIn(max = 520.dp).fillMaxWidth().heightIn(max = maxHeight * .85f)
                 .panelDismissGestures(PanelDismissDirection.UP, { !scroll.canScrollForward }, onClose).testTag("quick-shade-surface")) {
-                Column(Modifier.verticalScroll(scroll, enabled = scroll.maxValue > 0).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(Modifier.fillMaxWidth().heightIn(min = 96.dp)
                         .panelDismissGestures(PanelDismissDirection.UP, onDismiss = onClose, header = true).testTag("control-dismiss-header"), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
@@ -49,10 +49,12 @@ fun ControlCenter(onClose: () -> Unit, onEdit: () -> Unit) {
                         IconButton(onClick = onEdit) { Icon(Icons.Default.Settings, "Настроить Quick Settings") }
                         IconButton(onClick = onClose) { Icon(Icons.Default.Close, "Закрыть Control Center") }
                     }
-                    error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                    configuration?.let { saved ->
-                        if (saved.topbar.isEmpty()) Text("Плитки отключены. Добавьте их через настройки шторки.")
-                        QuickSettingsContent(saved.topbar, onExternal = onClose)
+                    Column(Modifier.weight(1f, fill = false).verticalScroll(scroll, enabled = scroll.maxValue > 0)) {
+                        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                        configuration?.let { saved ->
+                            if (saved.topbar.isEmpty()) Text("Плитки отключены. Добавьте их через настройки шторки.")
+                            QuickSettingsContent(saved.topbar, onExternal = onClose)
+                        }
                     }
                 }
             }

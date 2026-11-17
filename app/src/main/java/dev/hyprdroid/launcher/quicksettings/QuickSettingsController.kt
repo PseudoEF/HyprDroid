@@ -68,7 +68,11 @@ class QuickSettingsController private constructor(private val context: Context) 
         val write = Settings.System.canWrite(context)
         fun system(key: String) = runCatching { Settings.System.getInt(context.contentResolver, key) }.getOrNull()
         val brightness = system(Settings.System.SCREEN_BRIGHTNESS)?.takeIf { it in 1..255 }
-        val auto = system(Settings.System.SCREEN_BRIGHTNESS_MODE)?.let { it == Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC }
+        val auto = when (system(Settings.System.SCREEN_BRIGHTNESS_MODE)) {
+            Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC -> true
+            Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL -> false
+            else -> null
+        }
         val volume = runCatching { audio.getStreamVolume(AudioManager.STREAM_MUSIC) }.getOrNull()
         val max = runCatching { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }.getOrNull()
         val bt = runCatching {
