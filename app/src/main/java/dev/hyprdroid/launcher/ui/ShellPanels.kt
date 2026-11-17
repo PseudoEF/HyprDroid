@@ -54,6 +54,7 @@ fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>
             val badgeSize = maxOf(26.dp, with(density) { MaterialTheme.typography.labelLarge.lineHeight.toDp() } + 4.dp)
             val targetSize = maxOf(48.dp, badgeSize + 8.dp)
             // Keep one row: panel actions also remain available in the existing overflow menu.
+            val showDetails = home || maxWidth >= 260.dp
             val showRight = maxWidth >= 340.dp && density.fontScale <= 1.35f
             val showLeft = maxWidth >= 480.dp && density.fontScale <= 1.35f
                 Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -70,8 +71,8 @@ fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>
                             }
                         }
                     }
-                    if (home || maxWidth >= 260.dp) ShellClock()
-                    if (home || maxWidth >= 260.dp) onSettings?.let { IconButton(onClick = it, modifier = Modifier.testTag("topbar-settings")) { Icon(Icons.Default.Settings, "Настройки HyprDroid") } }
+                    if (showDetails) ShellClock()
+                    if (showDetails) onSettings?.let { IconButton(onClick = it, modifier = Modifier.testTag("topbar-settings")) { Icon(Icons.Default.Settings, "Настройки HyprDroid") } }
                     onDrawer?.let { IconButton(onClick = it) { DrawerGlyph("Открыть app drawer") } }
                     if (showRight) onSidebar?.let { IconButton(onClick = it, modifier = Modifier.testTag("sidebar-open")) { Icon(Icons.Default.Menu, "Открыть Sidebar") } }
                     if (showLeft) onLeftPanel?.let { IconButton(onClick = it, modifier = Modifier.testTag("left-panel-open")) { Text("◧", color = Mocha.Lavender, modifier = Modifier.semantics { contentDescription = "Открыть левую панель" }) } }
