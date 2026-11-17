@@ -216,3 +216,16 @@ Unit-тесты дополнены чтением схемы панелей v2 �
 Две отдельные инструментальные фазы того же запуска завершились `OK (1 test)` каждая. После создания виджета и приватного GIF выполняются force-stop и `adb install -r` того же тестового APK. В новом процессе восстанавливаются URI/файл GIF и AnimatedImageDrawable, прежний widget ID/RemoteViews/размер/порядок; очистка при запуске сохраняет выбранный GIF. Артефакт `HyprDroid-shell-ui` содержит XML, phase-отчёты и снимки. Тестовые поставщики и GIF-фикстура не входят в пользовательский APK. Проверенный код приложения совпадает с подписанным `c14d407`; далее менялись тесты, CI-проверки и документация. Для ручной целевой проверки workflow Android shell UI поддерживает suite=wallpaper; PR всегда запускает полный набор.
 
 Контракт нативного воспроизведения: [ImageDecoder](https://developer.android.com/reference/android/graphics/ImageDecoder), [AnimatedImageDrawable](https://developer.android.com/reference/android/graphics/drawable/AnimatedImageDrawable). Нативный stop/start может начинать GIF заново; сохранение точной позиции кадра не заявляется.
+
+## Quick Settings v0.8.0
+
+Локальная сборка `./gradlew :app:assembleDebug` не выполнена: JAVA_HOME/java отсутствуют. Wrapper, Gradle/Kotlin/AGP/Compose сохранены; проверка выполнена существующим CI.
+
+- [Unit-тесты, сборка и подписанная публикация](https://github.com/PseudoEF/HyprDroid/actions/runs/44054036246): SUCCESS, APK **0.8.0 / 10075**, исходники `b013adfc3df9a54eb936a952c5607f1076fa7a60`. [APK artifact](https://github.com/PseudoEF/HyprDroid/actions/runs/44054036246/artifacts/14314484489).
+- SHA-256 APK: `2af6e58c4b88405890ee3f50a6aada1e82cd3719348de4c16a3ace68d283a9c9`. applicationId и сертификат прежние; ключ не передавался в PR-проверки. About показывает 0.8.0, 10075 и этот коммит.
+- Тот же запуск: установка `adb install -r` поверх v0.7.2 / 10063 (`c14d407`), UID/firstInstallTime и SHA-256 обоих DataStore сохранены; реальные widget ID, статичный PNG, overlay и About проверены. [Отчёт обновления](https://github.com/PseudoEF/HyprDroid/actions/runs/44054036246/artifacts/14315322178).
+- [Целевой прогон Quick Settings](https://github.com/PseudoEF/HyprDroid/actions/runs/44054046155): 4 теста, включая отсутствие MODIFY_AUDIO_SETTINGS, регулировку медиагромкости, запись яркости/поворота, внешние изменения/отзыв WRITE_SETTINGS, редактор/отмену и переход из overlay в системный Wi-Fi. Успешны отдельные seed/verify после force-stop и reinstall: порядок Topbar, боковой QS-модуль, GIF и widget ID сохранены.
+
+- [Полный UI-прогон](https://github.com/PseudoEF/HyprDroid/actions/runs/44054040597): **21 tests, 0 failures/errors/skipped**, исходники того же `b013adf`. Оба этапа восстановления после force-stop/reinstall — OK; подтверждены прежние жесты, панели, Android-виджеты, GIF и новая конфигурация плиток. [Artifact с XML и снимками](https://github.com/PseudoEF/HyprDroid/actions/runs/44054040597/artifacts/14315063447).
+
+Физические фонарик, Bluetooth, аудиоустройства и OEM-ограничения не считаются проверенными эмулятором API 35. Ручной checklist — в [QUICK_SETTINGS](QUICK_SETTINGS.md). Workspace Sessions v0.7.3 отложены, PR #14 закрыт без merge; база реализации — v0.7.2.
