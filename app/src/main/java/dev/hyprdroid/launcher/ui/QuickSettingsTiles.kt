@@ -70,7 +70,6 @@ internal fun QuickSettingsSlider(tile: QuickTile, interactive: Boolean = true, o
     val controller = rememberQuickController()
     val states by controller.states.collectAsStateWithLifecycle()
     val state = states[tile] ?: QuickTileState()
-    var draft by remember(state.value) { mutableFloatStateOf(state.value ?: 0f) }
     ShellSurface(Modifier.fillMaxWidth().testTag("quick-tile-${tile.name}")) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).combinedClickable(enabled = interactive,
@@ -84,10 +83,12 @@ internal fun QuickSettingsSlider(tile: QuickTile, interactive: Boolean = true, o
                     Icon(Icons.Default.Settings, "Системные настройки ${tile.title}")
                 }
             }
-            Slider(draft, { draft = it }, enabled = interactive && state.adjustable,
-                onValueChangeFinished = { controller.adjust(tile, draft) },
+            ShellSlider(state.value ?: 0f, {}, enabled = interactive && state.adjustable,
+                onCommit = { controller.adjust(tile, it) },
                 modifier = Modifier.heightIn(min = 48.dp).testTag("quick-slider-${tile.name}").semantics { contentDescription = tile.title })
-            if (tile == QuickTile.BRIGHTNESS) Text("Оценка API · шкала Android может отличаться", style = MaterialTheme.typography.labelSmall, color = Mocha.Subtext)
+            if (tile == QuickTile.BRIGHTNESS) SettingsDetails("О шкале яркости") {
+                Text("Оценка API · шкала Android может отличаться", style = MaterialTheme.typography.labelSmall, color = Mocha.Subtext)
+            }
         }
     }
 }

@@ -72,11 +72,11 @@ internal fun WidgetSizeControls(widget: PanelWidget, enabled: Boolean, onChange:
     val info = remember(widget.appWidgetId, revision) { session.info(widget.appWidgetId) }
     Text("Размер виджета · ограничения поставщика учитываются при показе", style = MaterialTheme.typography.bodySmall)
     Text("Ширина: ${widget.widthPercent}%")
-    Slider(widget.widthPercent.toFloat(), { onChange(widget.copy(widthPercent = it.toInt())) }, valueRange = 25f..100f,
+    ShellSlider(widget.widthPercent.toFloat(), { onChange(widget.copy(widthPercent = it.toInt())) }, valueRange = 25f..100f,
         enabled = enabled && info != null && info.resizeMode and AppWidgetProviderInfo.RESIZE_HORIZONTAL != 0,
         modifier = Modifier.testTag("widget-width-${widget.appWidgetId}"))
     Text("Высота: ${widget.heightDp} dp")
-    Slider(widget.heightDp.toFloat(), { onChange(widget.copy(heightDp = it.toInt())) }, valueRange = 64f..600f,
+    ShellSlider(widget.heightDp.toFloat(), { onChange(widget.copy(heightDp = it.toInt())) }, valueRange = 64f..600f,
         enabled = enabled && info != null && info.resizeMode and AppWidgetProviderInfo.RESIZE_VERTICAL != 0,
         modifier = Modifier.testTag("widget-height-${widget.appWidgetId}"))
     if (info == null) Text("Поставщик или привязка недоступны. Можно удалить эту запись и добавить виджет заново.", color = Mocha.Subtext)

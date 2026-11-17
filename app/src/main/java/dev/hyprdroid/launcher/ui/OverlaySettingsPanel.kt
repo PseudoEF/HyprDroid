@@ -142,7 +142,9 @@ internal fun OverlaySettingsPanel(onClose: () -> Unit) {
                         PanelSlider("Высота зоны", draft.heightDp, 80f..200f, !saving) { draft = draft.copy(heightDp = it) }
                         PanelSlider("Положение по высоте", draft.positionPercent, 10f..90f, !saving, "%") { draft = draft.copy(positionPercent = it) }
                         PanelSlider("Отступ от края", draft.insetDp, 0f..64f, !saving) { draft = draft.copy(insetDp = it) }
-                        Text("Скрытый маркер сохраняет сенсорную зону. Увеличьте отступ при конфликте с Back; широкая зона может мешать приложению.", style = MaterialTheme.typography.bodySmall)
+                        SettingsDetails("О жестах и Android Back") {
+                            Text("Скрытый маркер сохраняет сенсорную зону. Увеличьте отступ при конфликте с Back; широкая зона может мешать приложению. В Home кнопки имеют приоритет. В overlay касание внутри узкого окна зоны не передаётся приложению под ним, даже в Swipe only; за его границами касания не перехватываются.", style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                     PanelCategory.OVERLAY -> {
                         Text("Где доступна панель", style = MaterialTheme.typography.titleMedium)
@@ -181,11 +183,11 @@ internal fun OverlaySettingsPanel(onClose: () -> Unit) {
 @Composable
 internal fun PanelWidthControl(draft: PanelSettings, enabled: Boolean, onChange: (PanelSettings) -> Unit) {
     Text("Ширина панели: ${draft.widthPercent}%", style = MaterialTheme.typography.titleSmall)
-    Slider(draft.widthPercent.toFloat(), { onChange(draft.copy(widthPercent = it.toInt())) }, valueRange = 50f..100f,
+    ShellSlider(draft.widthPercent.toFloat(), { onChange(draft.copy(widthPercent = it.toInt())) }, valueRange = 50f..100f,
         enabled = enabled, modifier = Modifier.testTag("panel-width"))
 }
 @Composable
 private fun PanelSlider(label: String, value: Int, range: ClosedFloatingPointRange<Float>, enabled: Boolean, unit: String = "dp", change: (Int) -> Unit) {
     Text("$label: $value $unit")
-    Slider(value.toFloat(), { change(it.toInt()) }, valueRange = range, enabled = enabled, modifier = Modifier.testTag("panel-slider-$label"))
+    ShellSlider(value.toFloat(), { change(it.toInt()) }, valueRange = range, enabled = enabled, modifier = Modifier.testTag("panel-slider-$label"))
 }

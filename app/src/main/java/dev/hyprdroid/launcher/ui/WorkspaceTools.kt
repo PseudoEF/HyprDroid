@@ -44,7 +44,7 @@ fun WorkspaceAppearanceScreen(workspace: Workspace, app: LauncherApp?, onApply: 
                 Spacer(Modifier.height(20.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { AppImage(app, Modifier.size(icon.roundToInt().dp)) }
                 Text("Размер иконок · ${icon.roundToInt()} dp", Modifier.padding(top = 24.dp))
-                Slider(value = icon, onValueChange = { icon = it }, valueRange = 36f..64f, steps = 6,
+                ShellSlider(value = icon, onValueChange = { icon = it }, valueRange = 36f..64f, steps = 6,
                     modifier = Modifier.testTag("icon-size-slider").semantics { contentDescription = "Размер иконок" })
                 Text("Плотность сетки", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))
                 GridDensity.entries.forEach { option ->
@@ -54,7 +54,7 @@ fun WorkspaceAppearanceScreen(workspace: Workspace, app: LauncherApp?, onApply: 
                     }
                 }
                 Text("Расстояние между элементами · ${spacing.roundToInt()} dp", Modifier.padding(top = 16.dp))
-                Slider(value = spacing, onValueChange = { spacing = it }, valueRange = 4f..24f, steps = 4,
+                ShellSlider(value = spacing, onValueChange = { spacing = it }, valueRange = 4f..24f, steps = 4,
                     modifier = Modifier.testTag("spacing-slider").semantics { contentDescription = "Расстояние между элементами" })
                 Text("Изменения применяются только к этому пространству. Сетка учитывает размер иконок и экрана.", color = Mocha.Subtext)
                 Button(onClick = { onApply(workspace.appearance.copy(iconSizeDp = icon.roundToInt(), spacingDp = spacing.roundToInt(), density = GridDensity.valueOf(density))) }, modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) { Text("Применить") }

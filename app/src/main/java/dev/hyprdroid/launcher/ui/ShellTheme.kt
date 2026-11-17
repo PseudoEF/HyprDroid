@@ -29,6 +29,10 @@ object Mocha {
 fun ShellTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = darkColorScheme(
         primary = Mocha.Mauve, secondary = Mocha.Lavender, tertiary = Mocha.Green,
+        onPrimary = Mocha.Base, onSecondary = Mocha.Base, onTertiary = Mocha.Base,
+        primaryContainer = Mocha.Surface, onPrimaryContainer = Mocha.Text,
+        secondaryContainer = Mocha.Surface, onSecondaryContainer = Mocha.Text,
+        tertiaryContainer = Mocha.Surface, onTertiaryContainer = Mocha.Text,
         background = Mocha.Base, surface = Mocha.Mantle, surfaceVariant = Mocha.Surface,
         onBackground = Mocha.Text, onSurface = Mocha.Text, onSurfaceVariant = Mocha.Subtext,
         outline = Mocha.Outline, error = Mocha.Red,
