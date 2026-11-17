@@ -46,7 +46,7 @@ class QuickSettingsUiTest {
                 compose.onAllNodesWithTag("quick-slider-BRIGHTNESS").assertCountEquals(1)
                 compose.onAllNodesWithTag("quick-slider-VOLUME").assertCountEquals(1)
                 captureShellScreen("v08-unified-shade")
-                compose.onNodeWithTag("quick-tile-WIFI").performScrollTo()
+                compose.onNodeWithTag("quick-tile-WIFI").assertIsDisplayed()
                 val wifi = compose.onNodeWithTag("quick-tile-WIFI").fetchSemanticsNode().boundsInRoot
                 val bluetooth = compose.onNodeWithTag("quick-tile-BLUETOOTH").fetchSemanticsNode().boundsInRoot
                 assertTrue(wifi.right <= bluetooth.left)
@@ -78,7 +78,7 @@ class QuickSettingsUiTest {
                 compose.onNodeWithContentDescription("Меню оболочки").performClick()
                 compose.onNodeWithText("Quick Settings", substring = false).performScrollTo().performClick()
                 compose.onNodeWithTag("quick-tile-WIFI").assertExists()
-                compose.onNodeWithTag("quick-tile-VOLUME").performScrollTo()
+                compose.onNodeWithTag("quick-tile-VOLUME").assertIsDisplayed()
                 compose.onNodeWithTag("quick-slider-VOLUME").assertExists()
                 compose.onNodeWithContentDescription("Закрыть Control Center").performClick()
                 compose.onNodeWithContentDescription("Меню оболочки").performClick()

@@ -51,8 +51,9 @@ class QuickSettingsStateTest {
             await { controller.states.value[QuickTile.BRIGHTNESS]?.value == null && controller.states.value[QuickTile.BRIGHTNESS]?.detail?.startsWith("Авто") == true }
             assertFalse(controller.states.value.getValue(QuickTile.BRIGHTNESS).detail.contains("%"))
             scenario.onActivity { controller.adjust(QuickTile.BRIGHTNESS, 0.2f) }
-            assertEquals(68, Settings.System.getInt(resolver, Settings.System.SCREEN_BRIGHTNESS))
+            assertEquals(Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC, Settings.System.getInt(resolver, Settings.System.SCREEN_BRIGHTNESS_MODE))
             Settings.System.putInt(resolver, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
+            Settings.System.putInt(resolver, Settings.System.SCREEN_BRIGHTNESS, 68)
             await { controller.states.value[QuickTile.BRIGHTNESS]?.adjustable == true }
             if (!audio.isVolumeFixed && audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) > 0) {
                 scenario.onActivity { controller.adjust(QuickTile.VOLUME, 0f) }
