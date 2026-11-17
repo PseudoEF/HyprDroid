@@ -55,13 +55,17 @@ class PanelDockInteractionTest {
             val origin = grid.fetchSemanticsNode().boundsInRoot.topLeft
             val start = compose.onNodeWithTag("dock-app-${apps[0]}").fetchSemanticsNode().boundsInRoot.center - origin
             val end = compose.onNodeWithTag("dock-app-${apps[2]}").fetchSemanticsNode().boundsInRoot.center - origin
+            // Pointer time alone does not advance Compose's long-press timeout.
+            compose.mainClock.autoAdvance = false
             grid.performTouchInput { down(start) }
-            SystemClock.sleep(750)
+            compose.mainClock.advanceTimeBy(1_000)
             grid.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Перетаскивание приложения"))
-            grid.performTouchInput {
-                for (step in 1..12) moveTo(start + (end - start) * (step / 12f), 30)
-                up()
+            for (step in 1..12) {
+                grid.performTouchInput { moveTo(start + (end - start) * (step / 12f), 30) }
+                compose.mainClock.advanceTimeBy(32)
             }
+            grid.performTouchInput { up() }
+            compose.mainClock.autoAdvance = true
             val expected = listOf(apps[1], apps[2], apps[0])
             try { compose.waitUntil(8_000) { runBlocking { repo.settings.first().dockComponents == expected } } }
             catch (error: AssertionError) {
@@ -70,7 +74,12 @@ class PanelDockInteractionTest {
             }
             assertEquals(context.packageName, device.currentPackageName)
             // A cancelled drag keeps the last committed order.
-            grid.performTouchInput { down(Offset(26f, 26f)); advanceEventTime(900); moveBy(Offset(40f, 0f)); cancel() }
+            compose.mainClock.autoAdvance = false
+            grid.performTouchInput { down(start) }
+            compose.mainClock.advanceTimeBy(1_000)
+            grid.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Перетаскивание приложения"))
+            grid.performTouchInput { moveBy(Offset(40f, 0f)); cancel() }
+            compose.mainClock.autoAdvance = true
             assertEquals(expected, runBlocking { repo.settings.first().dockComponents })
             scenario.recreate(); awaitTag("dock-grid")
             assertEquals(expected, runBlocking { repo.settings.first().dockComponents })
@@ -80,6 +89,7 @@ class PanelDockInteractionTest {
             compose.onNodeWithContentDescription("Убрать из dock: ${apps[2]}").performClick()
             compose.waitUntil(5_000) { runBlocking { apps[2] !in repo.settings.first().favorites } }
         } finally {
+            compose.mainClock.autoAdvance = true
             scenario.close()
             runBlocking {
                 repo.settings.first().favorites.forEach { repo.setFavorite(it, false) }
