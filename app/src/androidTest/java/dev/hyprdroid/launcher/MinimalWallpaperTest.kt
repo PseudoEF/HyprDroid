@@ -135,7 +135,7 @@ class MinimalWallpaperTest {
             scenario.onActivity { ViewModelProvider(it)[WorkspaceViewModel::class.java].useSystemWallpaper() }
             compose.waitUntil(10_000) { state().wallpaperUri == null }
             gone("animated-wallpaper")
-            assertFalse(File(imported!!.path!!).exists())
+            compose.waitUntil(8_000) { !File(imported!!.path!!).exists() }
         } finally {
             scenario.close()
             runBlocking { repository.setPresentation(previous.presentation); repository.setWallpaper(previous.wallpaperUri) }

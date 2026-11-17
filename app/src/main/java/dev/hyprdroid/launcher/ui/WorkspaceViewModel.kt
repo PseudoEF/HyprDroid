@@ -22,7 +22,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.first
 import dev.hyprdroid.launcher.data.AnimatedWallpaperFiles
@@ -184,7 +183,7 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
             } catch (error: CancellationException) {
                 throw error
             } catch (_: IOException) {
-                showMessage("Не удалось открыть фон. GIF: до 24 МиБ и 8192 px по стороне. Предыдущий фон сохранён.")
+                showMessage("Не удалось открыть фон. GIF: до 24 МиБ, 8 Мп и 8192 px по стороне. Предыдущий фон сохранён.")
             } catch (_: OutOfMemoryError) {
                 showMessage("Недостаточно памяти для этого изображения. Выберите файл меньшего размера.")
             } catch (_: RuntimeException) {

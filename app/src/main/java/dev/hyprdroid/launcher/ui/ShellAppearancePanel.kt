@@ -51,7 +51,7 @@ internal fun ShellAppearancePanel(value: ShellPresentation, saving: Boolean, onC
                     Switch(value.wallpaperMotion, { onChange(value.copy(wallpaperMotion = it)) }, enabled = !saving, modifier = Modifier.testTag("wallpaper-motion"))
                     Text("Анимация GIF на рабочем столе")
                 }
-                Text("GIF: до 24 МиБ, декодирование до 1024 px. Анимация останавливается вне Home, под панелями и в энергосбережении.", style = MaterialTheme.typography.bodySmall)
+                Text("GIF: до 24 МиБ и 8 Мп; декодирование до 1024 px (512 на малом объёме памяти). Анимация останавливается вне Home, под панелями и в энергосбережении.", style = MaterialTheme.typography.bodySmall)
                 Text("Dock", style = MaterialTheme.typography.titleMedium)
                 if (value.dockVisibility == DockVisibility.AUTO) Text("Скрывается через 3,5 секунды. Касание фона снова показывает dock.", style = MaterialTheme.typography.bodySmall)
                 DockVisibility.entries.forEach { visibility ->
