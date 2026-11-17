@@ -113,7 +113,7 @@ class AndroidWidgetsTest {
             waitText("Fixture widget configuration")
             val cancelled = state().pendingWidget!!.widget.appWidgetId
             device.findObject(By.text("Cancel widget")).click()
-            compose.waitUntil(8_000) { state().pendingWidget == null }
+            compose.waitUntil(8_000) { state().pendingWidget == null && !session.host.appWidgetIds.contains(cancelled) }
             assertFalse(session.host.appWidgetIds.contains(cancelled))
             assertTrue(state().panels.left.widgets.isEmpty())
 

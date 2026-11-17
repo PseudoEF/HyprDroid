@@ -33,8 +33,8 @@ class MinimalWallpaperTest {
     private val device get() = UiDevice.getInstance(instrumentation)
     private val repository get() = ShellRepository(context)
     private fun state() = runBlocking { repository.settings.first() }
-    private fun await(tag: String) = compose.waitUntil(15_000) { compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() }
-    private fun gone(tag: String) = compose.waitUntil(10_000) { compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isEmpty() }
+    private fun await(tag: String) = compose.waitUntil(15_000) { compose.onAllNodesWithTag(tag).fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty() }
+    private fun gone(tag: String) = compose.waitUntil(10_000) { compose.onAllNodesWithTag(tag).fetchSemanticsNodes(atLeastOneRootRequired = false).isEmpty() }
     private fun menu(item: String) {
         compose.onNodeWithContentDescription("Меню оболочки").performClick()
         compose.onNodeWithText(item, substring = false).performScrollTo().performClick()
@@ -101,13 +101,10 @@ class MinimalWallpaperTest {
                 assertTrue(clickDocument(By.desc("Show roots")))
                 assertTrue(clickDocument(By.text("Images")))
                 assertTrue(clickDocument(By.text("HyprDroidTests")))
-                // Image grids hide filename text. Prefer the accessible document description,
-                // otherwise switch DocumentsUI to its normal list view before selecting by name.
-                picked = clickDocument(By.descContains(name), 2_000)
-                if (!picked) {
-                    clickDocument(By.desc(java.util.regex.Pattern.compile("(?i).*list.*")), 3_000)
-                    picked = clickDocument(By.text(name))
-                }
+                // Grid descriptions can target Quick View rather than return a document URI.
+                // Select the actual filename row in DocumentsUI's normal list mode.
+                assertTrue(clickDocument(By.desc(java.util.regex.Pattern.compile("(?i).*list.*")), 5_000))
+                picked = clickDocument(By.text(name))
             }
             if (!picked) {
                 captureShellScreen("v072-picker-failure")
