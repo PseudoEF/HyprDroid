@@ -24,13 +24,23 @@ class PowerActionTest {
         fun await(condition: () -> Boolean) { val end = SystemClock.uptimeMillis() + 15_000; while (!condition() && SystemClock.uptimeMillis() < end) SystemClock.sleep(100); assertTrue(condition()) }
         val previous = shell("settings get secure enabled_accessibility_services")
         val oldEnabled = shell("settings get secure accessibility_enabled")
-        val component = context.packageName + "/.power.PowerDialogService"
+        val component = android.content.ComponentName(context, PowerDialogService::class.java).flattenToString()
         val services = if (previous == "null" || previous.isEmpty()) component else "$previous:$component"
         val scenario = ActivityScenario.launch(MainActivity::class.java)
         try {
+            // Model the user's separate approval for restricted sideloaded settings on API33+.
+            // This exists only in the emulator fixture; the app never changes this app-op.
+            shell("appops set ${context.packageName} ACCESS_RESTRICTED_SETTINGS allow")
+            instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+            val manager = context.getSystemService(AccessibilityManager::class.java)
+            val installed = manager.installedAccessibilityServiceList.filter { it.resolveInfo.serviceInfo.packageName == context.packageName }
+            assertTrue("Power service must be discoverable: ${installed.map { it.id }}", installed.any { it.resolveInfo.serviceInfo.name == PowerDialogService::class.java.name })
             shell("settings put secure enabled_accessibility_services ${quote(services)}")
             shell("settings put secure accessibility_enabled 1")
-            await { PowerDialogService.available.value }
+            try { await { PowerDialogService.available.value } }
+            catch (error: AssertionError) {
+                throw AssertionError("Power bind failed. Setting=${shell("settings get secure enabled_accessibility_services")}; installed=${installed.map { it.id }}; enabled=${manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK).map { it.id }}", error)
+            }
             val info = context.getSystemService(AccessibilityManager::class.java)
                 .getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
                 .first { it.resolveInfo.serviceInfo.name.endsWith("PowerDialogService") }
@@ -50,6 +60,7 @@ class PowerActionTest {
             if (previous == "null") shell("settings delete secure enabled_accessibility_services") else shell("settings put secure enabled_accessibility_services ${quote(previous)}")
             if (oldEnabled == "null") shell("settings delete secure accessibility_enabled") else shell("settings put secure accessibility_enabled ${quote(oldEnabled)}")
             await { !PowerDialogService.available.value }
+            shell("appops set ${context.packageName} ACCESS_RESTRICTED_SETTINGS default")
             scenario.close()
         }
     }
