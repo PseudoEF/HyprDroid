@@ -9,7 +9,9 @@ enum class MarkerVisibility(val title: String, val alpha: Int) {
 }
 /** Known, locally rendered modules. Unknown IDs remain data and are never executed. */
 enum class PanelModule(val title: String) {
-    QUICK_LAUNCH("Quick Launch"), SYSTEM_STATUS("System Status"), CLOCK("Часы"), DATE("Дата"), BATTERY("Батарея");
+    QUICK_LAUNCH("Quick Launch"), SYSTEM_STATUS("System Status"), CLOCK("Часы"), DATE("Дата"), BATTERY("Батарея"),
+    QS_WIFI("Wi-Fi"), QS_BLUETOOTH("Bluetooth"), QS_TORCH("Фонарик"), QS_DND("Не беспокоить"),
+    QS_BRIGHTNESS("Яркость"), QS_VOLUME("Громкость"), QS_ROTATION("Автоповорот"), QS_SETTINGS("Настройки");
     fun supports(side: PanelSide) = this != QUICK_LAUNCH || side == PanelSide.RIGHT
 }
 data class PanelSettings(

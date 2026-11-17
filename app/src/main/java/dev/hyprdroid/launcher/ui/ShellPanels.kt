@@ -44,7 +44,8 @@ fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>
     onDrawer: (() -> Unit)? = null, onSidebar: (() -> Unit)? = null, onLeftPanel: (() -> Unit)? = null,
     onMenuVisibilityChanged: (Boolean) -> Unit = {}) {
     var menuOpen by remember { mutableStateOf(false) }
-    SideEffect { onMenuVisibilityChanged(menuOpen) }
+    var quickOpen by remember { mutableStateOf(false) }
+    SideEffect { onMenuVisibilityChanged(menuOpen || quickOpen) }
     DisposableEffect(Unit) { onDispose { onMenuVisibilityChanged(false) } }
     ShellSurface(modifier) {
         BoxWithConstraints {
@@ -69,6 +70,7 @@ fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>
                         }
                     }
                     ShellClock()
+                    TopbarQuickSettings { quickOpen = it }
                     onDrawer?.let { IconButton(onClick = it) { DrawerGlyph("Открыть app drawer") } }
                     if (showRight) onSidebar?.let { IconButton(onClick = it, modifier = Modifier.testTag("sidebar-open")) { Icon(Icons.Default.Menu, "Открыть Sidebar") } }
                     if (showLeft) onLeftPanel?.let { IconButton(onClick = it, modifier = Modifier.testTag("left-panel-open")) { Text("◧", color = Mocha.Lavender, modifier = Modifier.semantics { contentDescription = "Открыть левую панель" }) } }

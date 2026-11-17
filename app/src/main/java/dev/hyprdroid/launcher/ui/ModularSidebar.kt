@@ -213,7 +213,7 @@ fun ModularSidebar(
                         }
                     } else if (!adding && !editing) item(key = PanelModuleKey(module), span = { GridItemSpan(maxLineSpan) }) {
                         androidWidgets[module]?.let { PanelAndroidWidget(it,
-                            onEdit = if (allowPanelEditing) ({ editModules(module) }) else null, interactive = allowPanelEditing) } ?: PanelStatusModule(module)
+                            onEdit = if (allowPanelEditing) ({ editModules(module) }) else null, interactive = allowPanelEditing) } ?: dev.hyprdroid.launcher.model.QuickTile.fromModule(module)?.let { QuickSettingsTile(it, interactive = allowPanelEditing, onExternal = onClose) } ?: PanelStatusModule(module)
                     }
                     }
                     if (modules.isEmpty()) item(key = SidebarChrome.EMPTY, span = { GridItemSpan(maxLineSpan) }) { Text("Модули скрыты. Настройте их через меню верхней панели.") }

@@ -66,9 +66,7 @@ class UpgradePersistenceTest {
             shell.setSidebarItem(WorkspaceItem.AppShortcut(apps[0]), true)
             shell.reorderSidebar("app:${apps[0]}", -1)
             shell.setSidebarItem(WorkspaceItem.AppShortcut(apps[1], "upgrade-shortcut-fixture"), true)
-            // This phase runs inside the pinned v0.7.1 APK with its three-argument constructor.
-            val constructor = ShellPresentation::class.java.constructors.single { it.parameterTypes.size == 3 }
-            shell.setPresentation(constructor.newInstance(DesktopMode.CLEAN, DockVisibility.AUTO, SidebarModule.entries.toSet()) as ShellPresentation)
+            shell.setPresentation(ShellPresentation(DesktopMode.CLEAN, DockVisibility.AUTO, SidebarModule.entries.toSet()))
             shell.setOverlay(OverlaySettings(true, 67, 144, 24))
             shell.reorderPanelModule(PanelSide.RIGHT, "QUICK_LAUNCH", -1)
             val image = android.graphics.Bitmap.createBitmap(2, 2, android.graphics.Bitmap.Config.ARGB_8888)

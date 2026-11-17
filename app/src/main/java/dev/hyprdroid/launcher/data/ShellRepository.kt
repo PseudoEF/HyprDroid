@@ -54,6 +54,11 @@ class ShellRepository(private val store: DataStore<Preferences>) {
     private val panels = stringPreferencesKey("panels_configuration")
     private val pendingWidget = stringPreferencesKey("pending_panel_widget")
     val settings = store.data.map(::decode).flowOn(Dispatchers.Default)
+    private val quickSettingsKey = stringPreferencesKey("quick_settings_configuration")
+    val quickSettings = store.data.map { QuickSettingsCodec.read(it[quickSettingsKey]) }.flowOn(Dispatchers.Default)
+    suspend fun setQuickSettings(value: dev.hyprdroid.launcher.model.QuickSettingsConfig) {
+        store.edit { data -> decode(data); QuickSettingsCodec.read(data[quickSettingsKey]); data[quickSettingsKey] = QuickSettingsCodec.write(value) }
+    }
 
     suspend fun setOverlay(value: OverlaySettings) {
         val safe = value.validated()

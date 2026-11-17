@@ -60,7 +60,7 @@ internal fun PanelModuleEditor(draft: PanelSettings, onChange: (PanelSettings) -
                     WidgetSizeControls(widget, enabled, resize)
                 } else if (inlinePreview) {
                     if (id == "QUICK_LAUNCH") Text("Ярлыки доступны через «Редактировать» в обычной панели Quick Launch.", style = MaterialTheme.typography.bodySmall)
-                    else PanelStatusModule(id)
+                    else QuickTile.fromModule(id)?.let { QuickSettingsTile(it, interactive = false) } ?: PanelStatusModule(id)
                 }
             }
             HorizontalDivider()
