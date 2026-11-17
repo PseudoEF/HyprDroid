@@ -118,6 +118,7 @@ class MinimalWallpaperTest {
             imported = Uri.parse(requireNotNull(state().wallpaperUri))
             assertTrue(AnimatedWallpaperFiles.isOwned(context, imported!!))
             assertTrue(File(imported!!.path!!).isFile)
+            captureShellScreen("v072-gif-picked")
             // Original picker document may disappear; the selected private copy remains playable.
             context.contentResolver.delete(source, null, null)
             menu("Все приложения"); await("app-drawer")
@@ -161,11 +162,15 @@ class MinimalWallpaperTest {
             compose.waitUntil(10_000) { state().wallpaperUri == null }
             gone("animated-wallpaper")
             compose.waitUntil(8_000) { !File(imported!!.path!!).exists() }
+        } catch (error: Throwable) {
+            runCatching { captureShellScreen("v072-test-failure") }
+            android.util.Log.e("WallpaperTest", "GIF test failed", error)
+            throw error
         } finally {
             scenario.close()
             runBlocking { repository.setPresentation(previous.presentation); repository.setWallpaper(previous.wallpaperUri) }
             imported?.let { AnimatedWallpaperFiles.remove(context, it) }
-            context.contentResolver.delete(source, null, null)
+            runCatching { context.contentResolver.delete(source, null, null) }
         }
     }
 }
