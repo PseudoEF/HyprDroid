@@ -7,7 +7,11 @@ collect_artifacts() {
 }
 trap collect_artifacts EXIT
 # Keep seeded workspaces installed for the font-size and orientation previews.
-./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.notClass=dev.hyprdroid.launcher.UpgradePersistenceTest,dev.hyprdroid.launcher.WidgetProcessRestoreTest --no-daemon --stacktrace
+if [ "${HYPRDROID_UI_SUITE:-all}" = wallpaper ]; then
+  ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.MinimalWallpaperTest --no-daemon --stacktrace
+else
+  ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.notClass=dev.hyprdroid.launcher.UpgradePersistenceTest,dev.hyprdroid.launcher.WidgetProcessRestoreTest --no-daemon --stacktrace
+fi
 # A separate pair of instrumentation invocations proves restoration after a real process death.
 # Shell binding permission is limited to this isolated emulator fixture, never product code.
 adb shell appwidget grantbind --package dev.hyprdroid.launcher --user 0

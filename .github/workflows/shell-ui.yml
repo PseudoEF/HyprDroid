@@ -8,12 +8,20 @@ on:
       - 'scripts/ci-shell-ui.sh'
       - '.github/workflows/shell-ui.yml'
   workflow_dispatch:
+    inputs:
+      suite:
+        description: UI suite (pull requests always run all tests)
+        type: choice
+        options: [all, wallpaper]
+        default: all
 permissions:
   contents: read
 jobs:
   shell-ui:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      HYPRDROID_UI_SUITE: ${{ inputs.suite || 'all' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
