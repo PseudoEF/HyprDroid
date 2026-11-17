@@ -33,7 +33,7 @@ fun ControlCenter(onClose: () -> Unit, onEdit: () -> Unit) {
         try { repository.quickSettings.collect { configuration = it } }
         catch (_: Exception) { error = "Не удалось прочитать плитки. Данные не изменены." }
     }
-    Box(Modifier.fillMaxSize().blockHomeBehind().testTag("control-center")) {
+    Box(Modifier.fillMaxSize().testTag("control-center")) {
         Box(Modifier.fillMaxSize().background(Mocha.Base.copy(alpha = .55f)).clickable(onClickLabel = "Закрыть Quick Settings", onClick = onClose).testTag("control-scrim"))
         BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().padding(12.dp)) {
             ShellSurface(Modifier.align(Alignment.TopCenter).widthIn(max = 520.dp).fillMaxWidth().heightIn(max = maxHeight * .85f)
