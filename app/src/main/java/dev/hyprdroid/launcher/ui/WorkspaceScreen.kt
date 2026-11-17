@@ -46,7 +46,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 @Composable
-fun WorkspaceScreen(model: WorkspaceViewModel) {
+fun WorkspaceScreen(model: WorkspaceViewModel, requestedScreen: String? = null, onRouteConsumed: () -> Unit = {}) {
     val state by model.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -84,7 +84,7 @@ fun WorkspaceScreen(model: WorkspaceViewModel) {
                 sidebarPlaceBefore = model::placeSidebarBefore,
                 presentation = model::setPresentation,
                 systemSettings = { action -> if (!openSystemSettings(context, action)) model.showMessage("Системные настройки недоступны.") },
-            ), onBackdropState = { value, visible -> backdrop = value; desktopVisible = visible })
+            ), onBackdropState = { value, visible -> backdrop = value; desktopVisible = visible }, requestedScreen = requestedScreen, onRouteConsumed = onRouteConsumed)
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).safeDrawingPadding().imePadding().padding(12.dp))
         }
     }
@@ -117,9 +117,11 @@ data class ShellActions(
 )
 
 @Composable
-fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (ShellPresentation, Boolean) -> Unit = { _, _ -> }) {
+fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (ShellPresentation, Boolean) -> Unit = { _, _ -> }, requestedScreen: String? = null, onRouteConsumed: () -> Unit = {}) {
     var aboutOpen by rememberSaveable { mutableStateOf(false) }
     var quickEditorOpen by rememberSaveable { mutableStateOf(false) }
+    var topbarSettingsOpen by rememberSaveable { mutableStateOf(false) }
+    var powerOpen by rememberSaveable { mutableStateOf(false) }
     // Construct the pager only after preferences load, so its initial page is the persisted one.
     if (state.settings == null) {
         BackHandler { aboutOpen = false }
@@ -135,6 +137,10 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
         return
     }
     val settings = state.settings
+    LaunchedEffect(requestedScreen) {
+        when (requestedScreen) { "topbar" -> topbarSettingsOpen = true; "quickEditor" -> quickEditorOpen = true }
+        if (requestedScreen != null) onRouteConsumed()
+    }
     val pager = rememberPagerState(initialPage = settings.selectedWorkspace, pageCount = { WORKSPACE_COUNT })
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
@@ -202,7 +208,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
     LaunchedEffect(pager, workspaceReady) {
         if (workspaceReady) snapshotFlow { pager.settledPage }.distinctUntilChanged().collect(actions.selectWorkspace)
     }
-    val overlayOpen = quickEditorOpen || shellMenuOpen || leftPanelOpen || overlaySettingsOpen || drawerOpen || controlOpen || sidebarOpen || aboutOpen || presentationPreview != null || appearanceWorkspace != null || orderWorkspace != null
+    val overlayOpen = topbarSettingsOpen || powerOpen || quickEditorOpen || shellMenuOpen || leftPanelOpen || overlaySettingsOpen || drawerOpen || controlOpen || sidebarOpen || aboutOpen || presentationPreview != null || appearanceWorkspace != null || orderWorkspace != null
     SideEffect { onBackdropState(presentation, !overlayOpen && !editing) }
     DisposableEffect(Unit) { onDispose { onBackdropState(presentation, false) } }
     LaunchedEffect(panels) {
@@ -228,6 +234,8 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
             leftPanelOpen -> leftPanelOpen = false
             overlaySettingsOpen -> overlaySettingsOpen = false
             presentationPreview != null -> if (!savingPresentation) closePresentation()
+            powerOpen -> powerOpen = false
+            topbarSettingsOpen -> topbarSettingsOpen = false
             quickEditorOpen -> quickEditorOpen = false
             aboutOpen -> aboutOpen = false
             sidebarOpen -> sidebarOpen = false
@@ -250,6 +258,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
             add(AppMenuAction("Рабочий стол и панели", shellReady, openPresentation))
             add(AppMenuAction("О приложении") { aboutOpen = true })
             add(AppMenuAction("Quick Settings · редактор") { quickEditorOpen = true })
+            add(AppMenuAction("TopBar поверх приложений") { topbarSettingsOpen = true })
             add(AppMenuAction("Все приложения", onClick = openDrawer))
             add(AppMenuAction("Quick Settings", onClick = openControl))
             add(AppMenuAction("Sidebar", panels.right.scope.home) { sidebarOpen = true })
@@ -330,10 +339,12 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
             menu = appMenu, onRetry = actions.retryApps)
     }
     AnimatedVisibility(visible = controlOpen, enter = slideInVertically { -it / 5 } + fadeIn(), exit = slideOutVertically { -it / 5 } + fadeOut()) {
-        ControlCenter(onClose = { controlOpen = false }, onEdit = { controlOpen = false; quickEditorOpen = true })
+        ControlCenter(onClose = { controlOpen = false }, onEdit = { controlOpen = false; quickEditorOpen = true }, onPower = { controlOpen = false; powerOpen = true })
     }
     if (aboutOpen) AboutScreen { aboutOpen = false }
     if (quickEditorOpen) QuickSettingsEditor { quickEditorOpen = false }
+    if (topbarSettingsOpen) TopbarSettingsPanel { topbarSettingsOpen = false }
+    if (powerOpen) PowerMenu { powerOpen = false }
     if (overlaySettingsOpen) OverlaySettingsPanel { overlaySettingsOpen = false }
     presentationPreview?.let { draft -> ShellAppearancePanel(draft, savingPresentation,
         onChange = { presentationPreview = it }, onCancel = closePresentation,

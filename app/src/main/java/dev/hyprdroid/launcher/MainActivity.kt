@@ -3,6 +3,8 @@ package dev.hyprdroid.launcher
 import android.os.Bundle
 import android.content.Intent
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import dev.hyprdroid.launcher.widgets.LocalWidgetBinding
 import dev.hyprdroid.launcher.widgets.WidgetBindingController
 import androidx.activity.ComponentActivity
@@ -18,8 +20,10 @@ import dev.hyprdroid.launcher.ui.WorkspaceViewModel
 
 class MainActivity : ComponentActivity() {
     private lateinit var widgetBinding: WidgetBindingController
+    private val route = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        route.value = intent?.getStringExtra("hyprdroid.route")
         widgetBinding = WidgetBindingController(this)
         dev.hyprdroid.launcher.overlay.OverlaySession.attach(this)
         enableEdgeToEdge(
@@ -32,9 +36,11 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val model: WorkspaceViewModel = viewModel()
-            CompositionLocalProvider(LocalWidgetBinding provides widgetBinding) { WorkspaceScreen(model) }
+            val requested by route.collectAsState()
+            CompositionLocalProvider(LocalWidgetBinding provides widgetBinding) { WorkspaceScreen(model, requested) { route.value = null } }
         }
     }
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); route.value = intent.getStringExtra("hyprdroid.route") }
     @Deprecated("Android widget host configuration uses the platform result contract")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (!widgetBinding.onActivityResult(requestCode, resultCode, data)) super.onActivityResult(requestCode, resultCode, data)

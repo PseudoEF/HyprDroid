@@ -21,11 +21,11 @@ fixture() {
   grep -q 'OK (1 test)' "$report/$phase.txt"
 }
 cp "$RUNNER_TEMP/hyprdroid-upgrade/a.json" "$report/build-a.json"
-cp "$RUNNER_TEMP/hyprdroid-distribution/HyprDroid-0.8.0-$CODE_B.json" "$report/build-b.json"
+cp "$RUNNER_TEMP/hyprdroid-distribution/HyprDroid-0.9.0-$CODE_B.json" "$report/build-b.json"
 adb install "$RUNNER_TEMP/hyprdroid-upgrade/a.apk"
 adb install "$RUNNER_TEMP/hyprdroid-upgrade/test.apk"
 adb shell appwidget grantbind --package "$package" --user 0
-fixture seed 10075 0.8.0 b013adfc3df9a54eb936a952c5607f1076fa7a60
+fixture seed 10083 0.8.0 daf280e45f5be1d64bdecb94777969772ad4a899
 adb shell appwidget revokebind --package "$package" --user 0
 # Simulate an already opted-in installation, including Android's actual special permission.
 adb shell appops set "$package" SYSTEM_ALERT_WINDOW allow
@@ -34,12 +34,12 @@ adb shell am force-stop "$package"
 adb shell run-as "$package" sha256sum files/datastore/workspaces.preferences_pb files/datastore/shell.preferences_pb > "$report/datastore-before.sha256"
 adb shell dumpsys package "$package" > "$report/package-before.txt"
 # No uninstall, clear-data, downgrade flag or replacement DataStore fixture.
-adb install -r "$RUNNER_TEMP/hyprdroid-distribution/HyprDroid-0.8.0-$CODE_B.apk" > "$report/install-update.txt"
+adb install -r "$RUNNER_TEMP/hyprdroid-distribution/HyprDroid-0.9.0-$CODE_B.apk" > "$report/install-update.txt"
 cat "$report/install-update.txt"
 grep -q Success "$report/install-update.txt"
 adb shell run-as "$package" sha256sum files/datastore/workspaces.preferences_pb files/datastore/shell.preferences_pb > "$report/datastore-after.sha256"
 cmp "$report/datastore-before.sha256" "$report/datastore-after.sha256"
-fixture verify "$CODE_B" 0.8.0 "$HYPRDROID_BUILD_COMMIT"
+fixture verify "$CODE_B" 0.9.0 "$HYPRDROID_BUILD_COMMIT"
 adb shell appops get "$package" SYSTEM_ALERT_WINDOW > "$report/overlay-permission-after.txt"
 adb shell dumpsys package "$package" > "$report/package-after.txt"
-echo "Update v0.8.0 (10075) -> v0.8.0 ($CODE_B) succeeded; UID, firstInstallTime and DataStore preserved" | tee "$report/result.txt"
+echo "Update v0.8.0 (10083) -> v0.9.0 ($CODE_B) succeeded; UID, firstInstallTime and DataStore preserved" | tee "$report/result.txt"

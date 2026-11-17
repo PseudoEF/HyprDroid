@@ -22,7 +22,7 @@ import java.util.Date
 
 /** The original Control Center evolved into the single Home Quick Settings shade. */
 @Composable
-fun ControlCenter(onClose: () -> Unit, onEdit: () -> Unit) {
+fun ControlCenter(onClose: () -> Unit, onEdit: () -> Unit, onPower: (() -> Unit)? = null) {
     val context = LocalContext.current
     val repository = remember(context) { ShellRepository(context) }
     var configuration by remember { mutableStateOf<QuickSettingsConfig?>(null) }
@@ -46,6 +46,7 @@ fun ControlCenter(onClose: () -> Unit, onEdit: () -> Unit) {
                             Text(java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(Date(status.now)), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("quick-date"))
                             Text("Батарея · ${status.battery?.let { "$it%" } ?: "недоступно"}${if (status.charging) " · зарядка" else ""}", style = MaterialTheme.typography.bodySmall)
                         }
+                        onPower?.let { action -> IconButton(onClick = action, modifier = Modifier.testTag("power-open")) { Text("⏻", color = Mocha.Mauve) } }
                         IconButton(onClick = onEdit) { Icon(Icons.Default.Settings, "Настроить Quick Settings") }
                         IconButton(onClick = onClose) { Icon(Icons.Default.Close, "Закрыть Control Center") }
                     }

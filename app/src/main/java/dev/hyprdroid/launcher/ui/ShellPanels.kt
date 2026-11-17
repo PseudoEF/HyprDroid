@@ -43,7 +43,7 @@ import java.util.Date
 @Composable
 fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>, modifier: Modifier = Modifier,
     onDrawer: (() -> Unit)? = null, onSidebar: (() -> Unit)? = null, onLeftPanel: (() -> Unit)? = null,
-    onMenuVisibilityChanged: (Boolean) -> Unit = {}, onSettings: (() -> Unit)? = null) {
+    onMenuVisibilityChanged: (Boolean) -> Unit = {}, onSettings: (() -> Unit)? = null, home: Boolean = true, onHome: (() -> Unit)? = null, onMenuRequest: (() -> Unit)? = null) {
     var menuOpen by remember { mutableStateOf(false) }
     val popupOpen = menuOpen
     SideEffect { onMenuVisibilityChanged(popupOpen) }
@@ -58,7 +58,7 @@ fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>
             val showLeft = maxWidth >= 480.dp && density.fontScale <= 1.35f
                 Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Row(Modifier.weight(1f).clipToBounds().horizontalScroll(rememberScrollState())) {
-                        repeat(WORKSPACE_COUNT) { index ->
+                        if (!home) { TextButton(onClick = { onHome?.invoke() }) { Text("Home") } } else repeat(WORKSPACE_COUNT) { index ->
                             Box(
                                 Modifier.size(targetSize).selectable(selected = current == index, role = Role.Tab, onClick = { onSelect(index) })
                                     .semantics { contentDescription = "Рабочее пространство ${index + 1}" },
@@ -76,7 +76,7 @@ fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>
                     if (showRight) onSidebar?.let { IconButton(onClick = it, modifier = Modifier.testTag("sidebar-open")) { Icon(Icons.Default.Menu, "Открыть Sidebar") } }
                     if (showLeft) onLeftPanel?.let { IconButton(onClick = it, modifier = Modifier.testTag("left-panel-open")) { Text("◧", color = Mocha.Lavender, modifier = Modifier.semantics { contentDescription = "Открыть левую панель" }) } }
                     Box {
-                        IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "Меню оболочки") }
+                        IconButton(onClick = { if (onMenuRequest != null) onMenuRequest() else menuOpen = true }) { Icon(Icons.Default.MoreVert, "Меню оболочки") }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false },
                             modifier = Modifier.sidebarClosingGesture(onClose = { menuOpen = false }).testTag("shell-menu")) {
                             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).sidebarClosingGesture(onClose = { menuOpen = false })

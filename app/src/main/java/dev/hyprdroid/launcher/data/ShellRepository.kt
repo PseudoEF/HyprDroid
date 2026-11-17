@@ -54,6 +54,11 @@ class ShellRepository(private val store: DataStore<Preferences>) {
     private val panels = stringPreferencesKey("panels_configuration")
     private val pendingWidget = stringPreferencesKey("pending_panel_widget")
     val settings = store.data.map(::decode).flowOn(Dispatchers.Default)
+    private val topbarKey = stringPreferencesKey("topbar_overlay_configuration")
+    val topbar = store.data.map { TopbarCodec.read(it[topbarKey]) }.flowOn(Dispatchers.Default)
+    suspend fun setTopbar(transform: (dev.hyprdroid.launcher.model.TopbarSettings) -> dev.hyprdroid.launcher.model.TopbarSettings) {
+        store.edit { data -> decode(data); data[topbarKey] = TopbarCodec.write(transform(TopbarCodec.read(data[topbarKey]))) }
+    }
     private val quickSettingsKey = stringPreferencesKey("quick_settings_configuration")
     val quickSettings = store.data.map { QuickSettingsCodec.read(it[quickSettingsKey]) }.flowOn(Dispatchers.Default)
     suspend fun setQuickSettings(value: dev.hyprdroid.launcher.model.QuickSettingsConfig) {
