@@ -101,9 +101,20 @@ class MinimalWallpaperTest {
                 assertTrue(clickDocument(By.desc("Show roots")))
                 assertTrue(clickDocument(By.text("Images")))
                 assertTrue(clickDocument(By.text("HyprDroidTests")))
-                picked = clickDocument(By.text(name))
+                // Image grids hide filename text. Prefer the accessible document description,
+                // otherwise switch DocumentsUI to its normal list view before selecting by name.
+                picked = clickDocument(By.descContains(name), 2_000)
+                if (!picked) {
+                    clickDocument(By.desc(java.util.regex.Pattern.compile("(?i).*list.*")), 3_000)
+                    picked = clickDocument(By.text(name))
+                }
             }
-            if (!picked) captureShellScreen("v072-picker-failure")
+            if (!picked) {
+                captureShellScreen("v072-picker-failure")
+                val hierarchy = java.io.ByteArrayOutputStream()
+                device.dumpWindowHierarchy(hierarchy)
+                android.util.Log.e("WallpaperPickerTest", hierarchy.toString("UTF-8"))
+            }
             assertTrue("System file picker must list the local GIF", picked)
             await("animated-wallpaper")
             compose.waitUntil(10_000) { (image(scenario)?.drawable as? AnimatedImageDrawable)?.isRunning == true }
