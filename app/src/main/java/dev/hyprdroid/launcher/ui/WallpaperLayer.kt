@@ -60,19 +60,26 @@ fun WallpaperLayer(uri: String?, scale: WallpaperScale = WallpaperScale.CROP, mo
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var resumed by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
     val power = remember { context.getSystemService(PowerManager::class.java) }
+    val drawable = content?.animated
+    val currentAllowed by rememberUpdatedState(motion && desktopVisible)
     var interactive by remember { mutableStateOf(power.isInteractive) }
     var powerSaving by remember { mutableStateOf(power.isPowerSaveMode) }
-    DisposableEffect(lifecycle, context) {
-        fun refresh() { resumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED); interactive = power.isInteractive; powerSaving = power.isPowerSaveMode }
+    DisposableEffect(lifecycle, context, drawable) {
+        fun refresh(screenOff: Boolean = false) {
+            resumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED); interactive = !screenOff && power.isInteractive; powerSaving = power.isPowerSaveMode
+            // STOP can pause the Compose recomposer: control the native animation synchronously too.
+            val animated = drawable as? AnimatedImageDrawable
+            if (currentAllowed && resumed && interactive && !powerSaving) { animated?.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE; animated?.start() }
+            else animated?.stop()
+        }
         val observer = LifecycleEventObserver { _, _ -> refresh() }
-        val receiver = object : BroadcastReceiver() { override fun onReceive(context: Context?, intent: Intent?) { refresh() } }
+        val receiver = object : BroadcastReceiver() { override fun onReceive(context: Context?, intent: Intent?) { refresh(intent?.action == Intent.ACTION_SCREEN_OFF) } }
         lifecycle.addObserver(observer)
         val filter = IntentFilter().apply { addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF); addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED) }
         if (Build.VERSION.SDK_INT >= 33) context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED) else context.registerReceiver(receiver, filter)
         refresh()
-        onDispose { lifecycle.removeObserver(observer); context.unregisterReceiver(receiver) }
+        onDispose { lifecycle.removeObserver(observer); context.unregisterReceiver(receiver); (drawable as? AnimatedImageDrawable)?.stop() }
     }
-    val drawable = content?.animated
     val playing = motion && desktopVisible && resumed && interactive && !powerSaving
     DisposableEffect(drawable, playing) {
         val animated = drawable as? AnimatedImageDrawable

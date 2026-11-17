@@ -31,7 +31,7 @@ internal object AnimatedWallpaperFiles {
             decoder.setTargetSize(max(1, (info.size.width * ratio).roundToInt()), max(1, (info.size.height * ratio).roundToInt()))
             decoder.setOnPartialImageListener { false }
         }
-    fun import(context: Context, source: Uri): Uri {
+    fun importGif(context: Context, source: Uri): Uri {
         val directory = File(context.filesDir, "animated-wallpapers").apply { if (!exists() && !mkdirs()) throw IOException("Cannot create wallpaper directory") }
         val target = File.createTempFile("wallpaper-", ".gif", directory)
         try {

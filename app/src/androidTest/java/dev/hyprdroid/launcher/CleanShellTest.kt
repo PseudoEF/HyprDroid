@@ -76,7 +76,8 @@ class CleanShellTest {
             gone("favorite-dock")
             compose.waitForIdle()
             captureShellScreen("v06-clean-hidden-dock")
-            compose.onNodeWithContentDescription("Открыть app drawer").performClick()
+            compose.onNodeWithContentDescription("Меню оболочки").performClick()
+            compose.onNodeWithText("Все приложения", substring = false).performClick()
             await("app-drawer")
             compose.onNodeWithTag("drawer-dismiss-header").performTouchInput { swipe(center, center + Offset(0f, 300f)) }
             gone("app-drawer")

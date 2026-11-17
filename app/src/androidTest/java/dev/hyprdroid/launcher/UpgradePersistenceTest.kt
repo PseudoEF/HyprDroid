@@ -45,7 +45,8 @@ class UpgradePersistenceTest {
         @Suppress("DEPRECATION")
         val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
         val appearance = WorkspaceAppearance(false, 60, GridDensity.RELAXED, 20)
-        val wallpaper = "content://hyprdroid.upgrade-test/image"
+        val wallpaperFile = File(context.filesDir, "upgrade-static-wallpaper.png")
+        val wallpaper = android.net.Uri.fromFile(wallpaperFile).toString()
         if (phase == "seed") {
             // The runner is fresh. Refuse to seed over any existing test/user data.
             assertFalse(baseline.exists())
@@ -65,9 +66,15 @@ class UpgradePersistenceTest {
             shell.setSidebarItem(WorkspaceItem.AppShortcut(apps[0]), true)
             shell.reorderSidebar("app:${apps[0]}", -1)
             shell.setSidebarItem(WorkspaceItem.AppShortcut(apps[1], "upgrade-shortcut-fixture"), true)
-            shell.setPresentation(ShellPresentation(DesktopMode.CLEAN, DockVisibility.AUTO))
+            // This phase runs inside the pinned v0.7.1 APK with its three-argument constructor.
+            val constructor = ShellPresentation::class.java.constructors.single { it.parameterTypes.size == 3 }
+            shell.setPresentation(constructor.newInstance(DesktopMode.CLEAN, DockVisibility.AUTO, SidebarModule.entries.toSet()) as ShellPresentation)
             shell.setOverlay(OverlaySettings(true, 67, 144, 24))
             shell.reorderPanelModule(PanelSide.RIGHT, "QUICK_LAUNCH", -1)
+            val image = android.graphics.Bitmap.createBitmap(2, 2, android.graphics.Bitmap.Config.ARGB_8888)
+            image.eraseColor(android.graphics.Color.rgb(30, 70, 100))
+            wallpaperFile.outputStream().use { assertTrue(image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) }
+            image.recycle()
             shell.setWallpaper(wallpaper)
             context.startActivity(Intent().setClassName(context.packageName + ".test", OverlayTestHostActivity::class.java.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             val host = PanelWidgetHost.get(context)
@@ -96,6 +103,8 @@ class UpgradePersistenceTest {
             val shortcut = WorkspaceItem.AppShortcut(apps[1], "upgrade-shortcut-fixture")
             assertEquals(listOf(WorkspaceItem.AppShortcut(apps[0]), WorkspaceItem.AppShortcut(apps[1]), shortcut), shell.settings.first().sidebar)
             assertEquals(wallpaper, shell.settings.first().wallpaperUri)
+            assertTrue(wallpaperFile.isFile)
+            dev.hyprdroid.launcher.ui.decodeWallpaper(context, android.net.Uri.parse(wallpaper), 64).recycle()
             assertEquals(DesktopMode.CLEAN, shell.settings.first().presentation.desktopMode)
             assertEquals(DockVisibility.AUTO, shell.settings.first().presentation.dockVisibility)
             assertEquals(SidebarModule.entries.toSet(), shell.settings.first().presentation.sidebarModules)

@@ -67,7 +67,8 @@ class SidebarInteractionTest {
                 // A native right-edge Android Back gesture, not an injected Compose swipe.
                 device.swipe(device.displayWidth - 2, device.displayHeight / 2, (device.displayWidth * .65f).toInt(), device.displayHeight / 2, 30)
                 gone("sidebar")
-                compose.onNodeWithContentDescription("Открыть app drawer").performClick()
+                compose.onNodeWithContentDescription("Меню оболочки").performClick()
+            compose.onNodeWithText("Все приложения", substring = false).performClick()
                 await("app-drawer")
                 compose.onNodeWithTag("app-drawer").performTouchInput { swipe(Offset(width * .8f, height * .5f), Offset(width * .4f, height * .5f)) }
                 compose.onNodeWithTag("sidebar").assertDoesNotExist()

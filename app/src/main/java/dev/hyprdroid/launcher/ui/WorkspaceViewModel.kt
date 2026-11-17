@@ -171,7 +171,7 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
                 withContext(NonCancellable) {
                     withContext(Dispatchers.IO) {
                         if (AnimatedWallpaperFiles.isGif(getApplication(), uri)) {
-                            imported = AnimatedWallpaperFiles.import(getApplication(), uri)
+                            imported = AnimatedWallpaperFiles.importGif(getApplication(), uri)
                         } else {
                             getApplication<Application>().contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             staticGranted = true
