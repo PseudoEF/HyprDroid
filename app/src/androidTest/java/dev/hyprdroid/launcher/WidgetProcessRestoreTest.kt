@@ -96,8 +96,14 @@ class WidgetProcessRestoreTest {
                 compose.waitUntil(10_000) { compose.onAllNodesWithTag("left-panel").fetchSemanticsNodes().isNotEmpty() }
                 compose.onNodeWithTag("sidebar-items").performScrollToIndex(saved.modules.lastIndex)
                 val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-                assertTrue(device.wait(Until.hasObject(By.text("Fixture #$id · 0")), 8_000))
+                val restoredWidget = device.wait(Until.hasObject(By.text("Fixture #$id · 0")), 8_000)
                 captureShellScreen("widget-after-process-restart")
+                if (!restoredWidget) {
+                    val hierarchy = java.io.ByteArrayOutputStream()
+                    device.dumpWindowHierarchy(hierarchy)
+                    android.util.Log.e("WidgetRestoreWindow", hierarchy.toString("UTF-8"))
+                }
+                assertTrue("The restored RemoteViews must be visible, not only the saved widget ID", restoredWidget)
             } finally { scenario.close() }
             val original = PanelsCodec.decode(fixture.getString("panels"))
             repository.setPanel(PanelSide.LEFT, original.left)
