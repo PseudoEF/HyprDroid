@@ -20,7 +20,6 @@ class PowerActionTest {
         val context = instrumentation.targetContext
         val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
         fun shell(command: String) = automation.executeShellCommand(command).use { ParcelFileDescriptor.AutoCloseInputStream(it).bufferedReader().readText().trim() }
-        fun quote(value: String) = "'" + value.replace("'", "'\\''") + "'"
         fun await(condition: () -> Boolean) { val end = SystemClock.uptimeMillis() + 15_000; while (!condition() && SystemClock.uptimeMillis() < end) SystemClock.sleep(100); assertTrue(condition()) }
         val previous = shell("settings get secure enabled_accessibility_services")
         val oldEnabled = shell("settings get secure accessibility_enabled")
@@ -35,7 +34,7 @@ class PowerActionTest {
             val manager = context.getSystemService(AccessibilityManager::class.java)
             val installed = manager.installedAccessibilityServiceList.filter { it.resolveInfo.serviceInfo.packageName == context.packageName }
             assertTrue("Power service must be discoverable: ${installed.map { it.id }}", installed.any { it.resolveInfo.serviceInfo.name == PowerDialogService::class.java.name })
-            shell("settings put secure enabled_accessibility_services ${quote(services)}")
+            shell("settings put secure enabled_accessibility_services $services")
             shell("settings put secure accessibility_enabled 1")
             try { await { PowerDialogService.available.value } }
             catch (error: AssertionError) {
@@ -57,8 +56,8 @@ class PowerActionTest {
             automation.injectInputEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK), true)
             automation.injectInputEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK), true)
         } finally {
-            if (previous == "null") shell("settings delete secure enabled_accessibility_services") else shell("settings put secure enabled_accessibility_services ${quote(previous)}")
-            if (oldEnabled == "null") shell("settings delete secure accessibility_enabled") else shell("settings put secure accessibility_enabled ${quote(oldEnabled)}")
+            if (previous == "null" || previous.isEmpty()) shell("settings delete secure enabled_accessibility_services") else shell("settings put secure enabled_accessibility_services $previous")
+            if (oldEnabled == "null") shell("settings delete secure accessibility_enabled") else shell("settings put secure accessibility_enabled $oldEnabled")
             await { !PowerDialogService.available.value }
             shell("appops set ${context.packageName} ACCESS_RESTRICTED_SETTINGS default")
             scenario.close()
