@@ -43,7 +43,7 @@ import java.util.Date
 @Composable
 fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>, modifier: Modifier = Modifier,
     onDrawer: (() -> Unit)? = null, onSidebar: (() -> Unit)? = null, onLeftPanel: (() -> Unit)? = null,
-    onMenuVisibilityChanged: (Boolean) -> Unit = {}, onSettings: (() -> Unit)? = null, home: Boolean = true, onHome: (() -> Unit)? = null, onMenuRequest: (() -> Unit)? = null) {
+    onMenuVisibilityChanged: (Boolean) -> Unit = {}, onSettings: (() -> Unit)? = null) {
     var menuOpen by remember { mutableStateOf(false) }
     val popupOpen = menuOpen
     SideEffect { onMenuVisibilityChanged(popupOpen) }
@@ -54,12 +54,11 @@ fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>
             val badgeSize = maxOf(26.dp, with(density) { MaterialTheme.typography.labelLarge.lineHeight.toDp() } + 4.dp)
             val targetSize = maxOf(48.dp, badgeSize + 8.dp)
             // Keep one row: panel actions also remain available in the existing overflow menu.
-            val showDetails = home || maxWidth >= 260.dp
             val showRight = maxWidth >= 340.dp && density.fontScale <= 1.35f
             val showLeft = maxWidth >= 480.dp && density.fontScale <= 1.35f
                 Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Row(Modifier.weight(1f).clipToBounds().horizontalScroll(rememberScrollState())) {
-                        if (!home) { TextButton(onClick = { onHome?.invoke() }) { Text("Home") } } else repeat(WORKSPACE_COUNT) { index ->
+                        repeat(WORKSPACE_COUNT) { index ->
                             Box(
                                 Modifier.size(targetSize).selectable(selected = current == index, role = Role.Tab, onClick = { onSelect(index) })
                                     .semantics { contentDescription = "Рабочее пространство ${index + 1}" },
@@ -71,13 +70,13 @@ fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>
                             }
                         }
                     }
-                    if (showDetails) ShellClock()
-                    if (showDetails) onSettings?.let { IconButton(onClick = it, modifier = Modifier.testTag("topbar-settings")) { Icon(Icons.Default.Settings, "Настройки HyprDroid") } }
+                    ShellClock()
+                    onSettings?.let { IconButton(onClick = it, modifier = Modifier.testTag("topbar-settings")) { Icon(Icons.Default.Settings, "Настройки HyprDroid") } }
                     onDrawer?.let { IconButton(onClick = it) { DrawerGlyph("Открыть app drawer") } }
                     if (showRight) onSidebar?.let { IconButton(onClick = it, modifier = Modifier.testTag("sidebar-open")) { Icon(Icons.Default.Menu, "Открыть Sidebar") } }
                     if (showLeft) onLeftPanel?.let { IconButton(onClick = it, modifier = Modifier.testTag("left-panel-open")) { Text("◧", color = Mocha.Lavender, modifier = Modifier.semantics { contentDescription = "Открыть левую панель" }) } }
                     Box {
-                        IconButton(onClick = { if (onMenuRequest != null) onMenuRequest() else menuOpen = true }) { Icon(Icons.Default.MoreVert, "Меню оболочки") }
+                        IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "Меню оболочки") }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false },
                             modifier = Modifier.sidebarClosingGesture(onClose = { menuOpen = false }).testTag("shell-menu")) {
                             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).sidebarClosingGesture(onClose = { menuOpen = false })

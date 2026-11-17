@@ -16,7 +16,6 @@ elif [ "${HYPRDROID_UI_SUITE:-all}" = quicksettings ]; then
 else
   ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.notClass=dev.hyprdroid.launcher.UpgradePersistenceTest,dev.hyprdroid.launcher.WidgetProcessRestoreTest --no-daemon --stacktrace
 fi
-adb shell pm revoke dev.hyprdroid.launcher android.permission.POST_NOTIFICATIONS || true
 # A separate pair of instrumentation invocations proves restoration after a real process death.
 # Shell binding permission is limited to this isolated emulator fixture, never product code.
 adb shell appwidget grantbind --package dev.hyprdroid.launcher --user 0

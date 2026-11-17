@@ -70,6 +70,7 @@ class UpgradePersistenceTest {
             shell.setOverlay(OverlaySettings(true, 67, 144, 24))
             shell.reorderPanelModule(PanelSide.RIGHT, "QUICK_LAUNCH", -1)
             shell.setQuickSettings(QuickSettingsConfig(listOf("QS_VOLUME", "QS_WIFI", "QS_BRIGHTNESS")))
+            shell.setTopbar { TopbarSettings(TopbarMode.ALWAYS, appRules = mapOf("example.legacy" to AppBarRule.SHOW)) }
             val right = shell.settings.first().panels.right
             shell.setPanel(PanelSide.RIGHT, right.copy(modules = right.modules + "QS_TORCH"))
             val image = android.graphics.Bitmap.createBitmap(2, 2, android.graphics.Bitmap.Config.ARGB_8888)
@@ -94,6 +95,8 @@ class UpgradePersistenceTest {
             assertEquals(original.getLong("firstInstallTime"), packageInfo.firstInstallTime)
             assertEquals(original.getString("certificate"), identity.certificateSha256)
             assertTrue(identity.versionCode > original.getLong("code"))
+            assertEquals(TopbarMode.ALWAYS, shell.topbar.first().mode) // retained, never used to create windows
+            assertEquals(AppBarRule.SHOW, shell.topbar.first().appRules["example.legacy"])
             val saved = repository.settings.first()
             assertEquals(2, saved.selectedWorkspace)
             assertEquals(listOf(apps[2], apps[0], apps[1]).map { "app:$it" }, saved.workspaces[0].items.map { it.id })

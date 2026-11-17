@@ -219,12 +219,13 @@
 - [x] Подтверждены [unit-тесты, подписанный APK 10083 и обновление 10075 → 10083](https://github.com/PseudoEF/HyprDroid/actions/runs/44064060921), [22 UI-теста и восстановление после force-stop/reinstall](https://github.com/PseudoEF/HyprDroid/actions/runs/44064069031); сохранены порядок плиток, боковой модуль, GIF и widget ID.
 - [ ] Сопоставить оценку яркости с Android на физическом устройстве в manual/auto и проверить аппаратные плитки.
 
-## Power Menu & contextual TopBar v0.9 (прототип)
+## Power Menu и Home TopBar v0.9
 
 - [x] Исследованы доступные собственные сигналы и ограничения Android15–17; нет обещания чужого fullscreen detection.
 - [x] Power Menu из Quick Settings, добровольный GLOBAL_ACTION_POWER_DIALOG, нулевые content/window capabilities и события.
-- [x] Общий Waybar, ограниченное нефокусируемое окно, Home only/Always/Auto-hide, размер/непрозрачность.
-- [x] Добровольный package-only Usage Access, Game/Video эвристика, сохранённые Auto/Show/Hide и ручное восстановление уведомлением.
+- [x] Завершён эксперимент глобального TopBar: публичные API Android17 не заменяют системный status bar. Waybar оставлен только на Home; док над заголовками приложений удалён.
+- [x] Удалены Usage Access, Game/Video эвристика, глобальный редактор и восстановление дока. Старые настройки сохранены неактивными, даже при Always visible; боковые панели не зависят от них.
 - [x] Сохранены боковые панели, master-overlay, Quick Settings, виджеты, GIF и ключи данных/подписи.
-- [x] Подтверждены [assembleDebug и unit](https://github.com/PseudoEF/HyprDroid/actions/runs/44078608075), [25 UI-тестов и восстановление после force-stop/reinstall](https://github.com/PseudoEF/HyprDroid/actions/runs/44078608027), [подписанный APK10091 и обновление с APK10083](https://github.com/PseudoEF/HyprDroid/actions/runs/44073953591).
-- [ ] Проверить реальные игры/видео/PiP/IME, Android15–17 и OEM на физическом телефоне.
+- [x] Исходный эксперимент: [25 UI-тестов](https://github.com/PseudoEF/HyprDroid/actions/runs/44078608027), [подписанный APK10091](https://github.com/PseudoEF/HyprDroid/actions/runs/44073953591). Этот APK ещё содержит глобальный док.
+- [ ] Подтвердить Home-only регрессию, сборку и обновление поверх 10091 в CI.
+- [ ] Проверить Home, системную строку и боковые панели на физическом Android17.

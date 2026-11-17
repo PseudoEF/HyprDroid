@@ -54,6 +54,8 @@ class ShellRepository(private val store: DataStore<Preferences>) {
     private val panels = stringPreferencesKey("panels_configuration")
     private val pendingWidget = stringPreferencesKey("pending_panel_widget")
     val settings = store.data.map(::decode).flowOn(Dispatchers.Default)
+    // Compatibility only. No UI/service consumes this retired configuration.
+    // Keep it independent so updates never rewrite other shell preferences.
     private val topbarKey = stringPreferencesKey("topbar_overlay_configuration")
     val topbar = store.data.map { TopbarCodec.read(it[topbarKey]) }.flowOn(Dispatchers.Default)
     suspend fun setTopbar(transform: (dev.hyprdroid.launcher.model.TopbarSettings) -> dev.hyprdroid.launcher.model.TopbarSettings) {

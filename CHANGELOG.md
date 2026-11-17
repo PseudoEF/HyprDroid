@@ -1,12 +1,12 @@
 # История изменений
 
 ## Не выпущено
-### Power Menu и глобальный TopBar v0.9
+### Power Menu и Home TopBar v0.9
 
-- Общий Waybar в Home и ограниченном overlay, три режима, размер/непрозрачность, Auto/Show/Hide по приложениям и уведомление восстановления.
-- Добровольный Usage Access только для текущего пакета/категории; эвристика Game/Video не выдаётся за fullscreen detection.
+- После исследования Android17 TopBar оставлен только на Home. Публичного API замены системного status bar нет; док над заголовками чужих приложений удалён.
+- Удалены глобальное окно, его настройки/Auto-hide, Usage Access и эвристика Game/Video. Старый JSON сохранён неактивным без сброса данных; боковые overlay-панели, Quick Settings и workspace сохранены.
 - Power Menu через опциональную AccessibilityService только для GLOBAL_ACTION_POWER_DIALOG; без событий, окон, чтения контента или привилегированных команд.
-- Аддитивные настройки; прежние панели, Quick Settings, виджеты/GIF и подпись сохранены. Подтверждены [сборка и unit](https://github.com/PseudoEF/HyprDroid/actions/runs/44078608075), [25 UI-тестов с процессным восстановлением](https://github.com/PseudoEF/HyprDroid/actions/runs/44078608027), [подписанное обновление 10083 → 10091](https://github.com/PseudoEF/HyprDroid/actions/runs/44073953591). Физический телефон не проверен; [ограничения](docs/TOPBAR_POWER.md).
+- Предыдущий экспериментальный APK10091 ещё содержит глобальный док; результаты сборки Home-only фиксируются отдельно в [BUILD](docs/BUILD.md). Физический телефон не проверен; [исследование и ограничения](docs/TOPBAR_POWER.md).
 
 ### Quick Settings v0.8
 - Доработка PR: прежний Control Center стал единой шторкой с сеткой 2×N, отдельными ползунками, часами/датой/батареей и закрытием вверх/Back/снаружи. Шестерёнка Topbar открывает настройки; редактор сокращён до checkbox и порядка.
