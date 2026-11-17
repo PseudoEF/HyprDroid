@@ -217,7 +217,7 @@ Unit-тесты дополнены чтением схемы панелей v2 �
 
 Контракт нативного воспроизведения: [ImageDecoder](https://developer.android.com/reference/android/graphics/ImageDecoder), [AnimatedImageDrawable](https://developer.android.com/reference/android/graphics/drawable/AnimatedImageDrawable). Нативный stop/start может начинать GIF заново; сохранение точной позиции кадра не заявляется.
 
-## Quick Settings v0.8.0
+## Quick Settings v0.8.0 — первоначальная итерация PR
 
 Локальная сборка `./gradlew :app:assembleDebug` не выполнена: JAVA_HOME/java отсутствуют. Wrapper, Gradle/Kotlin/AGP/Compose сохранены; проверка выполнена существующим CI.
 
@@ -229,3 +229,14 @@ Unit-тесты дополнены чтением схемы панелей v2 �
 - [Полный UI-прогон](https://github.com/PseudoEF/HyprDroid/actions/runs/44054040597): **21 tests, 0 failures/errors/skipped**, исходники того же `b013adf`. Оба этапа восстановления после force-stop/reinstall — OK; подтверждены прежние жесты, панели, Android-виджеты, GIF и новая конфигурация плиток. [Artifact с XML и снимками](https://github.com/PseudoEF/HyprDroid/actions/runs/44054040597/artifacts/14315063447).
 
 Физические фонарик, Bluetooth, аудиоустройства и OEM-ограничения не считаются проверенными эмулятором API 35. Ручной checklist — в [QUICK_SETTINGS](QUICK_SETTINGS.md). Workspace Sessions v0.7.3 отложены, PR #14 закрыт без merge; база реализации — v0.7.2.
+
+## Единая шторка Quick Settings — доработка PR #15
+
+- [Unit, debug APK и подписанное обновление](https://github.com/PseudoEF/HyprDroid/actions/runs/44064060921): SUCCESS. **0.8.0 / 10083**, source `daf280e45f5be1d64bdecb94777969772ad4a899`. [APK artifact](https://github.com/PseudoEF/HyprDroid/actions/runs/44064060921/artifacts/14318529963).
+- APK SHA-256 `9bb050a54e4ec38a5cd64958f5cd281c6ae03cded8e14c7a5c1f5b63183a47c8`; прежний applicationId и закреплённый сертификат, новый монотонный versionCode. About проверен.
+- Baseline — предыдущий распространяемый APK этого PR **10075 / b013adf**, тот же ключ. `adb install -r` сохранил UID, firstInstallTime, оба побайтовых SHA-256 DataStore, порядок верхних плиток, боковой QS_TORCH, реальные widget ID/PNG/overlay. [Отчёт](https://github.com/PseudoEF/HyprDroid/actions/runs/44064060921/artifacts/14318744450). Для первой итерации выше также подтверждено обновление с v0.7.2.
+- [Полный UI-прогон](https://github.com/PseudoEF/HyprDroid/actions/runs/44064069031): **22 tests, 0 failures/errors/skipped**; отдельные seed/verify после force-stop/reinstall — обе OK. Проверены прежние жесты/Clean/Classic/боковые панели/overlay/виджеты/GIF и новая шторка. [XML, журналы и снимки](https://github.com/PseudoEF/HyprDroid/actions/runs/44064069031/artifacts/14319453106).
+- [Целевой прогон](https://github.com/PseudoEF/HyprDroid/actions/runs/44064069191): **5 tests, 0 failures/errors/skipped**, обе фазы восстановления OK. Две колонки, отдельные ползунки, часы/дата, открытие свайпом, Back/обратный жест/снаружи, шестерёнка-настройки, компактный порядок/отмена, adaptive brightness без процента, WRITE_SETTINGS/revocation и глобальные боковые плитки.
+- Unit-тесты HLG проверяют монотонность, границы и обратное преобразование всех 255 допустимых значений; редактирование модулей сохраняет widget-записи и неизвестные ID.
+
+Локально JDK по-прежнему отсутствует; сборка подтверждена CI. Проверки — эмулятор API 35. Совпадение оценки яркости с процентом SystemUI конкретного телефона, аппаратный фонарик и OEM-поведение не объявляются проверенными; [исследование и checklist](QUICK_SETTINGS.md).
