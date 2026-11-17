@@ -107,7 +107,7 @@ class OverlaySidebarService : Service() {
         if (!Settings.canDrawOverlays(this)) { stopSelf(); return START_NOT_STICKY }
         try {
             val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(NotificationChannel(CHANNEL, "Экспериментальная Sidebar", NotificationManager.IMPORTANCE_LOW))
+            manager.createNotificationChannel(NotificationChannel(CHANNEL, "HyprDroid · overlay-панели", NotificationManager.IMPORTANCE_LOW))
             val home = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             val stop = PendingIntent.getService(this, 1, Intent(this, javaClass).setAction(STOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             val reveal = PendingIntent.getService(this, 2, Intent(this, javaClass).setAction(REVEAL), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -223,6 +223,8 @@ class OverlaySidebarService : Service() {
         }.start()
     }
     private fun disableOverlay() {
+        settings = settings.copy(enabled = false)
+        topbar.clear()
         removeWindow()
         scope.launch {
             try { repository.setOverlay(repository.settings.first().overlay.copy(enabled = false)) }

@@ -218,3 +218,13 @@
 - [x] Исследована ошибка линейного процента; HLG-оценка/обратная запись, авто без ложного процента и скрытых API.
 - [x] Подтверждены [unit-тесты, подписанный APK 10083 и обновление 10075 → 10083](https://github.com/PseudoEF/HyprDroid/actions/runs/44064060921), [22 UI-теста и восстановление после force-stop/reinstall](https://github.com/PseudoEF/HyprDroid/actions/runs/44064069031); сохранены порядок плиток, боковой модуль, GIF и widget ID.
 - [ ] Сопоставить оценку яркости с Android на физическом устройстве в manual/auto и проверить аппаратные плитки.
+
+## Power Menu & contextual TopBar v0.9 (прототип)
+
+- [x] Исследованы доступные собственные сигналы и ограничения Android15–17; нет обещания чужого fullscreen detection.
+- [x] Power Menu из Quick Settings, добровольный GLOBAL_ACTION_POWER_DIALOG, нулевые content/window capabilities и события.
+- [x] Общий Waybar, ограниченное нефокусируемое окно, Home only/Always/Auto-hide, размер/непрозрачность.
+- [x] Добровольный package-only Usage Access, Game/Video эвристика, сохранённые Auto/Show/Hide и ручное восстановление уведомлением.
+- [x] Сохранены боковые панели, master-overlay, Quick Settings, виджеты, GIF и ключи данных/подписи.
+- [ ] Подтвердить unit, взаимодействие с отдельным приложением, Power Dialog, полный UI и подписанное обновление с APK10083.
+- [ ] Проверить реальные игры/видео/PiP/IME, Android15–17 и OEM на физическом телефоне.

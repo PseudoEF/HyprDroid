@@ -157,3 +157,7 @@ Workspace Sessions v0.7.3 отложены; PR закрыт без merge. Эта
 ### Доработка UX Quick Settings в PR #15
 
 Control Center расширен до единой раскрывающейся шторки, отдельный Topbar popup удалён. Свайп вниз Home, безопасное обратное закрытие/Back/снаружи, двухколоночная сетка, фиксированный заголовок часов/даты/батареи и самостоятельные range-controls. Шестерёнка Topbar открывает прежние настройки оболочки. Компактный редактор использует те же сохранённые ID и отдельную чистую операцию `withQuickModules`, сохраняющую виджеты и неизвестные модули. Яркость — маркированная оценка HLG по публичному Settings.System; автоматический и неизвестный режимы не выдают ложный процент. [Исследование и ограничения](QUICK_SETTINGS.md#почему-яркость-могла-показывать-7-вместо-56).
+
+## Power Menu и контекстный TopBar v0.9
+
+Общий Waybar используется Home и ограниченным нефокусируемым WindowManager-окном в прежней OverlaySidebarService. TopbarSettings/TopbarCodec добавляют отдельный JSON v1 в shell, policy отделена от Android. ForegroundHints использует только добровольный Usage Access и пакет/категорию в памяти; fullscreen/контент не анализируются. Новая служба PowerDialogService одобрена пользователем только для GLOBAL_ACTION_POWER_DIALOG, без событий и window capabilities. [Режимы, исключения, lifecycle, безопасность и ограничения Android15–17](TOPBAR_POWER.md).

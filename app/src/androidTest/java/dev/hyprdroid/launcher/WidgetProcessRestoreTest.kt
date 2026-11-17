@@ -33,6 +33,9 @@ class WidgetProcessRestoreTest {
             assertFalse(file.exists())
             val previous = repository.settings.first().panels
             val previousQuickSettings = repository.quickSettings.first()
+            val previousTopbar = repository.topbar.first()
+            repository.setTopbar { dev.hyprdroid.launcher.model.TopbarSettings(widthPercent = 72, heightDp = 64, opacityPercent = 75,
+                appRules = mapOf("example.restore" to dev.hyprdroid.launcher.model.AppBarRule.HIDE)) }
             repository.setQuickSettings(QuickSettingsConfig(listOf("QS_VOLUME", "QS_WIFI")))
             repository.setPanel(PanelSide.LEFT, previous.left.copy(modules = previous.left.modules + "QS_BRIGHTNESS"))
             assertTrue(previous.left.widgets.isEmpty() && previous.right.widgets.isEmpty())
@@ -49,11 +52,15 @@ class WidgetProcessRestoreTest {
             repository.setWallpaper(gif.toString()); input.delete()
             file.writeText(JSONObject().put("id", id).put("provider", provider.flattenToString()).put("panels", PanelsCodec.encode(previous))
                 .put("gif", gif.toString()).put("previousWallpaper", oldWallpaper ?: JSONObject.NULL)
-                .put("quickSettings", QuickSettingsCodec.write(previousQuickSettings)).toString())
+                .put("quickSettings", QuickSettingsCodec.write(previousQuickSettings)).put("topbar", TopbarCodec.write(previousTopbar)).toString())
         } else {
             assertEquals("verify", phase)
             val fixture = JSONObject(file.readText())
             assertEquals(listOf("QS_VOLUME", "QS_WIFI"), repository.quickSettings.first().topbar)
+            assertEquals(72, repository.topbar.first().widthPercent)
+            assertEquals(64, repository.topbar.first().heightDp)
+            assertEquals(75, repository.topbar.first().opacityPercent)
+            assertEquals(dev.hyprdroid.launcher.model.AppBarRule.HIDE, repository.topbar.first().appRules["example.restore"])
             val gif = android.net.Uri.parse(fixture.getString("gif"))
             assertEquals(gif.toString(), repository.settings.first().wallpaperUri)
             assertTrue(File(requireNotNull(gif.path)).isFile)
@@ -97,6 +104,7 @@ class WidgetProcessRestoreTest {
             repository.setPanel(PanelSide.RIGHT, original.right)
             repository.setWallpaper(if (fixture.isNull("previousWallpaper")) null else fixture.getString("previousWallpaper"))
             repository.setQuickSettings(QuickSettingsCodec.read(fixture.getString("quickSettings")))
+            repository.setTopbar { TopbarCodec.read(fixture.getString("topbar")) }
             AnimatedWallpaperFiles.remove(context, gif)
             session.cleanup(repository)
             assertFalse(session.host.appWidgetIds.contains(id))
