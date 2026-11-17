@@ -66,18 +66,18 @@ class QuickSettingsController private constructor(private val context: Context) 
     fun hasPermission(permission: String) = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
     private fun refresh() {
         val write = Settings.System.canWrite(context)
-        fun system(key: String, fallback: Int) = runCatching { Settings.System.getInt(context.contentResolver, key, fallback) }.getOrDefault(fallback)
-        val brightness = system(Settings.System.SCREEN_BRIGHTNESS, 128).coerceIn(0, 255)
-        val auto = system(Settings.System.SCREEN_BRIGHTNESS_MODE, 0) == Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC
-        val volume = runCatching { audio.getStreamVolume(AudioManager.STREAM_MUSIC) }.getOrDefault(0)
-        val max = runCatching { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }.getOrDefault(0)
+        fun system(key: String) = runCatching { Settings.System.getInt(context.contentResolver, key) }.getOrNull()
+        val brightness = system(Settings.System.SCREEN_BRIGHTNESS)?.takeIf { it in 1..255 }
+        val auto = system(Settings.System.SCREEN_BRIGHTNESS_MODE)?.let { it == Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC }
+        val volume = runCatching { audio.getStreamVolume(AudioManager.STREAM_MUSIC) }.getOrNull()
+        val max = runCatching { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }.getOrNull()
         val bt = runCatching {
             if (Build.VERSION.SDK_INT >= 31 && !hasPermission(Manifest.permission.BLUETOOTH_CONNECT)) null
             else context.getSystemService(BluetoothManager::class.java)?.adapter?.isEnabled
         }.getOrNull()
         val wifi = runCatching { context.getSystemService(WifiManager::class.java).wifiState }.getOrNull()
         val filter = runCatching { context.getSystemService(NotificationManager::class.java).currentInterruptionFilter }.getOrNull()
-        val rotate = system(Settings.System.ACCELEROMETER_ROTATION, 0) != 0
+        val rotate = system(Settings.System.ACCELEROMETER_ROTATION)?.let { it != 0 }
         fun onOff(on: Boolean?) = when(on) { true -> "Включено"; false -> "Выключено"; null -> "Статус недоступен · в системе" }
         val wifiEnabled = when(wifi) { WifiManager.WIFI_STATE_ENABLED -> true; WifiManager.WIFI_STATE_DISABLED -> false; else -> null }
         val dnd = when(filter) { null, NotificationManager.INTERRUPTION_FILTER_UNKNOWN -> null; NotificationManager.INTERRUPTION_FILTER_ALL -> false; else -> true }
@@ -86,8 +86,8 @@ class QuickSettingsController private constructor(private val context: Context) 
             QuickTile.BLUETOOTH to QuickTileState(onOff(bt), bt),
             QuickTile.TORCH to QuickTileState(when { torchId == null -> "Нет вспышки"; !hasPermission(Manifest.permission.CAMERA) -> "Нужен доступ к камере"; !torchAvailable -> "Занят / недоступен"; else -> onOff(torch) }, torch),
             QuickTile.DND to QuickTileState(onOff(dnd), dnd),
-            QuickTile.BRIGHTNESS to QuickTileState("${if (auto) "Авто · " else ""}${brightness * 100 / 255}%${if (!write) " · в системе" else ""}", value = brightness / 255f, adjustable = write && !auto),
-            QuickTile.VOLUME to QuickTileState("Медиа · ${if (max > 0) volume * 100 / max else 0}%", volume > 0, if (max > 0) volume.toFloat() / max else 0f, max > 0 && !audio.isVolumeFixed),
+            QuickTile.BRIGHTNESS to QuickTileState(BrightnessScale.detail(brightness, auto), value = if (auto == false) brightness?.let(BrightnessScale::toSlider) else null, adjustable = write && auto == false && brightness != null),
+            QuickTile.VOLUME to if (max != null && max > 0 && volume != null) QuickTileState("Медиа · ${volume * 100 / max}%", volume > 0, volume.toFloat() / max, !audio.isVolumeFixed) else QuickTileState("Громкость недоступна"),
             QuickTile.ROTATION to QuickTileState(onOff(rotate) + if (!write) " · в системе" else "", rotate),
             QuickTile.SETTINGS to QuickTileState("Android"),
         )
@@ -101,7 +101,7 @@ class QuickSettingsController private constructor(private val context: Context) 
                 else { camera.setTorchMode(requireNotNull(torchId), torch != true); false }
             }
             QuickTile.ROTATION -> if (Settings.System.canWrite(context)) {
-                val next = if (Settings.System.getInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 0) 1 else 0
+                val next = if (Settings.System.getInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION) == 0) 1 else 0
                 check(Settings.System.putInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, next)); refresh(); false
             } else settings(tile)
             QuickTile.VOLUME -> if (audio.isVolumeFixed) settings(tile) else {
@@ -114,8 +114,8 @@ class QuickSettingsController private constructor(private val context: Context) 
         try {
             when(tile) {
                 QuickTile.VOLUME -> if (!audio.isVolumeFixed) audio.setStreamVolume(AudioManager.STREAM_MUSIC, (value.coerceIn(0f, 1f) * audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)).toInt(), 0)
-                QuickTile.BRIGHTNESS -> if (Settings.System.canWrite(context) && Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE, 0) != Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC)
-                    check(Settings.System.putInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS, (value.coerceIn(0f, 1f) * 254).toInt() + 1))
+                QuickTile.BRIGHTNESS -> if (Settings.System.canWrite(context) && Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE) == Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
+                    check(Settings.System.putInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS, BrightnessScale.toSetting(value)))
                 else -> Unit
             }
             refresh()

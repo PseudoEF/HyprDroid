@@ -6,6 +6,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -22,7 +26,7 @@ import kotlinx.coroutines.flow.first
 internal fun QuickSettingsEditor(onClose: () -> Unit) {
     val context = LocalContext.current
     val repository = remember(context) { ShellRepository(context) }
-    val controller = rememberQuickController()
+    val controller = remember(context) { dev.hyprdroid.launcher.quicksettings.QuickSettingsController.get(context) }
     val scope = rememberCoroutineScope()
     var placement by rememberSaveable { mutableIntStateOf(0) }
     var draft by remember { mutableStateOf<PanelSettings?>(null) }
@@ -33,6 +37,8 @@ internal fun QuickSettingsEditor(onClose: () -> Unit) {
     var dirty by remember { mutableStateOf(false) }
     var pendingPlacement by remember { mutableStateOf<Int?>(null) }
     var closing by remember { mutableStateOf(false) }
+    var preview by rememberSaveable { mutableStateOf(false) }
+    var access by rememberSaveable { mutableStateOf(false) }
     fun requestClose() { if (!saving) { if (dirty) closing = true else onClose() } }
     fun requestPlacement(next: Int) { if (!saving && next != placement) { if (dirty) pendingPlacement = next else placement = next } }
     BackHandler { requestClose() }
@@ -65,24 +71,35 @@ internal fun QuickSettingsEditor(onClose: () -> Unit) {
                 Text("Выберите размещение. Порядок и включение меняются только после сохранения. Боковые панели сохраняют собственные Home/Overlay-настройки.")
                 val value = draft
                 if (value != null) {
-                    Text("Долгое нажатие плитки открывает настройки. Для перестановки выберите модуль и используйте «Выше/Ниже».")
-                    // Other modules remain in the draft but are edited by the existing full panel editor.
                     val selected = value.modules.filter { QuickTile.fromModule(it) != null }
-                    PanelModuleEditor(value.copy(modules = selected, widgets = emptyList()), { edited ->
-                        val replacement = edited.modules.toMutableList()
-                        val merged = value.modules.mapNotNull { id -> if (QuickTile.fromModule(id) == null) id else if (replacement.isNotEmpty()) replacement.removeAt(0) else null } + replacement
-                        draft = value.copy(modules = merged); dirty = true
-                    }, !saving)
-                    QuickTile.entries.filter { it.moduleId !in value.modules }.forEach { tile ->
-                        TextButton(onClick = { draft = value.copy(modules = value.modules + tile.moduleId); dirty = true }, enabled = !saving) { Text("Добавить ${tile.title}") }
+                    val rows = selected.mapNotNull(QuickTile::fromModule) + QuickTile.entries.filter { it.moduleId !in selected }
+                    rows.forEach { tile ->
+                        val index = selected.indexOf(tile.moduleId)
+                        Row(Modifier.fillMaxWidth().testTag("quick-editor-row-${tile.moduleId}"), verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(index >= 0, { checked ->
+                                draft = value.withQuickModules(if (checked) selected + tile.moduleId else selected - tile.moduleId); dirty = true
+                            }, enabled = !saving, modifier = Modifier.testTag("quick-enable-${tile.moduleId}"))
+                            Column(Modifier.weight(1f)) {
+                                Text(tile.title, style = MaterialTheme.typography.bodyMedium)
+                                if (tile == QuickTile.BRIGHTNESS || tile == QuickTile.VOLUME) Text("Отдельный ползунок", style = MaterialTheme.typography.labelSmall, color = Mocha.Subtext)
+                            }
+                            fun move(delta: Int) {
+                                val order = selected.toMutableList().apply { add(index + delta, removeAt(index)) }
+                                draft = value.withQuickModules(order); dirty = true
+                            }
+                            IconButton(onClick = { move(-1) }, enabled = !saving && index > 0, modifier = Modifier.testTag("module-up-${tile.moduleId}")) { Icon(Icons.Default.KeyboardArrowUp, "Выше ${tile.title}") }
+                            IconButton(onClick = { move(1) }, enabled = !saving && index >= 0 && index < selected.lastIndex, modifier = Modifier.testTag("module-down-${tile.moduleId}")) { Icon(Icons.Default.KeyboardArrowDown, "Ниже ${tile.title}") }
+                        }
                     }
-                    Text("Предпросмотр", style = MaterialTheme.typography.titleSmall)
-                    selected.forEach { QuickSettingsTile(requireNotNull(QuickTile.fromModule(it)), interactive = false) }
+                    TextButton(onClick = { preview = !preview }) { Text(if (preview) "Скрыть предпросмотр" else "Предпросмотр") }
+                    if (preview) QuickSettingsContent(selected, interactive = false)
                 }
-                Text("Дополнительный доступ — только по вашему выбору", style = MaterialTheme.typography.titleSmall)
-                TextButton(onClick = { controller.writeAccess() }) { Text("Разрешить яркость и автоповорот") }
-                if (Build.VERSION.SDK_INT >= 31) TextButton(onClick = { controller.permission(true) }) { Text("Разрешить чтение состояния Bluetooth") }
-                Text("Wi-Fi и «Не беспокоить» используют системный интерфейс. CAMERA запрашивается только при выборе фонарика; разрешения не нужны для обычного лаунчера.")
+                TextButton(onClick = { access = !access }) { Text("Разрешения и ограничения Android") }
+                if (access) {
+                    TextButton(onClick = { controller.writeAccess() }) { Text("Разрешить яркость и автоповорот") }
+                    if (Build.VERSION.SDK_INT >= 31) TextButton(onClick = { controller.permission(true) }) { Text("Разрешить чтение состояния Bluetooth") }
+                    Text("Wi-Fi и DND используют системный интерфейс. Яркость — оценка HLG по Settings.System; процент Android и текущая адаптивная яркость не гарантируются публичным API. CAMERA — только для фонарика.")
+                }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
             Button(onClick = { val value = draft ?: return@Button; saving = true; scope.launch {

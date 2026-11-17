@@ -3,12 +3,11 @@ package dev.hyprdroid.launcher.ui
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -18,7 +17,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.hyprdroid.launcher.data.ShellRepository
 import dev.hyprdroid.launcher.model.*
 import dev.hyprdroid.launcher.quicksettings.QuickSettingsController
 
@@ -40,61 +38,75 @@ internal fun rememberQuickController(): QuickSettingsController {
     return controller
 }
 
-/** Identical rendering/actions in topbar, Home panels and WindowManager panels. */
+/** One renderer/controller for the shade, Home panels, previews and overlay. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun QuickSettingsTile(tile: QuickTile, interactive: Boolean = true, onExternal: () -> Unit = {}) {
+    if (tile == QuickTile.BRIGHTNESS || tile == QuickTile.VOLUME) {
+        QuickSettingsSlider(tile, interactive, onExternal); return
+    }
     val controller = rememberQuickController()
     val states by controller.states.collectAsStateWithLifecycle()
     val state = states[tile] ?: QuickTileState()
-    var expanded by remember { mutableStateOf(false) }
     ShellSurface(Modifier.fillMaxWidth().testTag("quick-tile-${tile.name}")) {
-        Column(Modifier.padding(8.dp)) {
-            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                .combinedClickable(enabled = interactive, onClickLabel = "Открыть ${tile.title}", onLongClickLabel = "Настройки ${tile.title}",
-                    onLongClick = { if (controller.settings(tile)) onExternal() },
-                    onClick = {
-                        if (state.adjustable && (tile == QuickTile.BRIGHTNESS || tile == QuickTile.VOLUME)) expanded = !expanded
-                        else if (controller.tap(tile)) onExternal()
-                    })
-                .semantics { stateDescription = state.detail; role = Role.Button }, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text(tile.glyph, style = MaterialTheme.typography.headlineSmall, color = if (state.active == true) Mocha.Mauve else Mocha.Subtext, modifier = Modifier.padding(8.dp))
-                Column(Modifier.weight(1f)) { Text(tile.title); Text(state.detail, style = MaterialTheme.typography.bodySmall, color = Mocha.Subtext) }
+        Column(Modifier.fillMaxWidth().combinedClickable(enabled = interactive,
+            onClickLabel = tile.title, onLongClickLabel = "Настройки ${tile.title}",
+            onLongClick = { if (controller.settings(tile)) onExternal() },
+            onClick = { if (controller.tap(tile)) onExternal() })
+            .semantics { stateDescription = state.detail; role = Role.Button }
+            .heightIn(min = 84.dp).padding(12.dp), verticalArrangement = Arrangement.Center) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(tile.glyph, color = if (state.active == true) Mocha.Mauve else Mocha.Subtext, modifier = Modifier.clearAndSetSemantics {})
+                Text(tile.title, style = MaterialTheme.typography.labelLarge)
             }
-            if (expanded && state.adjustable) {
-                var draft by remember(state.value) { mutableFloatStateOf(state.value ?: 0f) }
-                Slider(draft, { draft = it }, enabled = interactive, onValueChangeFinished = { controller.adjust(tile, draft) },
-                    modifier = Modifier.testTag("quick-slider-${tile.name}").semantics { contentDescription = tile.title })
-            }
+            Text(state.detail, style = MaterialTheme.typography.bodySmall, color = Mocha.Subtext)
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun TopbarQuickSettings(onVisibilityChanged: (Boolean) -> Unit) {
-    val context = LocalContext.current
-    val repository = remember(context) { ShellRepository(context) }
-    var config by remember { mutableStateOf<QuickSettingsConfig?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var open by remember { mutableStateOf(false) }
-    LaunchedEffect(repository) {
-        try { repository.quickSettings.collect { config = it; error = null } }
-        catch (_: Exception) { error = "Quick Settings недоступны. Откройте редактор через меню." }
-    }
-    SideEffect { onVisibilityChanged(open) }
-    DisposableEffect(Unit) { onDispose { onVisibilityChanged(false) } }
-    if (config?.topbar?.isEmpty() != false && error == null) return
-    Box {
-        IconButton(onClick = { open = true }, modifier = Modifier.testTag("quick-topbar-open")) { Icon(Icons.Default.Settings, "Quick Settings") }
-        DropdownMenu(open, { open = false }, modifier = Modifier.widthIn(min = 240.dp, max = 360.dp).testTag("quick-topbar-popup")) {
-            Row(Modifier.fillMaxWidth().sidebarClosingGesture(onClose = { open = false })) {
-                Text("Quick Settings", Modifier.weight(1f).padding(12.dp))
-                TextButton(onClick = { open = false }) { Text("Закрыть") }
+internal fun QuickSettingsSlider(tile: QuickTile, interactive: Boolean = true, onExternal: () -> Unit = {}) {
+    val controller = rememberQuickController()
+    val states by controller.states.collectAsStateWithLifecycle()
+    val state = states[tile] ?: QuickTileState()
+    var draft by remember(state.value) { mutableFloatStateOf(state.value ?: 0f) }
+    ShellSurface(Modifier.fillMaxWidth().testTag("quick-tile-${tile.name}")) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).combinedClickable(enabled = interactive,
+                onClick = { if (controller.tap(tile)) onExternal() },
+                onLongClickLabel = "Настройки ${tile.title}", onLongClick = { if (controller.settings(tile)) onExternal() }), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(tile.title, style = MaterialTheme.typography.labelLarge)
+                    Text(state.detail, style = MaterialTheme.typography.bodySmall, color = Mocha.Subtext)
+                }
+                IconButton(onClick = { if (controller.settings(tile)) onExternal() }, enabled = interactive) {
+                    Icon(Icons.Default.Settings, "Системные настройки ${tile.title}")
+                }
             }
-            error?.let { Text(it, Modifier.padding(12.dp)) }
-            config?.topbar?.forEach { id ->
-                QuickTile.fromModule(id)?.let { QuickSettingsTile(it, onExternal = { open = false }) }
-                    ?: Text("Недоступный модуль", Modifier.padding(12.dp))
+            Slider(draft, { draft = it }, enabled = interactive && state.adjustable,
+                onValueChangeFinished = { controller.adjust(tile, draft) },
+                modifier = Modifier.heightIn(min = 48.dp).testTag("quick-slider-${tile.name}").semantics { contentDescription = tile.title })
+            if (tile == QuickTile.BRIGHTNESS) Text("Оценка API · шкала Android может отличаться", style = MaterialTheme.typography.labelSmall, color = Mocha.Subtext)
+        }
+    }
+}
+
+/** Two columns, no nested scrolling; range controls are separate, never duplicate grid tiles. */
+@Composable
+internal fun QuickSettingsContent(modules: List<String>, interactive: Boolean = true, onExternal: () -> Unit = {}) {
+    val controls = modules.filter { it == QuickTile.BRIGHTNESS.moduleId || it == QuickTile.VOLUME.moduleId }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        controls.forEach { QuickSettingsSlider(requireNotNull(QuickTile.fromModule(it)), interactive, onExternal) }
+        Column(Modifier.testTag("quick-grid"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            modules.filterNot { it in controls }.chunked(2).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { id -> Box(Modifier.weight(1f)) {
+                        QuickTile.fromModule(id)?.let { QuickSettingsTile(it, interactive, onExternal) }
+                            ?: Text("Недоступный модуль", Modifier.padding(12.dp))
+                    } }
+                    if (row.size == 1) Spacer(Modifier.weight(1f))
+                }
             }
         }
     }

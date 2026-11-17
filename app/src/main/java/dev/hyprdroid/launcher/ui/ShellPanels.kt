@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,10 +43,9 @@ import java.util.Date
 @Composable
 fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>, modifier: Modifier = Modifier,
     onDrawer: (() -> Unit)? = null, onSidebar: (() -> Unit)? = null, onLeftPanel: (() -> Unit)? = null,
-    onMenuVisibilityChanged: (Boolean) -> Unit = {}) {
+    onMenuVisibilityChanged: (Boolean) -> Unit = {}, onSettings: (() -> Unit)? = null) {
     var menuOpen by remember { mutableStateOf(false) }
-    var quickOpen by remember { mutableStateOf(false) }
-    val popupOpen = menuOpen || quickOpen
+    val popupOpen = menuOpen
     SideEffect { onMenuVisibilityChanged(popupOpen) }
     DisposableEffect(Unit) { onDispose { onMenuVisibilityChanged(false) } }
     ShellSurface(modifier) {
@@ -71,7 +71,7 @@ fun Waybar(current: Int, onSelect: (Int) -> Unit, menuItems: List<AppMenuAction>
                         }
                     }
                     ShellClock()
-                    TopbarQuickSettings { quickOpen = it }
+                    onSettings?.let { IconButton(onClick = it, modifier = Modifier.testTag("topbar-settings")) { Icon(Icons.Default.Settings, "Настройки HyprDroid") } }
                     onDrawer?.let { IconButton(onClick = it) { DrawerGlyph("Открыть app drawer") } }
                     if (showRight) onSidebar?.let { IconButton(onClick = it, modifier = Modifier.testTag("sidebar-open")) { Icon(Icons.Default.Menu, "Открыть Sidebar") } }
                     if (showLeft) onLeftPanel?.let { IconButton(onClick = it, modifier = Modifier.testTag("left-panel-open")) { Text("◧", color = Mocha.Lavender, modifier = Modifier.semantics { contentDescription = "Открыть левую панель" }) } }

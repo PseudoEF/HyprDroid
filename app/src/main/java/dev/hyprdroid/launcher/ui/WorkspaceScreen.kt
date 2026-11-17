@@ -251,7 +251,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
             add(AppMenuAction("О приложении") { aboutOpen = true })
             add(AppMenuAction("Quick Settings · редактор") { quickEditorOpen = true })
             add(AppMenuAction("Все приложения", onClick = openDrawer))
-            add(AppMenuAction("Control Center", onClick = openControl))
+            add(AppMenuAction("Quick Settings", onClick = openControl))
             add(AppMenuAction("Sidebar", panels.right.scope.home) { sidebarOpen = true })
             add(AppMenuAction("Левая панель", panels.left.scope.home) { leftPanelOpen = true })
             add(AppMenuAction("Настройки панелей", shellReady) { overlaySettingsOpen = true })
@@ -270,7 +270,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
             onDrawer = if (presentation.drawerTopbar.visible(presentation.desktopMode)) openDrawer else null,
             onSidebar = if (presentation.sidebarTopbar) ({ if (panels.right.scope.home) sidebarOpen = true else overlaySettingsOpen = true }) else null,
             onLeftPanel = { if (panels.left.scope.home) leftPanelOpen = true else overlaySettingsOpen = true },
-            onMenuVisibilityChanged = { shellMenuOpen = it })
+            onSettings = openPresentation, onMenuVisibilityChanged = { shellMenuOpen = it })
         Spacer(Modifier.height(12.dp))
         HorizontalPager(state = pager, modifier = Modifier.weight(1f).widthIn(max = 960.dp).fillMaxWidth().testTag("home-pager"),
             userScrollEnabled = !overlayOpen && !dragging) { page ->
@@ -329,7 +329,9 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
             onPin = { component, enabled -> selectingWorkspace?.let { actions.pin(it, component, enabled) } },
             menu = appMenu, onRetry = actions.retryApps)
     }
-    if (controlOpen) ControlCenter(onClose = { controlOpen = false }, onSettings = actions.systemSettings)
+    AnimatedVisibility(visible = controlOpen, enter = slideInVertically { -it / 5 } + fadeIn(), exit = slideOutVertically { -it / 5 } + fadeOut()) {
+        ControlCenter(onClose = { controlOpen = false }, onEdit = { controlOpen = false; quickEditorOpen = true })
+    }
     if (aboutOpen) AboutScreen { aboutOpen = false }
     if (quickEditorOpen) QuickSettingsEditor { quickEditorOpen = false }
     if (overlaySettingsOpen) OverlaySettingsPanel { overlaySettingsOpen = false }

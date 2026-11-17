@@ -23,20 +23,21 @@ class QuickSettingsUiTest {
         try {
             runBlocking { repo.setQuickSettings(initial) }
             ActivityScenario.launch(MainActivity::class.java).use {
-                compose.waitUntil(20_000) { compose.onAllNodesWithTag("quick-topbar-open").fetchSemanticsNodes().isNotEmpty() }
-                compose.onNodeWithTag("quick-topbar-open").performClick()
+                compose.waitUntil(20_000) { compose.onAllNodesWithContentDescription("Меню оболочки").fetchSemanticsNodes().isNotEmpty() }
+                compose.onNodeWithContentDescription("Меню оболочки").performClick()
+                compose.onNodeWithText("Quick Settings", substring = false).performScrollTo().performClick()
                 compose.onNodeWithTag("quick-tile-WIFI").assertExists()
                 compose.onNodeWithTag("quick-tile-VOLUME").performScrollTo().performClick()
                 compose.onNodeWithTag("quick-slider-VOLUME").assertExists()
-                compose.onNodeWithText("Закрыть", substring = false).performClick()
+                compose.onNodeWithContentDescription("Закрыть Control Center").performClick()
                 compose.onNodeWithContentDescription("Меню оболочки").performClick()
                 compose.onNodeWithText("Quick Settings · редактор").performScrollTo().performClick()
-                compose.onNodeWithTag("module-select-QS_VOLUME").performScrollTo().performClick()
+                
                 compose.onNodeWithTag("module-up-QS_VOLUME").performScrollTo().performClick()
                 compose.onNodeWithTag("quick-settings-save").performClick()
                 compose.waitUntil(10_000) { runBlocking { repo.quickSettings.first().topbar == listOf("QS_VOLUME", "QS_WIFI") } }
-                compose.onNodeWithTag("module-select-QS_WIFI").performScrollTo().performClick()
-                compose.onNodeWithTag("module-remove-QS_WIFI").performScrollTo().performClick()
+                
+                compose.onNodeWithTag("quick-enable-QS_WIFI").performScrollTo().performClick()
                 compose.onNodeWithText("Закрыть", substring = false).performClick()
                 compose.onNodeWithText("Продолжить редактирование").performClick()
                 assertEquals(listOf("QS_VOLUME", "QS_WIFI"), runBlocking { repo.quickSettings.first().topbar })
