@@ -62,6 +62,7 @@ fun WallpaperLayer(uri: String?, scale: WallpaperScale = WallpaperScale.CROP, mo
     val power = remember { context.getSystemService(PowerManager::class.java) }
     val drawable = content?.animated
     val currentAllowed by rememberUpdatedState(motion && desktopVisible)
+    var windowFocused by remember(drawable) { mutableStateOf(false) }
     var interactive by remember { mutableStateOf(power.isInteractive) }
     var powerSaving by remember { mutableStateOf(power.isPowerSaveMode) }
     DisposableEffect(lifecycle, context, drawable) {
@@ -69,7 +70,7 @@ fun WallpaperLayer(uri: String?, scale: WallpaperScale = WallpaperScale.CROP, mo
             resumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED); interactive = !screenOff && power.isInteractive; powerSaving = power.isPowerSaveMode
             // STOP can pause the Compose recomposer: control the native animation synchronously too.
             val animated = drawable as? AnimatedImageDrawable
-            if (currentAllowed && resumed && interactive && !powerSaving) { animated?.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE; animated?.start() }
+            if (currentAllowed && windowFocused && resumed && interactive && !powerSaving) { animated?.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE; animated?.start() }
             else animated?.stop()
         }
         val observer = LifecycleEventObserver { _, _ -> refresh() }
@@ -80,7 +81,8 @@ fun WallpaperLayer(uri: String?, scale: WallpaperScale = WallpaperScale.CROP, mo
         refresh()
         onDispose { lifecycle.removeObserver(observer); context.unregisterReceiver(receiver); (drawable as? AnimatedImageDrawable)?.stop() }
     }
-    val playing = motion && desktopVisible && resumed && interactive && !powerSaving
+    val allowedInWindow by rememberUpdatedState(motion && desktopVisible && resumed && interactive && !powerSaving)
+    val playing = allowedInWindow && windowFocused
     DisposableEffect(drawable, playing) {
         val animated = drawable as? AnimatedImageDrawable
         if (playing) { animated?.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE; animated?.start() } else animated?.stop()
@@ -90,7 +92,16 @@ fun WallpaperLayer(uri: String?, scale: WallpaperScale = WallpaperScale.CROP, mo
         WallpaperScale.CROP -> ContentScale.Crop; WallpaperScale.FIT -> ContentScale.Fit; WallpaperScale.STRETCH -> ContentScale.FillBounds
     }, modifier = Modifier.fillMaxSize().testTag("static-wallpaper")) }
     if (drawable != null) key(drawable) {
-        AndroidView(factory = { visual -> ImageView(visual).apply { tag = "animated-wallpaper-view"; importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO; setImageDrawable(drawable) } },
+        AndroidView(factory = { visual -> object : ImageView(visual) {
+            private fun focusAnimation(focused: Boolean) {
+                windowFocused = focused
+                val animated = drawable as? AnimatedImageDrawable
+                if (focused && allowedInWindow) { animated?.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE; animated?.start() } else animated?.stop()
+            }
+            override fun onAttachedToWindow() { super.onAttachedToWindow(); focusAnimation(hasWindowFocus()) }
+            override fun onWindowFocusChanged(hasWindowFocus: Boolean) { super.onWindowFocusChanged(hasWindowFocus); focusAnimation(hasWindowFocus) }
+            override fun onDetachedFromWindow() { focusAnimation(false); super.onDetachedFromWindow() }
+        }.apply { tag = "animated-wallpaper-view"; importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO; setImageDrawable(drawable) } },
             modifier = Modifier.fillMaxSize().testTag("animated-wallpaper"), onReset = null,
             onRelease = { (drawable as? AnimatedImageDrawable)?.stop(); it.setImageDrawable(null); drawable.callback = null },
             update = { view -> view.scaleType = when (scale) {

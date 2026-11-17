@@ -113,6 +113,10 @@ class MinimalWallpaperTest {
             compose.waitUntil(10_000) { (image(scenario)?.drawable as? AnimatedImageDrawable)?.isRunning == true }
             assertEquals(imported.toString(), state().wallpaperUri)
             assertTrue(image(scenario)!!.drawable.intrinsicWidth <= AnimatedWallpaperFiles.MAX_DECODE_DIMENSION)
+            scenario.onActivity { image(scenario)!!.onWindowFocusChanged(false) }
+            assertFalse((image(scenario)!!.drawable as AnimatedImageDrawable).isRunning)
+            scenario.onActivity { image(scenario)!!.onWindowFocusChanged(true) }
+            compose.waitUntil(8_000) { (image(scenario)?.drawable as? AnimatedImageDrawable)?.isRunning == true }
 
             menu("Рабочий стол и панели")
             compose.onNodeWithTag("wallpaper-scale-FIT").performScrollTo().performClick()
