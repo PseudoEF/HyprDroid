@@ -161,3 +161,7 @@ Control Center расширен до единой раскрывающейся �
 ## Power Menu и Home TopBar v0.9
 
 Waybar работает только в Home. Исследование публичных API Android17 подтвердило, что TYPE_APPLICATION_OVERLAY находится ниже status bar, а InsetsController не заменяет SystemUI чужих приложений. Экспериментальный глобальный док, Usage Access, эвристика категорий и его редактор удалены. JSON v1 TopbarSettings/TopbarCodec оставлен только для сохранения старой неактивной записи, без запуска окон/службы. OverlaySidebarService снова обслуживает только независимые боковые панели. PowerDialogService одобрена пользователем только для GLOBAL_ACTION_POWER_DIALOG, без событий и window capabilities. [Исследование и ограничения](TOPBAR_POWER.md).
+
+## Полировка взаимодействий
+
+PanelSettings v4 добавляет activation и swipeThresholdDp, с Swipe only / 48 dp для прежних схем. Home использует прежнюю политику направления и приоритет дочерних компонентов; OverlayEdgeView ограничен собственным маленьким окном. Dock переиспользует WorkspaceDragState в однострочной сетке, а относительная перестановка применяется транзакцией к актуальным данным. favorites_order v1 хранится рядом с прежним набором favorites, без переноса файлов или очистки хранилищ. Общий ShellSlider отделяет непрерывный draft от входящих целых/системных значений; тема и SettingsDetails общие для существующих экранов. Новые движки модулей, тайлинг и разрешения не добавлены. [Управление и миграция](PANEL_DOCK_UX.md).
