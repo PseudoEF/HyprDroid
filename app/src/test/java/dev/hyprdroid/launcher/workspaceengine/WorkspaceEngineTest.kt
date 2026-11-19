@@ -470,4 +470,20 @@ class WorkspaceEngineTest {
             assertTrue(item.rect.y + item.rect.height <= 2000)
         }
     }
+
+    @Test fun layoutDistributesSpaceRespectingSplitMinimums() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1"))
+        assertTrue(engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s1"), window("w-2", "com.example/.Second")))
+        assertTrue(engine.resizeSplit(SplitId("s1"), 0.9f))
+        val placed = engine.calculateLayout(LayoutArea(1000, 1000), mapOf(
+            WindowId("w-1") to WindowMin(100, 0),
+            WindowId("w-2") to WindowMin(600, 0),
+        ))
+        assertEquals(2, placed.size)
+        val byId = placed.associateBy { it.windowId }
+        assertEquals(400, byId.getValue(WindowId("w-1")).rect.width)
+        assertEquals(600, byId.getValue(WindowId("w-2")).rect.width)
+        assertFalse(byId.getValue(WindowId("w-2")).constrained)
+    }
 }

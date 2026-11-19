@@ -114,7 +114,7 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
                 val firstSize: Int
                 val secondSize: Int
                 if (firstMin + secondMin <= available.toLong()) {
-                    firstSize = maxOf((available * split.ratio).toInt(), firstMin.toInt())
+                    firstSize = maxOf((available * split.ratio).toInt(), firstMin.toInt()).coerceAtMost(available - secondMin.toInt())
                 }
                 else {
                     firstSize = firstMin.coerceAtMost(available.toLong()).toInt()
@@ -140,8 +140,10 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
         val split = node as SplitNode
         val firstMin = minExtent(split.first, axis, mins)
         val secondMin = minExtent(split.second, axis, mins)
-        return if (split.orientation == Orientation.HORIZONTAL) firstMin + secondMin else maxOf(firstMin, secondMin)
+        return if (split.orientation == Orientation.HORIZONTAL) saturatingAdd(firstMin, secondMin) else maxOf(firstMin, secondMin)
     }
+
+    private fun saturatingAdd(a: Long, b: Long): Long = if (b > Long.MAX_VALUE - a) Long.MAX_VALUE else a + b
 
     fun serialize(): String {
         val node = root
