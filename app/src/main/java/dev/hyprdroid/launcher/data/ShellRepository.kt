@@ -3,6 +3,7 @@ package dev.hyprdroid.launcher.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
@@ -24,6 +25,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import dev.hyprdroid.launcher.model.placeItemBefore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withContext
 import org.json.JSONException
 import java.io.IOException
 import kotlinx.coroutines.flow.map
@@ -60,17 +62,17 @@ class ShellRepository(private val store: DataStore<Preferences>) {
     private val topbarKey = stringPreferencesKey("topbar_overlay_configuration")
     val topbar = store.data.map { TopbarCodec.read(it[topbarKey]) }.flowOn(Dispatchers.Default)
     suspend fun setTopbar(transform: (dev.hyprdroid.launcher.model.TopbarSettings) -> dev.hyprdroid.launcher.model.TopbarSettings) {
-        store.edit { data -> decode(data); data[topbarKey] = TopbarCodec.write(transform(TopbarCodec.read(data[topbarKey]))) }
+        write { data -> decode(data); data[topbarKey] = TopbarCodec.write(transform(TopbarCodec.read(data[topbarKey]))) }
     }
     private val quickSettingsKey = stringPreferencesKey("quick_settings_configuration")
     val quickSettings = store.data.map { QuickSettingsCodec.read(it[quickSettingsKey]) }.flowOn(Dispatchers.Default)
     suspend fun setQuickSettings(value: dev.hyprdroid.launcher.model.QuickSettingsConfig) {
-        store.edit { data -> decode(data); QuickSettingsCodec.read(data[quickSettingsKey]); data[quickSettingsKey] = QuickSettingsCodec.write(value) }
+        write { data -> decode(data); QuickSettingsCodec.read(data[quickSettingsKey]); data[quickSettingsKey] = QuickSettingsCodec.write(value) }
     }
 
     suspend fun setOverlay(value: OverlaySettings) {
         val safe = value.validated()
-        store.edit { data ->
+        write { data ->
             val current = decode(data) // Refuse unknown schemas; leave all existing records intact.
             ShellPresentationCodec.write(data, current.presentation)
             data[overlayEnabled] = safe.enabled
@@ -87,7 +89,7 @@ class ShellRepository(private val store: DataStore<Preferences>) {
     }
 
     suspend fun setPresentation(value: ShellPresentation) {
-        store.edit { data ->
+        write { data ->
             val current = decode(data)
             current.panelConfiguration?.let { configuration ->
                 val old = configuration.right.modules
@@ -101,7 +103,7 @@ class ShellRepository(private val store: DataStore<Preferences>) {
     }
 
     suspend fun setPanel(side: PanelSide, value: PanelSettings, previous: PanelSettings? = null) {
-        store.edit { data ->
+        write { data ->
             val current = decode(data)
             // Retain widgets added after this UI draft was opened, including late configuration results.
             val added = if (previous == null) emptyList() else current.panels[side].widgets.filter { widget -> previous.widgets.none { it.appWidgetId == widget.appWidgetId } && value.widgets.none { it.appWidgetId == widget.appWidgetId } }
@@ -112,7 +114,7 @@ class ShellRepository(private val store: DataStore<Preferences>) {
         }
     }
     suspend fun savePendingWidget(value: PendingPanelWidget) {
-        store.edit { data ->
+        write { data ->
             val current = decode(data)
             if (current.pendingWidget?.widget?.appWidgetId?.let { it != value.widget.appWidgetId } == true) throw IOException("Another widget is pending")
             data[pendingWidget] = PanelsCodec.encodePending(value)
@@ -120,12 +122,12 @@ class ShellRepository(private val store: DataStore<Preferences>) {
         }
     }
     suspend fun cancelPendingWidget(id: Int) {
-        store.edit { data -> if (decode(data).pendingWidget?.widget?.appWidgetId == id) data.remove(pendingWidget) }
+        write { data -> if (decode(data).pendingWidget?.widget?.appWidgetId == id) data.remove(pendingWidget) }
     }
     suspend fun commitPendingWidget(id: Int) {
-        store.edit { data ->
+        write { data ->
             val current = decode(data)
-            val pending = current.pendingWidget?.takeIf { it.widget.appWidgetId == id && it.stage == WidgetBindingStage.COMMIT } ?: return@edit
+            val pending = current.pendingWidget?.takeIf { it.widget.appWidgetId == id && it.stage == WidgetBindingStage.COMMIT } ?: return@write
             val panel = current.panels[pending.side]
             val existing = panel.widgets.find { it.appWidgetId == id }
             if (existing != null && existing != pending.widget) throw IOException("Conflicting widget identity")
@@ -139,7 +141,7 @@ class ShellRepository(private val store: DataStore<Preferences>) {
         }
     }
     suspend fun reorderPanelModule(side: PanelSide, id: String, delta: Int) {
-        store.edit { data ->
+        write { data ->
             val current = decode(data)
             val panel = current.panels[side]
             val index = panel.modules.indexOf(id)
@@ -170,7 +172,7 @@ class ShellRepository(private val store: DataStore<Preferences>) {
         }
     }
     private suspend fun updateSidebar(transform: (List<WorkspaceItem>) -> List<WorkspaceItem>) {
-        store.edit { data ->
+        write { data ->
             val current = decode(data)
             data[sidebar] = WorkspaceCodec.encodeItems(transform(current.sidebar))
             ShellPresentationCodec.write(data, current.presentation)
@@ -179,7 +181,7 @@ class ShellRepository(private val store: DataStore<Preferences>) {
 
     suspend fun setFavorite(component: String, enabled: Boolean) {
         require(dev.hyprdroid.launcher.model.validComponent(component))
-        store.edit { preferences ->
+        write { preferences ->
             val current = decode(preferences)
             val apps = current.favorites
             if (enabled && component !in apps && apps.size >= MAX_DOCK_APPS) throw DockFullException()
@@ -190,9 +192,9 @@ class ShellRepository(private val store: DataStore<Preferences>) {
     }
 
     suspend fun placeFavoriteBefore(component: String, before: String?) {
-        store.edit { data ->
+        write { data ->
             val current = decode(data)
-            if (component !in current.favorites || component == before) return@edit
+            if (component !in current.favorites || component == before) return@write
             // A relative move applies to current data: concurrent removals are never resurrected.
             val order = current.dockComponents.toMutableList().apply { remove(component) }
             val index = before?.let(order::indexOf)?.takeIf { it >= 0 } ?: order.size
@@ -202,7 +204,7 @@ class ShellRepository(private val store: DataStore<Preferences>) {
     }
 
     suspend fun setWallpaper(uri: String?) {
-        store.edit { preferences ->
+        write { preferences ->
             val current = decode(preferences) // Never overwrite a newer schema.
             if (uri == null) preferences.remove(wallpaper) else preferences[wallpaper] = uri
             ShellPresentationCodec.write(preferences, current.presentation)
@@ -210,7 +212,7 @@ class ShellRepository(private val store: DataStore<Preferences>) {
     }
 
     suspend fun removePackages(packages: Set<String>) {
-        store.edit { preferences ->
+        write { preferences ->
             val current = decode(preferences)
             preferences[favorites] = current.favorites.filterNot { it.substringBefore('/') in packages }.toSet()
             preferences[favoriteOrder] = DockOrderCodec.write(current.dockComponents.filterNot { it.substringBefore('/') in packages })
@@ -220,6 +222,13 @@ class ShellRepository(private val store: DataStore<Preferences>) {
             ShellPresentationCodec.write(preferences, current.presentation)
         }
     }
+
+    /**
+     * DataStore runs the transform in the caller's coroutine context, so JSON decoding and encoding
+     * must not inherit the main thread. Ordering is unchanged: DataStore serializes updateData.
+     */
+    private suspend fun write(transform: suspend (MutablePreferences) -> Unit): Preferences =
+        withContext(Dispatchers.Default) { store.edit(transform) }
 
     private fun decode(preferences: Preferences): ShellSettings {
         if ((preferences[version] ?: 1) !in 1..3) throw IOException("Unsupported shell schema")
