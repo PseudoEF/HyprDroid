@@ -46,8 +46,9 @@ class LauncherCatalog(private val context: Context) {
                 val key = IconKey(component, dpi, size)
                 used += key
                 val updated = versions[packageName]
+                val stamp = IconStamp(packageUpdated = updated)
                 val cached = if (refreshIcons || updated == null || packageName in invalidatePackages) null
-                    else icons.get(key, updated)
+                    else icons.get(key, stamp)
                 val icon = cached ?: try {
                     activity.getBadgedIcon(dpi).toBitmap(size, size)
                 } catch (_: RuntimeException) {
@@ -55,7 +56,7 @@ class LauncherCatalog(private val context: Context) {
                 }
                 // Without a readable update time the icon is never cached: a missed callback must
                 // not be able to keep a stale icon forever.
-                if (cached == null && updated != null) icons.put(key, updated, icon.allocationByteCount, icon)
+                if (cached == null && updated != null) icons.put(key, stamp, icon.allocationByteCount, icon)
                 LauncherApp(component, activity.label.toString(), icon)
             }
             .sortedBy { it.label.lowercase(Locale.ROOT) }
@@ -106,12 +107,12 @@ class LauncherCatalog(private val context: Context) {
                 val item = WorkspaceItem.AppShortcut(component, info.id)
                 val key = IconKey("shortcut:$component/${info.id}", dpi, size)
                 used += key
-                val updated = shortcutIconStamp(info.lastChangedTimestamp, versions[info.`package`])
-                val cached = if (refreshIcons || updated == null || info.`package` in invalidatePackages) null
+                val updated = IconStamp(info.lastChangedTimestamp, versions[info.`package`])
+                val cached = if (refreshIcons || updated.packageUpdated == null || info.`package` in invalidatePackages) null
                     else icons.get(key, updated)
                 val icon = cached ?: try { launcher.getShortcutIconDrawable(info, dpi)?.toBitmap(size, size) }
                     catch (_: RuntimeException) { null }
-                if (cached == null && icon != null && updated != null) icons.put(key, updated, icon.allocationByteCount, icon)
+                if (cached == null && icon != null && updated.packageUpdated != null) icons.put(key, updated, icon.allocationByteCount, icon)
                 val application = apps.firstOrNull { it.componentId.substringBefore('/') == info.`package` }?.label ?: info.`package`
                 SidebarEntry(item, LauncherApp(component, "${info.shortLabel ?: info.id} · $application",
                     icon ?: context.packageManager.defaultActivityIcon.toBitmap(size, size)))
