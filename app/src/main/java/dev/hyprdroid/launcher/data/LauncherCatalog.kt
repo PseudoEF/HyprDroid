@@ -30,9 +30,9 @@ class LauncherCatalog(private val context: Context) {
     /**
      * Rebuilds labels and order from LauncherApps, reusing decoded icons while the package update
      * timestamp, density and pixel size stay the same. [invalidatePackages] forces a fresh icon for
-     * those packages even when the timestamp looks unchanged.
+     * those packages, and [refreshIcons] re-decodes the whole catalogue for an explicit user refresh.
      */
-    fun reload(invalidatePackages: Set<String> = emptySet()): Snapshot {
+    fun reload(invalidatePackages: Set<String> = emptySet(), refreshIcons: Boolean = false): Snapshot {
         val metrics = context.resources.displayMetrics
         val size = (48 * metrics.density).toInt().coerceIn(48, 192)
         val dpi = metrics.densityDpi
@@ -46,7 +46,8 @@ class LauncherCatalog(private val context: Context) {
                 val key = IconKey(component, dpi, size)
                 used += key
                 val updated = versions[packageName]
-                val cached = if (updated == null || packageName in invalidatePackages) null else icons.get(key, updated)
+                val cached = if (refreshIcons || updated == null || packageName in invalidatePackages) null
+                    else icons.get(key, updated)
                 val icon = cached ?: try {
                     activity.getBadgedIcon(dpi).toBitmap(size, size)
                 } catch (_: RuntimeException) {
@@ -58,7 +59,7 @@ class LauncherCatalog(private val context: Context) {
                 LauncherApp(component, activity.label.toString(), icon)
             }
             .sortedBy { it.label.lowercase(Locale.ROOT) }
-        val entries = sidebarEntries(apps, dpi, size, invalidatePackages, used)
+        val entries = sidebarEntries(apps, dpi, size, versions, invalidatePackages, refreshIcons, used)
         icons.retain(used)
         return Snapshot(apps, entries)
     }
@@ -93,8 +94,8 @@ class LauncherCatalog(private val context: Context) {
     }
 
     /** Public Android shortcuts are visible only while Android grants HOME shortcut-host access. */
-    private fun sidebarEntries(apps: List<LauncherApp>, dpi: Int, size: Int,
-        invalidatePackages: Set<String>, used: MutableSet<IconKey>): List<SidebarEntry> {
+    private fun sidebarEntries(apps: List<LauncherApp>, dpi: Int, size: Int, versions: Map<String, Long>,
+        invalidatePackages: Set<String>, refreshIcons: Boolean, used: MutableSet<IconKey>): List<SidebarEntry> {
         val activities = apps.map { SidebarEntry(WorkspaceItem.AppShortcut(it.componentId), it) }
         if (!launcher.hasShortcutHostPermission()) return activities
         val shortcuts = try {
@@ -105,10 +106,12 @@ class LauncherCatalog(private val context: Context) {
                 val item = WorkspaceItem.AppShortcut(component, info.id)
                 val key = IconKey("shortcut:$component/${info.id}", dpi, size)
                 used += key
-                val cached = if (info.`package` in invalidatePackages) null else icons.get(key, info.lastChangedTimestamp)
+                val updated = shortcutIconStamp(info.lastChangedTimestamp, versions[info.`package`])
+                val cached = if (refreshIcons || updated == null || info.`package` in invalidatePackages) null
+                    else icons.get(key, updated)
                 val icon = cached ?: try { launcher.getShortcutIconDrawable(info, dpi)?.toBitmap(size, size) }
                     catch (_: RuntimeException) { null }
-                if (cached == null && icon != null) icons.put(key, info.lastChangedTimestamp, icon.allocationByteCount, icon)
+                if (cached == null && icon != null && updated != null) icons.put(key, updated, icon.allocationByteCount, icon)
                 val application = apps.firstOrNull { it.componentId.substringBefore('/') == info.`package` }?.label ?: info.`package`
                 SidebarEntry(item, LauncherApp(component, "${info.shortLabel ?: info.id} · $application",
                     icon ?: context.packageManager.defaultActivityIcon.toBitmap(size, size)))

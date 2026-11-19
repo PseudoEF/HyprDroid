@@ -2,6 +2,7 @@ package dev.hyprdroid.launcher
 
 import dev.hyprdroid.launcher.data.CatalogIconCache
 import dev.hyprdroid.launcher.data.IconKey
+import dev.hyprdroid.launcher.data.shortcutIconStamp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -47,5 +48,11 @@ class CatalogIconCacheTest {
         cache.put(key, 7, 40, "new")
         assertEquals(40, cache.sizeBytes)
         assertEquals("new", cache.get(key, 7))
+    }
+
+    @Test fun shortcutStampFollowsBothTheShortcutAndItsPackage() {
+        assertEquals("a package update invalidates the shortcut icon", 9L, shortcutIconStamp(5, 9))
+        assertEquals("a shortcut change invalidates its icon", 7L, shortcutIconStamp(7, 3))
+        assertNull("an unknown package update time must not be cached", shortcutIconStamp(5, null))
     }
 }

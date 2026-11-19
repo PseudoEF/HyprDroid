@@ -48,12 +48,13 @@ internal class CatalogRefreshGate(private val safetyIntervalMillis: Long = SAFET
 
 /**
  * Serializes catalogue loads. A request that arrives during a load waits for the mutex and then
- * joins the result instead of starting a parallel copy of the same work.
+ * joins the result instead of starting a parallel copy of the same work. The second argument of
+ * [load] tells the catalogue to re-decode icons even when their timestamps did not change.
  */
 internal class CatalogRefresher(
     private val gate: CatalogRefreshGate,
     private val now: () -> Long,
-    private val load: suspend (Set<String>) -> Boolean,
+    private val load: suspend (Set<String>, Boolean) -> Boolean,
 ) {
     private val mutex = Mutex()
 
@@ -62,8 +63,9 @@ internal class CatalogRefresher(
             var forced = force
             while (true) {
                 val invalidated = gate.take(hasApps(), forced, now()) ?: return
+                val refreshIcons = forced
                 forced = false
-                if (!load(invalidated)) {
+                if (!load(invalidated, refreshIcons)) {
                     gate.failed(invalidated)
                     return
                 }

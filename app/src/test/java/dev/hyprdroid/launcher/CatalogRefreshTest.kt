@@ -16,7 +16,7 @@ class CatalogRefreshTest {
     @Test fun coldStartLoadsOnceAndPlainResumeInsideTheIntervalIsSkipped() = runBlocking {
         var now = 1_000L
         val loads = mutableListOf<Set<String>>()
-        val refresher = CatalogRefresher(CatalogRefreshGate(), { now }) { invalidated ->
+        val refresher = CatalogRefresher(CatalogRefreshGate(), { now }) { invalidated, _ ->
             loads += invalidated
             true
         }
@@ -36,7 +36,7 @@ class CatalogRefreshTest {
         val loads = mutableListOf<Set<String>>()
         val started = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
-        val refresher = CatalogRefresher(gate, { 0L }) { invalidated ->
+        val refresher = CatalogRefresher(gate, { 0L }) { invalidated, _ ->
             loads += invalidated
             if (loads.size == 1) { started.complete(Unit); release.await() }
             true
@@ -53,7 +53,7 @@ class CatalogRefreshTest {
         var loads = 0
         val started = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
-        val refresher = CatalogRefresher(CatalogRefreshGate(), { 0L }) {
+        val refresher = CatalogRefresher(CatalogRefreshGate(), { 0L }) { _, _ ->
             loads++
             if (loads == 1) { started.complete(Unit); release.await() }
             true
@@ -69,7 +69,7 @@ class CatalogRefreshTest {
 
     @Test fun forcedRefreshBypassesTheSafetyInterval() = runBlocking {
         val loads = mutableListOf<Set<String>>()
-        val refresher = CatalogRefresher(CatalogRefreshGate(), { 0L }) { invalidated ->
+        val refresher = CatalogRefresher(CatalogRefreshGate(), { 0L }) { invalidated, _ ->
             loads += invalidated
             true
         }
@@ -82,7 +82,7 @@ class CatalogRefreshTest {
     @Test fun failedPassKeepsItsInvalidationAndDoesNotRetryInALoop() = runBlocking {
         val gate = CatalogRefreshGate()
         var attempts = 0
-        val refresher = CatalogRefresher(gate, { 0L }) { attempts++; false }
+        val refresher = CatalogRefresher(gate, { 0L }) { _, _ -> attempts++; false }
         gate.changed(setOf("example.app"))
         refresher.refresh(hasApps = { true }, force = false)
         assertEquals("a failure is not retried immediately", 1, attempts)
@@ -93,7 +93,7 @@ class CatalogRefreshTest {
     @Test fun packageEventAfterIdleTriggersExactlyOneInvalidatedPass() = runBlocking {
         val gate = CatalogRefreshGate()
         val loads = mutableListOf<Set<String>>()
-        val refresher = CatalogRefresher(gate, { 0L }) { invalidated ->
+        val refresher = CatalogRefresher(gate, { 0L }) { invalidated, _ ->
             loads += invalidated
             true
         }
@@ -102,5 +102,17 @@ class CatalogRefreshTest {
         refresher.refresh(hasApps = { true }, force = false)
         refresher.refresh(hasApps = { true }, force = false)
         assertEquals(listOf(emptySet<String>(), setOf("first.app")), loads)
+    }
+
+    @Test fun explicitRefreshReDecodesIconsAndItsFollowUpPassDoesNot() = runBlocking {
+        val gate = CatalogRefreshGate()
+        val passes = mutableListOf<Pair<Set<String>, Boolean>>()
+        val refresher = CatalogRefresher(gate, { 0L }) { invalidated, refreshIcons ->
+            passes += invalidated to refreshIcons
+            if (passes.size == 1) gate.changed(setOf("late.app"))
+            true
+        }
+        refresher.refresh(hasApps = { true }, force = true)
+        assertEquals(listOf(emptySet<String>() to true, setOf("late.app") to false), passes)
     }
 }
