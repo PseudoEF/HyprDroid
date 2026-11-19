@@ -25,6 +25,15 @@ internal class WorkspaceEngineStore(private val store: DataStore<Preferences>) {
         }
     }
 
+    suspend fun isOpen(workspaceId: String): Boolean =
+        store.data.first()[stringPreferencesKey("tiling/$workspaceId/open")] ?: false
+
+    suspend fun setOpen(workspaceId: String, open: Boolean) {
+        store.edit { preferences ->
+            preferences[stringPreferencesKey("tiling/$workspaceId/open")] = open
+        }
+    }
+
     suspend fun load(): Map<String, WorkspaceEngine> {
         val preferences = store.data.first()
         val engines = mutableMapOf<String, WorkspaceEngine>()

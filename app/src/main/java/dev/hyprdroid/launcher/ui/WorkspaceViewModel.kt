@@ -13,6 +13,7 @@ import dev.hyprdroid.launcher.data.LauncherApp
 import dev.hyprdroid.launcher.data.LauncherCatalog
 import dev.hyprdroid.launcher.data.ShellRepository
 import dev.hyprdroid.launcher.data.WorkspaceRepository
+import dev.hyprdroid.launcher.data.WorkspaceEngineStore
 import dev.hyprdroid.launcher.data.SidebarEntry
 import dev.hyprdroid.launcher.model.WorkspaceItem
 import dev.hyprdroid.launcher.model.ShellPresentation
@@ -20,6 +21,11 @@ import dev.hyprdroid.launcher.model.ShellSettings
 import dev.hyprdroid.launcher.model.WorkspaceSettings
 import dev.hyprdroid.launcher.model.WorkspaceAppearance
 import dev.hyprdroid.launcher.model.WorkspaceMoveConflictException
+import dev.hyprdroid.launcher.workspaceengine.Orientation
+import dev.hyprdroid.launcher.workspaceengine.SplitId
+import dev.hyprdroid.launcher.workspaceengine.WorkspaceEngine
+import dev.hyprdroid.launcher.workspaceengine.WorkspaceWindow
+import dev.hyprdroid.launcher.workspaceengine.WindowId
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +41,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private const val TILING_TEST_MODULE_ID = "dev.hyprdroid.launcher.tiling/.Test"
+
 data class WorkspaceUiState(
     val settings: WorkspaceSettings? = null,
     val shell: ShellSettings? = null,
@@ -45,6 +53,7 @@ data class WorkspaceUiState(
     val storageError: Boolean = false,
     val shellError: Boolean = false,
     val message: String? = null,
+    val tiling: TilingState? = null,
 )
 
 class WorkspaceViewModel(application: Application) : AndroidViewModel(application) {
@@ -52,12 +61,15 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
     private val repository = WorkspaceRepository(application)
     private val shellRepository = ShellRepository(application)
     private val catalog = LauncherCatalog(application)
+    private val engineStore = WorkspaceEngineStore(application)
+    private val engines = mutableMapOf<Int, WorkspaceEngine>()
     private val mutableState = MutableStateFlow(WorkspaceUiState())
     val state = mutableState.asStateFlow()
     private val catalogGate = CatalogRefreshGate()
     private val catalogRefresher = CatalogRefresher(catalogGate, SystemClock::elapsedRealtime, ::loadCatalog)
     private var storageJob: Job? = null
     private var shellJob: Job? = null
+    private var engineJob: Job? = null
     private var stopObserving: (() -> Unit)? = null
 
     init {
@@ -70,6 +82,15 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
         }
         retryStorage()
         retryShellStorage()
+        engineJob = viewModelScope.launch {
+            try {
+                engineStore.load().forEach { (workspaceId, engine) ->
+                    engines[workspaceId.toInt()] = engine
+                    if (engineStore.isOpen(workspaceId)) openTilingSession(workspaceId.toInt(), engine)
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { /* An unreadable engine store must not block the launcher. */ }
+        }
         try {
             stopObserving = catalog.observe({ packages ->
                 catalogGate.changed(packages)
@@ -252,6 +273,78 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    private fun openTilingSession(workspaceId: Int, engine: WorkspaceEngine) {
+        mutableState.update { current ->
+            val tiling = current.tiling
+            if (tiling != null && tiling.open && tiling.workspaceId == workspaceId) current
+            else current.copy(tiling = TilingState(open = true, workspaceId = workspaceId, focusedWindowId = engine.focusedWindowId, engine = engine.snapshot()))
+        }
+        save { engineStore.save(workspaceId.toString(), engine) }
+    }
+
+    private fun publishTiling(workspaceId: Int, engine: WorkspaceEngine) {
+        mutableState.update { current ->
+            val tiling = current.tiling
+            if (tiling == null || !tiling.open || tiling.workspaceId != workspaceId) current
+            else current.copy(tiling = TilingState(open = true, workspaceId = workspaceId, focusedWindowId = engine.focusedWindowId, engine = engine.snapshot()))
+        }
+    }
+
+    /** Opens the internal tiling surface for one workspace; an empty tree receives the first test window. */
+    fun openTilingSurface(workspaceId: Int) = viewModelScope.launch {
+        try {
+            val engine = engines.getOrPut(workspaceId) { WorkspaceEngine() }
+            if (engine.root == null) engine.addFirstWindow(WorkspaceWindow(WindowId("tile-1"), TILING_TEST_MODULE_ID, 320, 240))
+            save { engineStore.save(workspaceId.toString(), engine) }
+            openTilingSession(workspaceId, engine)
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: IOException) { showMessage("Не удалось открыть окно. Освободите память и попробуйте снова.") }
+    }
+
+    /** Closes the tiling surface only; the placement tree is kept for the next open. */
+    fun closeTilingSurface() {
+        mutableState.update { it.copy(tiling = null) }
+    }
+
+    /** Splits the focused internal window with a new test window. */
+    fun addTilingWindow(workspaceId: Int, orientation: Orientation) = viewModelScope.launch {
+        try {
+            val engine = engines.getOrPut(workspaceId) { WorkspaceEngine() }
+            val target = engine.focusedWindowId ?: engine.leaves().firstOrNull() ?: return@launch
+            val splitIndex = engine.windowsById().size
+            if (!engine.splitWindow(target, orientation, SplitId("tile-split-$splitIndex"), WorkspaceWindow(WindowId("tile-${splitIndex + 1}"), TILING_TEST_MODULE_ID, 320, 240))) return@launch
+            save { engineStore.save(workspaceId.toString(), engine) }
+            publishTiling(workspaceId, engine)
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: IOException) { showMessage("Не удалось добавить окно. Проверьте место в памяти.") }
+    }
+
+    /** Removes one internal window; the surface closes itself when the tree becomes empty. */
+    fun closeTilingWindow(workspaceId: Int, windowId: WindowId) = viewModelScope.launch {
+        try {
+            val engine = engines[workspaceId] ?: return@launch
+            if (!engine.removeWindow(windowId)) return@launch
+            save { engineStore.save(workspaceId.toString(), engine) }
+            if (engine.root == null) mutableState.update { it.copy(tiling = null) }
+            else publishTiling(workspaceId, engine)
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: IOException) { showMessage("Не удалось закрыть окно. Проверьте место в памяти.") }
+    }
+
+    fun focusTilingWindow(workspaceId: Int, windowId: WindowId) {
+        val engine = engines[workspaceId] ?: return
+        if (!engine.focusWindow(windowId)) return
+        save { engineStore.save(workspaceId.toString(), engine) }
+        publishTiling(workspaceId, engine)
+    }
+
+    fun resizeTilingSplit(workspaceId: Int, splitId: SplitId, ratio: Float) {
+        val engine = engines[workspaceId] ?: return
+        if (!engine.resizeSplit(splitId, ratio)) return
+        save { engineStore.save(workspaceId.toString(), engine) }
+        publishTiling(workspaceId, engine)
+    }
+
     fun launch(component: String) {
         try {
             catalog.launch(component)
@@ -266,6 +359,7 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
 
     override fun onCleared() {
         stopObserving?.invoke()
+        engineJob?.cancel()
         super.onCleared()
     }
 }

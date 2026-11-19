@@ -19,6 +19,16 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
         const val MAX_RATIO = 0.95f
     }
 
+    /** All internal windows with module manifests; the UI layer derives minimum sizes from them. */
+    fun windowsById(): Map<WindowId, WorkspaceWindow> = windows
+
+    /** Independent copy for immutable publishing; mutations never leak back into a published snapshot. */
+    internal fun snapshot(): WorkspaceEngine = WorkspaceEngine().apply {
+        root = this@snapshot.root
+        focusedWindowId = this@snapshot.focusedWindowId
+        this@snapshot.windows.forEach { (windowId, window) -> this.windows[windowId] = window }
+    }
+
     /** Creates the first window of a workspace; an engine that already owns a tree rejects this. */
     fun addFirstWindow(window: WorkspaceWindow): Boolean {
         if (root != null) return false
@@ -107,23 +117,7 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
             }
             else {
                 val split = node as SplitNode
-                val constrainedAxis = if (split.orientation == Orientation.HORIZONTAL) 0 else 1
-                val firstMin = minExtent(split.first, constrainedAxis, mins)
-                val secondMin = minExtent(split.second, constrainedAxis, mins)
-                val available = if (split.orientation == Orientation.HORIZONTAL) rect.width else rect.height
-                val firstSize: Int
-                val secondSize: Int
-                if (firstMin + secondMin <= available.toLong()) {
-                    firstSize = maxOf((available * split.ratio).toInt(), firstMin.toInt()).coerceAtMost(available - secondMin.toInt())
-                }
-                else {
-                    firstSize = firstMin.coerceAtMost(available.toLong()).toInt()
-                }
-                secondSize = available - firstSize
-                val firstRect = if (split.orientation == Orientation.HORIZONTAL) LayoutRect(x = rect.x, y = rect.y, width = firstSize, height = rect.height)
-                else LayoutRect(x = rect.x, y = rect.y, width = rect.width, height = firstSize)
-                val secondRect = if (split.orientation == Orientation.HORIZONTAL) LayoutRect(x = rect.x + firstSize, y = rect.y, width = secondSize, height = rect.height)
-                else LayoutRect(x = rect.x, y = rect.y + firstSize, width = rect.width, height = secondSize)
+                val (firstRect, secondRect) = splitChildren(split, rect, mins)
                 walk(split.first, firstRect)
                 walk(split.second, secondRect)
             }
@@ -131,6 +125,44 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
         walk(root, LayoutRect(x = 0, y = 0, width = width, height = height))
         return result
     }
+
+    /** Splits of the tree with the rect boundaries that the layout pass used; the UI layer renders dividers from them. */
+    internal fun splitsWithRects(root: LayoutNode?, area: LayoutRect, mins: Map<WindowId, WindowMin>): List<SplitPlacement> {
+        val placements = mutableListOf<SplitPlacement>()
+        fun walk(node: LayoutNode?, rect: LayoutRect) {
+            if (node == null) return
+            if (node is SplitNode) {
+                val split = node
+                val (firstRect, secondRect) = splitChildren(split, rect, mins)
+                placements += SplitPlacement(split, firstRect, secondRect)
+                walk(split.first, firstRect)
+                walk(split.second, secondRect)
+            }
+        }
+        walk(root, area)
+        return placements
+    }
+
+    private fun splitChildren(split: SplitNode, rect: LayoutRect, mins: Map<WindowId, WindowMin>): Pair<LayoutRect, LayoutRect> {
+        val constrainedAxis = if (split.orientation == Orientation.HORIZONTAL) 0 else 1
+        val firstMin = minExtent(split.first, constrainedAxis, mins)
+        val secondMin = minExtent(split.second, constrainedAxis, mins)
+        val available = if (split.orientation == Orientation.HORIZONTAL) rect.width else rect.height
+        val firstSize: Int
+        val secondSize: Int
+        if (firstMin + secondMin <= available.toLong()) {
+            firstSize = maxOf((available * split.ratio).toInt(), firstMin.toInt()).coerceAtMost(available - secondMin.toInt())
+        }
+        else {
+            firstSize = firstMin.coerceAtMost(available.toLong()).toInt()
+        }
+        secondSize = available - firstSize
+        val firstRect = if (split.orientation == Orientation.HORIZONTAL) LayoutRect(x = rect.x, y = rect.y, width = firstSize, height = rect.height) else LayoutRect(x = rect.x, y = rect.y, width = rect.width, height = firstSize)
+        val secondRect = if (split.orientation == Orientation.HORIZONTAL) LayoutRect(x = rect.x + firstSize, y = rect.y, width = secondSize, height = rect.height) else LayoutRect(x = rect.x, y = rect.y + firstSize, width = rect.width, height = secondSize)
+        return firstRect to secondRect
+    }
+
+    internal data class SplitPlacement(val split: SplitNode, val firstRect: LayoutRect, val secondRect: LayoutRect)
 
     private fun minExtent(node: LayoutNode?, axis: Int, mins: Map<WindowId, WindowMin>): Long {
         if (node is LeafNode) {

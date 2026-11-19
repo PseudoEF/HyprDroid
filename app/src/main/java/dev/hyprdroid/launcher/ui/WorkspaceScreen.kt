@@ -40,6 +40,9 @@ import dev.hyprdroid.launcher.model.DesktopMode
 import dev.hyprdroid.launcher.model.DockVisibility
 import dev.hyprdroid.launcher.model.PanelSide
 import dev.hyprdroid.launcher.model.PanelsSettings
+import dev.hyprdroid.launcher.workspaceengine.Orientation
+import dev.hyprdroid.launcher.workspaceengine.SplitId
+import dev.hyprdroid.launcher.workspaceengine.WindowId
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -84,6 +87,12 @@ fun WorkspaceScreen(model: WorkspaceViewModel, requestedScreen: String? = null, 
                 sidebarPlaceBefore = model::placeSidebarBefore,
                 presentation = model::setPresentation,
                 systemSettings = { action -> if (!openSystemSettings(context, action)) model.showMessage("Системные настройки недоступны.") },
+                openTiling = model::openTilingSurface,
+                closeTilingSurface = model::closeTilingSurface,
+                addTilingWindow = { workspaceId, orientation -> model.addTilingWindow(workspaceId, orientation) },
+                closeTilingWindow = { workspaceId, windowId -> model.closeTilingWindow(workspaceId, windowId) },
+                focusTilingWindow = { workspaceId, windowId -> model.focusTilingWindow(workspaceId, windowId) },
+                resizeTilingSplit = { workspaceId, splitId, ratio -> model.resizeTilingSplit(workspaceId, splitId, ratio) },
             ), onBackdropState = { value, visible -> backdrop = value; desktopVisible = visible }, requestedScreen = requestedScreen, onRouteConsumed = onRouteConsumed)
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).safeDrawingPadding().imePadding().padding(12.dp))
         }
@@ -115,6 +124,12 @@ data class ShellActions(
     val sidebarLaunch: (WorkspaceItem.AppShortcut) -> Unit,
     val sidebarPlaceBefore: (String, String?, () -> Unit) -> Unit,
     val presentation: (ShellPresentation, () -> Unit) -> Unit,
+    val openTiling: (Int) -> Unit,
+    val closeTilingSurface: () -> Unit,
+    val addTilingWindow: (Int, Orientation) -> Unit,
+    val closeTilingWindow: (Int, WindowId) -> Unit,
+    val focusTilingWindow: (Int, WindowId) -> Unit,
+    val resizeTilingSplit: (Int, SplitId, Float) -> Unit,
 )
 
 @Composable
@@ -144,6 +159,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
     }
     val pager = rememberPagerState(initialPage = settings.selectedWorkspace, pageCount = { WORKSPACE_COUNT })
     val scope = rememberCoroutineScope()
+    val tilingSession = state.tiling?.takeIf { it.open && it.workspaceId == pager.currentPage }
     val haptics = LocalHapticFeedback.current
     var editing by rememberSaveable { mutableStateOf(false) }
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
@@ -245,6 +261,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
             controlOpen -> controlOpen = false
             appearanceWorkspace != null -> appearanceWorkspace = null
             orderWorkspace != null -> orderWorkspace = null
+            tilingSession != null -> actions.closeTilingSurface()
             else -> editing = false
         }
     }
@@ -268,6 +285,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
             add(AppMenuAction("Настройки панелей", shellReady) { overlaySettingsOpen = true })
             if (presentation.dockVisibility == DockVisibility.AUTO) add(AppMenuAction("Показать dock", onClick = revealDock))
             add(AppMenuAction("Редактировать пространство", workspaceReady, enterEdit))
+            add(AppMenuAction("Оконный тайл", shellReady) { actions.openTiling(pager.currentPage) })
             add(AppMenuAction("Вид пространства", workspaceReady) { appearanceWorkspace = pager.currentPage })
             add(AppMenuAction("Порядок элементов", workspaceReady) { orderWorkspace = pager.currentPage })
             add(AppMenuAction("Выбрать изображение…", shellReady, actions.chooseWallpaper))
@@ -284,10 +302,20 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
             onSettings = openPresentation, onMenuVisibilityChanged = { shellMenuOpen = it })
         Spacer(Modifier.height(12.dp))
         HorizontalPager(state = pager, modifier = Modifier.weight(1f).widthIn(max = 960.dp).fillMaxWidth().testTag("home-pager"),
-            userScrollEnabled = !overlayOpen && !dragging) { page ->
+            userScrollEnabled = !overlayOpen && !dragging && tilingSession == null) { page ->
             if (!classic) Box(Modifier.fillMaxSize().testTag("workspace-canvas-$page")) {
                 Box(Modifier.fillMaxSize().testTag("clean-workspace-$page")
-                    .homeBlankGestures(!overlayOpen, true, openPresentation, openDrawer, openControl, revealDock))
+                    .homeBlankGestures(!overlayOpen && tilingSession == null, true, openPresentation, openDrawer, openControl, revealDock))
+                if (tilingSession != null) {
+                    TilingSurface(
+                        engine = tilingSession.engine,
+                        modifier = Modifier.fillMaxSize(),
+                        onFocusWindow = { windowId -> actions.focusTilingWindow(pager.currentPage, windowId) },
+                        onCloseWindow = { windowId -> actions.closeTilingWindow(pager.currentPage, windowId) },
+                        onAddWindow = { orientation -> actions.addTilingWindow(pager.currentPage, orientation) },
+                        onResizeSplit = { splitId, ratio -> actions.resizeTilingSplit(pager.currentPage, splitId, ratio) },
+                    )
+                }
             }
             else WorkspaceCanvas(
                 settings.workspaces[page], appsById, editing && workspaceReady,
