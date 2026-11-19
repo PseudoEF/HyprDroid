@@ -1,6 +1,15 @@
 # История изменений
 
 ## Не выпущено
+### Workspace Engine v0.9 — архитектурный фундамент
+
+- Внутренний пакет `dev.hyprdroid.launcher.workspaceengine`: чистый Kotlin-движок размещения без Android/Compose и новых зависимостей; модель `WorkspaceTree`, `SplitNode` (ratio 0.05..0.95), `LeafNode`, `WorkspaceWindow`, layout-геометрия.
+- Отдельный DataStore `workspace_engine` со схемой движка; прежние workspace/shell/панелей хранилища и форматы не изменены.
+- Операции движка (`addFirstWindow`, `splitWindow`, `removeWindow`, `focusWindow`, `resizeSplit`, `calculateLayout`) с явными результатами и типизированными ошибками без повреждения состояния; layout — чистая функция на px с нормализованным ratio и информацией о нарушении минимумов.
+- Сериализация движка v1 с версионированием и валидацией; неизвестная версия схемы и повреждённое дерево — `IOException`. Начальное состояние — пустые деревья, миграция legacy не выполняется.
+- Контракт `ModuleManifest` для будущих internal `.hmod`: id, name, version, entrypoint, permissions; без WebView, ZIP, JavaScript и исполнения.
+- Unit-тесты: 13 тестов движка, контракт модуля, round-trip сериализации и DataStore; `:app:testDebugUnitTest :app:assembleDebug` — зелёные (81 тест, 0 fail).
+
 ### UI/UX Polish & Stability
 
 - Панели: Swipe only по умолчанию, опциональный Tap + Swipe и независимый порог свайпа; схема панелей v4 читает прежние данные без сброса.
