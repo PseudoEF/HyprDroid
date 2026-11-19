@@ -52,6 +52,9 @@ class OverlaySidebarService : Service() {
     private var observing: Job? = null
     private var registered = false
     private var screenOff = false
+    /** What the current windows actually show; only a matching, still attached window is reused. */
+    private data class Rendered(val side: PanelSide?, val panels: PanelsSettings, val screen: Int, val density: Float)
+    private var rendered: Rendered? = null
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             screenOff = intent?.action == Intent.ACTION_SCREEN_OFF
@@ -118,8 +121,16 @@ class OverlaySidebarService : Service() {
         val locked = getSystemService(KeyguardManager::class.java).isKeyguardLocked
         val awake = getSystemService(PowerManager::class.java).isInteractive
         if (OverlaySession.homeVisible || screenOff || locked || !awake) { openSide = null; removeWindow(); return }
+        val target = state(openSide)
+        if (rendered == target && attached(target)) return
         render()
     }
+    private fun state(side: PanelSide?) = Rendered(side, panels, windowContext.resources.displayMetrics.heightPixels,
+        windowContext.resources.displayMetrics.density)
+    /** Reuse only a window that is still in the window manager for exactly this state. */
+    private fun attached(state: Rendered): Boolean = if (state.side != null)
+        root?.isAttachedToWindow == true && compose != null
+    else handles.size == PanelSide.entries.count { panels[it].scope.apps } && handles.all { it.isAttachedToWindow }
     private fun render() {
         removeWindow()
         try {
@@ -156,11 +167,13 @@ class OverlaySidebarService : Service() {
                 owner.visible(true)
             } else {
                 PanelSide.entries.filter { panels[it].scope.apps }.forEach { edgeSide -> addHandle(edgeSide) }
+                rendered = state(null)
                 return
             }
             params.setTitle("HyprDroid ${side.name} panel")
             root = view
             windows.addView(view, params)
+            rendered = state(side)
             view.alpha = 0f; view.animate().alpha(1f).setDuration(180).start(); view.requestFocus()
         } catch (_: RuntimeException) {
             removeWindow(); OverlaySession.failed("Android не разрешил показать overlay-панель"); stopSelf()
@@ -195,13 +208,18 @@ class OverlaySidebarService : Service() {
         }
     }
     private fun removeWindow() {
+        rendered = null
         handles.forEach { try { windows.removeViewImmediate(it) } catch (_: IllegalArgumentException) { } }
         handles.clear()
         root?.let { view -> view.animate().cancel(); try { windows.removeViewImmediate(view) } catch (_: IllegalArgumentException) { } }
         compose?.disposeComposition(); compose = null; root = null
         owner.visible(false)
     }
-    override fun onConfigurationChanged(newConfig: Configuration) { super.onConfigurationChanged(newConfig); openSide = null; refreshVisibility() }
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Density/insets/display size may change without touching the stored settings.
+        openSide = null; rendered = null; refreshVisibility()
+    }
     override fun onDestroy() {
         removeWindow()
         if (registered) unregisterReceiver(receiver)
