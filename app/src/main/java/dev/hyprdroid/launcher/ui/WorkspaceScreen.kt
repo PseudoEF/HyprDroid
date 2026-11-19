@@ -57,7 +57,7 @@ fun WorkspaceScreen(model: WorkspaceViewModel, requestedScreen: String? = null, 
         if (uri != null) model.chooseWallpaper(uri)
     }
     DisposableEffect(lifecycle, model) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) model.refreshApps() }
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) model.refreshAppsIfNeeded() }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
