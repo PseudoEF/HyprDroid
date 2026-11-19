@@ -9,28 +9,26 @@ package dev.hyprdroid.launcher.data
 internal data class IconKey(val componentId: String, val densityDpi: Int, val sizePx: Int)
 
 /**
- * A shortcut icon is stale when either the shortcut itself or its package changed. Without a
- * readable package timestamp the icon must not be cached, so a missed callback cannot keep it.
+ * Independent version parts of one icon: the public shortcut change and the package update time.
+ * Both are compared as separate parts, never merged with each other.
  */
-internal fun shortcutIconStamp(shortcutChanged: Long, packageUpdated: Long?): Long? =
-    packageUpdated?.let { maxOf(shortcutChanged, it) }
+internal data class IconStamp(val shortcutChanged: Long = 0, val packageUpdated: Long? = null)
 
 /**
  * In-memory icon store limited by decoded bytes. Values are never recycled: Compose may still draw
  * the previous catalogue while the next one is being built.
  */
 internal class CatalogIconCache<T : Any>(private val maxBytes: Long) {
-    internal data class Entry<T>(val value: T, val updated: Long, val bytes: Int)
+    internal data class Entry<T>(val value: T, val stamp: IconStamp, val bytes: Int)
 
     private val entries = LinkedHashMap<IconKey, Entry<T>>()
     private var bytes = 0
 
-    /** A value is reusable only when the package update timestamp still matches. */
-    @Synchronized fun get(key: IconKey, updated: Long): T? = entries[key]?.takeIf { it.updated == updated }?.value
+    @Synchronized fun get(key: IconKey, stamp: IconStamp): T? = entries[key]?.takeIf { it.stamp == stamp }?.value
 
-    @Synchronized fun put(key: IconKey, updated: Long, valueBytes: Int, value: T) {
+    @Synchronized fun put(key: IconKey, stamp: IconStamp, valueBytes: Int, value: T) {
         entries.remove(key)?.let { bytes -= it.bytes }
-        entries[key] = Entry(value, updated, valueBytes)
+        entries[key] = Entry(value, stamp, valueBytes)
         bytes += valueBytes
     }
 
