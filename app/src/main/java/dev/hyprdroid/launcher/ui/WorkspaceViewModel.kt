@@ -5,6 +5,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import dev.hyprdroid.launcher.data.CatalogRefreshGate
+import dev.hyprdroid.launcher.data.CatalogRefresher
 import dev.hyprdroid.launcher.data.DockFullException
 import dev.hyprdroid.launcher.data.LauncherApp
 import dev.hyprdroid.launcher.data.LauncherCatalog
@@ -51,7 +53,8 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
     private val catalog = LauncherCatalog(application)
     private val mutableState = MutableStateFlow(WorkspaceUiState())
     val state = mutableState.asStateFlow()
-    private var refreshJob: Job? = null
+    private val catalogGate = CatalogRefreshGate()
+    private val catalogRefresher = CatalogRefresher(catalogGate, System::currentTimeMillis, ::loadCatalog)
     private var storageJob: Job? = null
     private var shellJob: Job? = null
     private var stopObserving: (() -> Unit)? = null
@@ -67,9 +70,13 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
         retryStorage()
         retryShellStorage()
         try {
-            stopObserving = catalog.observe(::refreshApps) { packageName ->
+            stopObserving = catalog.observe({ packages ->
+                catalogGate.changed(packages)
+                requestCatalog(force = false)
+            }) { packageName ->
                 removePackages(setOf(packageName))
-                refreshApps()
+                catalogGate.changed(setOf(packageName))
+                requestCatalog(force = false)
             }
         } catch (_: RuntimeException) {
             showMessage("Не удалось включить обновление приложений. Список обновится при возврате на главный экран.")
@@ -83,7 +90,7 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
                 repository.settings.collect { settings ->
                     val firstLoad = mutableState.value.settings == null
                     mutableState.update { it.copy(settings = settings, storageError = false) }
-                    if (firstLoad) refreshApps()
+                    if (firstLoad) requestCatalog(force = false)
                 }
             } catch (_: IOException) {
                 mutableState.update { it.copy(storageError = true) }
@@ -99,7 +106,7 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
                 shellRepository.settings.collect { shell ->
                     val firstLoad = mutableState.value.shell == null
                     mutableState.update { it.copy(shell = shell, shellError = false) }
-                    if (firstLoad) refreshApps()
+                    if (firstLoad) requestCatalog(force = false)
                 }
             } catch (_: IOException) {
                 mutableState.update { it.copy(shellError = true) }
@@ -108,27 +115,43 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun refreshApps() {
-        refreshJob?.cancel()
-        refreshJob = viewModelScope.launch {
-            mutableState.update { it.copy(loadingApps = true) }
-            try {
-                val pins = mutableState.value.settings?.workspaces?.flatMap { it.pinnedApps }?.toSet().orEmpty() +
-                    mutableState.value.shell?.favorites.orEmpty() + mutableState.value.shell?.sidebar.orEmpty()
-                        .filterIsInstance<WorkspaceItem.AppShortcut>().map { it.componentId }
-                val (apps, entries, missing) = withContext(Dispatchers.IO) {
-                    val apps = catalog.load()
-                    val visiblePackages = apps.map { it.componentId.substringBefore('/') }.toSet()
-                    Triple(apps, catalog.loadSidebarEntries(apps), catalog.missingPackages(pins.filterNot { it.substringBefore('/') in visiblePackages }.toSet()))
-                }
-                mutableState.update { it.copy(apps = apps, sidebarEntries = entries, loadingApps = false, catalogError = false) }
-                if (missing.isNotEmpty()) removePackages(missing)
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: RuntimeException) {
-                mutableState.update { it.copy(loadingApps = false, catalogError = true) }
-                showMessage("Не удалось загрузить приложения. Повторите попытку через меню панели.")
+    /** Explicit request from the menu or a failed launch: bypasses the safety interval. */
+    fun refreshApps() = requestCatalog(force = true)
+
+    /** Returning to Home re-reads the catalogue only for a package event or the safety interval. */
+    fun refreshAppsIfNeeded() = requestCatalog(force = false)
+
+    private fun requestCatalog(force: Boolean) {
+        viewModelScope.launch {
+            catalogRefresher.refresh(hasApps = { mutableState.value.apps.isNotEmpty() }, force = force)
+        }
+    }
+
+    /**
+     * The only visible change on a background pass is that [WorkspaceUiState.loadingApps] stays
+     * false: the already loaded catalogue remains on screen. A cold start keeps the old behaviour.
+     */
+    private suspend fun loadCatalog(invalidate: Set<String>): Boolean {
+        if (mutableState.value.apps.isEmpty()) mutableState.update { it.copy(loadingApps = true) }
+        return try {
+            val pins = mutableState.value.settings?.workspaces?.flatMap { it.pinnedApps }?.toSet().orEmpty() +
+                mutableState.value.shell?.favorites.orEmpty() + mutableState.value.shell?.sidebar.orEmpty()
+                    .filterIsInstance<WorkspaceItem.AppShortcut>().map { it.componentId }
+            val (apps, entries, missing) = withContext(Dispatchers.IO) {
+                val snapshot = catalog.reload(invalidate)
+                val visiblePackages = snapshot.apps.map { it.componentId.substringBefore('/') }.toSet()
+                Triple(snapshot.apps, snapshot.entries,
+                    catalog.missingPackages(pins.filterNot { it.substringBefore('/') in visiblePackages }.toSet()))
             }
+            mutableState.update { it.copy(apps = apps, sidebarEntries = entries, loadingApps = false, catalogError = false) }
+            if (missing.isNotEmpty()) removePackages(missing)
+            true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: RuntimeException) {
+            mutableState.update { it.copy(loadingApps = false, catalogError = true) }
+            showMessage("Не удалось загрузить приложения. Повторите попытку через меню панели.")
+            false
         }
     }
 

@@ -17,25 +17,62 @@ import dev.hyprdroid.launcher.model.WorkspaceItem
 data class LauncherApp(val componentId: String, val label: String, val icon: Bitmap)
 data class SidebarEntry(val item: WorkspaceItem.AppShortcut, val app: LauncherApp)
 
+/** Catalogue of the current profile; only this profile's activities are ever requested. */
 class LauncherCatalog(private val context: Context) {
+    companion object { private const val MAX_ICON_CACHE_BYTES = 32L * 1024 * 1024 }
+
+    data class Snapshot(val apps: List<LauncherApp>, val entries: List<SidebarEntry>)
+
     private val launcher = context.getSystemService(LauncherApps::class.java)
     private val user = Process.myUserHandle()
+    private val icons = CatalogIconCache<Bitmap>(MAX_ICON_CACHE_BYTES)
 
-    fun load(): List<LauncherApp> {
-        val size = (48 * context.resources.displayMetrics.density).toInt().coerceIn(48, 192)
-        return launcher.getActivityList(null, user)
+    /**
+     * Rebuilds labels and order from LauncherApps, reusing decoded icons while the package update
+     * timestamp, density and pixel size stay the same. [invalidatePackages] forces a fresh icon for
+     * those packages even when the timestamp looks unchanged.
+     */
+    fun reload(invalidatePackages: Set<String> = emptySet()): Snapshot {
+        val metrics = context.resources.displayMetrics
+        val size = (48 * metrics.density).toInt().coerceIn(48, 192)
+        val dpi = metrics.densityDpi
+        val versions = packageVersions()
+        val used = mutableSetOf<IconKey>()
+        val apps = launcher.getActivityList(null, user)
             .filter { it.componentName.packageName != context.packageName }
             .map { activity ->
-                val icon = try {
-                    activity.getBadgedIcon(context.resources.displayMetrics.densityDpi)
-                        .toBitmap(size, size)
+                val component = activity.componentName.flattenToString()
+                val packageName = activity.componentName.packageName
+                val key = IconKey(component, dpi, size)
+                used += key
+                val updated = versions[packageName]
+                val cached = if (updated == null || packageName in invalidatePackages) null else icons.get(key, updated)
+                val icon = cached ?: try {
+                    activity.getBadgedIcon(dpi).toBitmap(size, size)
                 } catch (_: RuntimeException) {
                     context.packageManager.defaultActivityIcon.toBitmap(size, size)
                 }
-                LauncherApp(activity.componentName.flattenToString(), activity.label.toString(), icon)
+                // Without a readable update time the icon is never cached: a missed callback must
+                // not be able to keep a stale icon forever.
+                if (cached == null && updated != null) icons.put(key, updated, icon.allocationByteCount, icon)
+                LauncherApp(component, activity.label.toString(), icon)
             }
             .sortedBy { it.label.lowercase(Locale.ROOT) }
+        val entries = sidebarEntries(apps, dpi, size, invalidatePackages, used)
+        icons.retain(used)
+        return Snapshot(apps, entries)
     }
+
+    /** One binder call per pass instead of one per package; invisible packages fall back to decode. */
+    @Suppress("DEPRECATION")
+    private fun packageVersions(): Map<String, Long> = try {
+        context.packageManager.getInstalledPackages(0).associate { it.packageName to it.lastUpdateTime }
+    } catch (_: RuntimeException) {
+        emptyMap()
+    }
+
+    /** Apps without the sidebar snapshot, for callers that only need the launchable catalogue. */
+    fun load(): List<LauncherApp> = reload().apps
 
     /** A missing launcher activity alone is not evidence of an uninstall (e.g. disabled app). */
     fun missingPackages(componentIds: Set<String>): Set<String> = componentIds
@@ -56,18 +93,22 @@ class LauncherCatalog(private val context: Context) {
     }
 
     /** Public Android shortcuts are visible only while Android grants HOME shortcut-host access. */
-    fun loadSidebarEntries(apps: List<LauncherApp>): List<SidebarEntry> {
+    private fun sidebarEntries(apps: List<LauncherApp>, dpi: Int, size: Int,
+        invalidatePackages: Set<String>, used: MutableSet<IconKey>): List<SidebarEntry> {
         val activities = apps.map { SidebarEntry(WorkspaceItem.AppShortcut(it.componentId), it) }
         if (!launcher.hasShortcutHostPermission()) return activities
-        val size = (48 * context.resources.displayMetrics.density).toInt().coerceIn(48, 192)
         val shortcuts = try {
             launcher.getShortcuts(LauncherApps.ShortcutQuery().setQueryFlags(
                 LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED,
             ), user).orEmpty().filter { it.isEnabled && it.`package` != context.packageName }.map { info ->
                 val component = info.activity?.flattenToString() ?: "${info.`package`}/.Shortcut"
                 val item = WorkspaceItem.AppShortcut(component, info.id)
-                val icon = try { launcher.getShortcutIconDrawable(info, context.resources.displayMetrics.densityDpi)?.toBitmap(size, size) }
+                val key = IconKey("shortcut:$component/${info.id}", dpi, size)
+                used += key
+                val cached = if (info.`package` in invalidatePackages) null else icons.get(key, info.lastChangedTimestamp)
+                val icon = cached ?: try { launcher.getShortcutIconDrawable(info, dpi)?.toBitmap(size, size) }
                     catch (_: RuntimeException) { null }
+                if (cached == null && icon != null) icons.put(key, info.lastChangedTimestamp, icon.allocationByteCount, icon)
                 val application = apps.firstOrNull { it.componentId.substringBefore('/') == info.`package` }?.label ?: info.`package`
                 SidebarEntry(item, LauncherApp(component, "${info.shortLabel ?: info.id} · $application",
                     icon ?: context.packageManager.defaultActivityIcon.toBitmap(size, size)))
@@ -82,18 +123,22 @@ class LauncherCatalog(private val context: Context) {
         else launcher.startShortcut(item.componentId.substringBefore('/'), shortcut, null, null, user)
     }
 
-    fun observe(onChanged: () -> Unit, onRemoved: (String) -> Unit): () -> Unit {
+    /** Package events name the packages whose cached icons must be refreshed. */
+    fun observe(onChanged: (Set<String>) -> Unit, onRemoved: (String) -> Unit): () -> Unit {
         val callback = object : LauncherApps.Callback() {
-            override fun onPackageAdded(packageName: String, user: UserHandle) = changed(user)
-            override fun onPackageChanged(packageName: String, user: UserHandle) = changed(user)
+            override fun onPackageAdded(packageName: String, user: UserHandle) = changed(setOf(packageName), user)
+            override fun onPackageChanged(packageName: String, user: UserHandle) = changed(setOf(packageName), user)
             override fun onPackageRemoved(packageName: String, user: UserHandle) {
                 if (user == this@LauncherCatalog.user) onRemoved(packageName)
             }
-            override fun onPackagesAvailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = changed(user)
-            override fun onPackagesUnavailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = changed(user)
-            override fun onShortcutsChanged(packageName: String, shortcuts: MutableList<android.content.pm.ShortcutInfo>, user: UserHandle) = changed(user)
-            private fun changed(profile: UserHandle) {
-                if (profile == this@LauncherCatalog.user) onChanged()
+            override fun onPackagesAvailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) =
+                changed(packageNames.toSet(), user)
+            override fun onPackagesUnavailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) =
+                changed(packageNames.toSet(), user)
+            override fun onShortcutsChanged(packageName: String, shortcuts: MutableList<android.content.pm.ShortcutInfo>, user: UserHandle) =
+                changed(setOf(packageName), user)
+            private fun changed(packages: Set<String>, profile: UserHandle) {
+                if (profile == this@LauncherCatalog.user) onChanged(packages)
             }
         }
         launcher.registerCallback(callback, Handler(Looper.getMainLooper()))
