@@ -249,8 +249,8 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
         }
     }
     Box(Modifier.fillMaxSize().testTag("home-panel-root")
-        .homePanelGesture(PanelSide.LEFT, panels.left, !overlayOpen && !editing && panels.left.scope.home) { leftPanelOpen = true }
-        .homePanelGesture(PanelSide.RIGHT, panels.right, !overlayOpen && !editing && panels.right.scope.home) { sidebarOpen = true }) {
+        .homePanelGesture(PanelSide.LEFT, panels.left, !overlayOpen && !editing && !dockDragging && panels.left.scope.home) { leftPanelOpen = true }
+        .homePanelGesture(PanelSide.RIGHT, panels.right, !overlayOpen && !editing && !dockDragging && panels.right.scope.home) { sidebarOpen = true }) {
     Column(
         Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 12.dp, vertical = 8.dp)
             .then(if (overlayOpen) Modifier.clearAndSetSemantics {} else Modifier),
@@ -284,7 +284,7 @@ fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (
             onSettings = openPresentation, onMenuVisibilityChanged = { shellMenuOpen = it })
         Spacer(Modifier.height(12.dp))
         HorizontalPager(state = pager, modifier = Modifier.weight(1f).widthIn(max = 960.dp).fillMaxWidth().testTag("home-pager"),
-            userScrollEnabled = !overlayOpen && !dragging) { page ->
+            userScrollEnabled = !overlayOpen && !dragging && !dockDragging) { page ->
             if (!classic) Box(Modifier.fillMaxSize().testTag("workspace-canvas-$page")) {
                 Box(Modifier.fillMaxSize().testTag("clean-workspace-$page")
                     .homeBlankGestures(!overlayOpen, true, openPresentation, openDrawer, openControl, revealDock))
