@@ -113,11 +113,11 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
                 val available = if (split.orientation == Orientation.HORIZONTAL) rect.width else rect.height
                 val firstSize: Int
                 val secondSize: Int
-                if (firstMin + secondMin <= available) {
-                    firstSize = maxOf((available * split.ratio).toInt(), firstMin).coerceAtMost(available - secondMin)
+                if (firstMin + secondMin <= available.toLong()) {
+                    firstSize = maxOf((available * split.ratio).toInt(), firstMin.toInt())
                 }
                 else {
-                    firstSize = firstMin.coerceAtMost(available)
+                    firstSize = firstMin.coerceAtMost(available.toLong()).toInt()
                 }
                 secondSize = available - firstSize
                 val firstRect = if (split.orientation == Orientation.HORIZONTAL) LayoutRect(x = rect.x, y = rect.y, width = firstSize, height = rect.height)
@@ -132,10 +132,10 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
         return result
     }
 
-    private fun minExtent(node: LayoutNode?, axis: Int, mins: Map<WindowId, WindowMin>): Int {
+    private fun minExtent(node: LayoutNode?, axis: Int, mins: Map<WindowId, WindowMin>): Long {
         if (node is LeafNode) {
             val min = mins[node.windowId] ?: WindowMin(0, 0)
-            return if (axis == 0) min.widthPx.coerceAtLeast(0) else min.heightPx.coerceAtLeast(0)
+            return if (axis == 0) min.widthPx.coerceAtLeast(0).toLong() else min.heightPx.coerceAtLeast(0).toLong()
         }
         val split = node as SplitNode
         val firstMin = minExtent(split.first, axis, mins)

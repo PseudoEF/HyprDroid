@@ -451,4 +451,23 @@ class WorkspaceEngineTest {
         ))
         assertEquals(2, placed.size)
     }
+
+    @Test fun layoutWithLargeMinimumsUsesLongMathAndClamps() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1"))
+        assertTrue(engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s1"), window("w-2", "com.example/.Second")))
+        assertTrue(engine.splitWindow(WindowId("w-2"), Orientation.VERTICAL, SplitId("s2"), window("w-3", "com.example/.Third")))
+        val placed = engine.calculateLayout(LayoutArea(2000, 2000), mapOf(
+            WindowId("w-1") to WindowMin(Int.MAX_VALUE, Int.MAX_VALUE),
+            WindowId("w-2") to WindowMin(Int.MAX_VALUE, Int.MAX_VALUE),
+            WindowId("w-3") to WindowMin(Int.MAX_VALUE, Int.MAX_VALUE),
+        ))
+        assertEquals(3, placed.size)
+        for (item in placed) {
+            assertTrue(item.rect.width >= 0)
+            assertTrue(item.rect.height >= 0)
+            assertTrue(item.rect.x + item.rect.width <= 2000)
+            assertTrue(item.rect.y + item.rect.height <= 2000)
+        }
+    }
 }
