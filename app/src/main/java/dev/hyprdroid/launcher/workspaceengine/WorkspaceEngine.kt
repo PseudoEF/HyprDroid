@@ -10,6 +10,8 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
     var root: LayoutNode? = initial.root
     private val windows: MutableMap<WindowId, WorkspaceWindow> = initial.windows.toMutableMap()
     var focusedWindowId: WindowId? = initial.focusedWindowId
+    private val knownLeafIds = mutableSetOf<String>()
+    private val knownSplitIds = mutableSetOf<String>()
 
     companion object {
         const val ENGINE_SCHEMA_VERSION = 1
@@ -75,43 +77,66 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
 
     fun resizeSplit(splitId: SplitId, ratio: Float): Boolean {
         val split = findSplit(root, splitId) ?: return false
-        if (ratio < MIN_RATIO || ratio > MAX_RATIO) return false
+        if (ratio.isNaN() || ratio.isInfinite() || ratio < MIN_RATIO || ratio > MAX_RATIO) return false
         split.ratio = ratio
         return true
     }
 
     /** Pure layout pass: rectangles are produced inside the available area, mins may clip. */
     fun calculateLayout(area: LayoutArea, mins: Map<WindowId, WindowMin>): List<PlacedWindow> {
+        val width = area.widthPx.coerceAtLeast(0)
+        val height = area.heightPx.coerceAtLeast(0)
         val result = mutableListOf<PlacedWindow>()
         fun walk(node: LayoutNode?, rect: LayoutRect) {
             if (node == null) return
             if (node is LeafNode) {
                 val min = mins[node.windowId] ?: WindowMin(0, 0)
+                val minWidthPx = min.widthPx.coerceAtLeast(0)
+                val minHeightPx = min.heightPx.coerceAtLeast(0)
                 result += PlacedWindow(
                     windowId = node.windowId,
                     rect = rect,
-                    minWidthPx = min.widthPx,
-                    minHeightPx = min.heightPx,
-                    constrained = rect.width < min.widthPx || rect.height < min.heightPx,
+                    minWidthPx = minWidthPx,
+                    minHeightPx = minHeightPx,
+                    constrained = rect.width < minWidthPx || rect.height < minHeightPx,
                 )
             }
             else {
                 val split = node as SplitNode
-                val firstRect = if (split.orientation == Orientation.HORIZONTAL) LayoutRect(x = 0, y = 0, width = (rect.width * split.ratio).toInt(), height = rect.height)
-                else LayoutRect(x = 0, y = 0, width = rect.width, height = (rect.height * split.ratio).toInt())
-                val secondRect = if (split.orientation == Orientation.HORIZONTAL) LayoutRect(x = firstRect.x + firstRect.width, y = firstRect.y, width = rect.width - firstRect.width, height = rect.height)
-                else LayoutRect(x = firstRect.x, y = firstRect.y, width = rect.width, height = rect.height - firstRect.height)
+                val constrainedAxis = if (split.orientation == Orientation.HORIZONTAL) 0 else 1
+                val firstMin = minExtent(split.first, constrainedAxis, mins)
+                val secondMin = minExtent(split.second, constrainedAxis, mins)
+                val available = if (split.orientation == Orientation.HORIZONTAL) rect.width else rect.height
+                var firstSize = (available * split.ratio).toInt()
+                if (firstSize < firstMin) firstSize = firstMin
+                if (available - firstSize < secondMin) firstSize = available - secondMin
+                val secondSize = available - firstSize
+                val firstRect = if (split.orientation == Orientation.HORIZONTAL) LayoutRect(x = rect.x, y = rect.y, width = firstSize, height = rect.height)
+                else LayoutRect(x = rect.x, y = rect.y, width = rect.width, height = firstSize)
+                val secondRect = if (split.orientation == Orientation.HORIZONTAL) LayoutRect(x = rect.x + firstSize, y = rect.y, width = secondSize, height = rect.height)
+                else LayoutRect(x = rect.x, y = rect.y + firstSize, width = rect.width, height = secondSize)
                 walk(split.first, firstRect)
                 walk(split.second, secondRect)
             }
         }
-        walk(root, LayoutRect(x = 0, y = 0, width = area.widthPx, height = area.heightPx))
+        walk(root, LayoutRect(x = 0, y = 0, width = width, height = height))
         return result
+    }
+
+    private fun minExtent(node: LayoutNode?, axis: Int, mins: Map<WindowId, WindowMin>): Int {
+        if (node is LeafNode) {
+            val min = mins[node.windowId] ?: WindowMin(0, 0)
+            return if (axis == 0) min.widthPx.coerceAtLeast(0) else min.heightPx.coerceAtLeast(0)
+        }
+        val split = node as SplitNode
+        val firstMin = minExtent(split.first, axis, mins)
+        val secondMin = minExtent(split.second, axis, mins)
+        return if (split.orientation == Orientation.HORIZONTAL) firstMin + secondMin else maxOf(firstMin, secondMin)
     }
 
     fun serialize(): String {
         val node = root
-        val rootJson: Any? = if (node == null) null else when (node) {
+        val rootJson: Any? = if (node == null) JSONObject.NULL else when (node) {
             is LeafNode -> JSONObject().put("leaf", node.windowId.value)
             is SplitNode -> JSONObject()
                 .put("id", node.id.value)
@@ -136,21 +161,25 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
         val document = try { JSONObject(raw) } catch (error: JSONException) { throw IOException("Invalid workspace engine state", error) }
         val version = document.optInt("version", -1)
         if (version != ENGINE_SCHEMA_VERSION) throw IOException("Unsupported workspace engine schema version: $version")
+        if (!document.has("root")) throw IOException("Invalid workspace engine state: missing root")
+        if (!document.has("windows")) throw IOException("Invalid workspace engine state: missing windows")
+        if (!document.has("focused")) throw IOException("Invalid workspace engine state: missing focused")
         val engine = WorkspaceEngine()
         val node = document.opt("root")
         engine.root = if (node == null || JSONObject.NULL.equals(node)) null else {
             try { nodeFromJson(node) } catch (error: JSONException) { throw IOException("Invalid workspace engine state", error) }
         }
-        val windowsJson = document.optJSONArray("windows") ?: JSONArray()
+        val windowsJson = document.optJSONArray("windows") ?: throw IOException("Invalid workspace engine state: windows must be an array")
         val loaded = mutableMapOf<WindowId, WorkspaceWindow>()
         for (index in 0 until windowsJson.length()) {
-            val item = windowsJson.optJSONObject(index) ?: throw IOException("Invalid workspace engine state")
+            val item = windowsJson.optJSONObject(index) ?: throw IOException("Invalid workspace engine state: window entry must be an object")
             val windowId = WindowId(item.getString("windowId"))
             loaded[windowId] = WorkspaceWindow(windowId = windowId, moduleId = item.getString("moduleId"), minWidthDp = item.optInt("minWidthDp", 0), minHeightDp = item.optInt("minHeightDp", 0))
         }
         engine.windows.clear()
         loaded.forEach { entry -> engine.windows[entry.key] = entry.value }
         engine.focusedWindowId = if (document.isNull("focused")) null else WindowId(document.getString("focused"))
+        if (engine.focusedWindowId != null && !loaded.containsKey(engine.focusedWindowId)) throw IOException("Damaged workspace engine state: focused window is missing")
         if (engine.leaves().toSet() != engine.windows.keys.toSet()) throw IOException("Damaged workspace engine state: leaves do not match windows")
         return engine
     }
@@ -168,16 +197,23 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
     private fun nodeFromJson(value: Any?): LayoutNode? = when (value) {
         null -> null
         is JSONObject -> {
-            if (value.has("leaf")) LeafNode(WindowId(value.getString("leaf")))
+            if (value.has("leaf")) {
+                val leafId = value.getString("leaf")
+                if (!knownLeafIds.add(leafId)) throw IOException("Damaged workspace engine state: duplicate window id $leafId")
+                LeafNode(WindowId(leafId))
+            }
             else {
+                if (!value.has("id")) throw IOException("Invalid workspace engine state: split id is missing")
+                val splitId = value.getString("id")
+                if (!knownSplitIds.add(splitId)) throw IOException("Damaged workspace engine state: duplicate split id $splitId")
+                if (!value.has("orientation")) throw IOException("Invalid workspace engine state: split orientation is missing")
                 val orientation = try { Orientation.valueOf(value.getString("orientation")) } catch (error: IllegalArgumentException) { throw IOException("Invalid workspace engine state: unknown orientation", error) }
-                SplitNode(
-                    id = SplitId(value.getString("id")),
-                    orientation = orientation,
-                    ratio = value.optDouble("ratio", 0.5).toFloat(),
-                    first = nodeFromJson(value.get("first")) ?: throw IOException("Invalid workspace engine state: split first child is missing"),
-                    second = nodeFromJson(value.get("second")) ?: throw IOException("Invalid workspace engine state: split second child is missing"),
-                )
+                if (!value.has("ratio")) throw IOException("Invalid workspace engine state: split ratio is missing")
+                val ratio = value.optDouble("ratio", 0.5).toFloat()
+                if (ratio.isNaN() || ratio.isInfinite() || ratio < MIN_RATIO || ratio > MAX_RATIO) throw IOException("Invalid workspace engine state: split ratio out of range: $ratio")
+                val first = nodeFromJson(value.get("first")) ?: throw IOException("Invalid workspace engine state: split first child is missing")
+                val second = nodeFromJson(value.get("second")) ?: throw IOException("Invalid workspace engine state: split second child is missing")
+                SplitNode(id = SplitId(splitId), orientation = orientation, ratio = ratio, first = first, second = second)
             }
         }
         else -> throw IOException("Invalid workspace engine state: unsupported layout node")
@@ -192,6 +228,7 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
     }
 
     private fun locate(node: LayoutNode?, parent: LayoutNode?, grandparent: LayoutNode?, isFirst: Boolean, target: WindowId): Location? {
+        if (node == null) return null
         if (node is LeafNode) return if (node.windowId == target) Location(node, parent, grandparent, isFirst) else null
         val split = node as SplitNode
         val fromFirst = locate(split.first, split, parent, true, target)

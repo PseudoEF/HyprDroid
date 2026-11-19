@@ -96,6 +96,8 @@ class WorkspaceEngineTest {
         assertFalse(engine.resizeSplit(SplitId("s1"), 0.04f))
         assertFalse(engine.resizeSplit(SplitId("s1"), 0.96f))
         assertTrue(engine.resizeSplit(SplitId("s1"), 0.9f))
+        assertFalse(engine.resizeSplit(SplitId("s1"), Float.NaN))
+        assertFalse(engine.resizeSplit(SplitId("s1"), Float.POSITIVE_INFINITY))
         val placed = engine.calculateLayout(LayoutArea(1000, 1000), mapOf(WindowId("w-1") to WindowMin(0, 0), WindowId("w-2") to WindowMin(0, 0)))
         assertEquals(900, placed.first { it.windowId == WindowId("w-1") }.rect.width)
     }
@@ -156,6 +158,219 @@ class WorkspaceEngineTest {
         try {
             WorkspaceEngine().deserialize(damaged)
             fail("Expected IOException for a damaged engine state tree")
+        }
+        catch (expected: IOException) {
+            // expected
+        }
+    }
+
+    @Test fun operationsOnEmptyTreeAreRejectedSafely() {
+        val engine = WorkspaceEngine()
+        assertFalse(engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s1"), window("w-2", "com.example/.Second")))
+        assertFalse(engine.removeWindow(WindowId("w-1")))
+        assertFalse(engine.focusWindow(WindowId("w-1")))
+        assertFalse(engine.resizeSplit(SplitId("s1"), 0.5f))
+        assertTrue(engine.addFirstWindow(window("w-1")))
+    }
+
+    @Test fun nestedLayoutHasNoOverlapsAndStaysInsideArea() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1"))
+        assertTrue(engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s1"), window("w-2", "com.example/.Second")))
+        assertTrue(engine.splitWindow(WindowId("w-2"), Orientation.VERTICAL, SplitId("s2"), window("w-3", "com.example/.Third")))
+        assertTrue(engine.splitWindow(WindowId("w-3"), Orientation.HORIZONTAL, SplitId("s3"), window("w-4", "com.example/.Fourth")))
+        val placed = engine.calculateLayout(LayoutArea(1000, 1000), mapOf(
+            WindowId("w-1") to WindowMin(0, 0),
+            WindowId("w-2") to WindowMin(0, 0),
+            WindowId("w-3") to WindowMin(0, 0),
+            WindowId("w-4") to WindowMin(0, 0),
+        ))
+        assertEquals(4, placed.size)
+        for (item in placed) {
+            assertTrue(item.rect.x + item.rect.width <= 1000)
+            assertTrue(item.rect.y + item.rect.height <= 1000)
+        }
+        for (i in placed.indices) {
+            for (j in i + 1 until placed.size) {
+                val first = placed[i]
+                val second = placed[j]
+                val overlaps = first.rect.x < second.rect.x + second.rect.width && second.rect.x < first.rect.x + first.rect.width && first.rect.y < second.rect.y + second.rect.height && second.rect.y < first.rect.y + second.rect.height
+                assertFalse("Windows ${first.windowId} and ${second.windowId} overlap", overlaps)
+            }
+        }
+    }
+
+    @Test fun layoutRespectsMinimumSizesWhenTheyFit() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1"))
+        assertTrue(engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s1"), window("w-2", "com.example/.Second")))
+        val placed = engine.calculateLayout(LayoutArea(1000, 1000), mapOf(
+            WindowId("w-1") to WindowMin(600, 0),
+            WindowId("w-2") to WindowMin(100, 0),
+        ))
+        assertEquals(2, placed.size)
+        val byId = placed.associateBy { it.windowId }
+        assertEquals(600, byId.getValue(WindowId("w-1")).rect.width)
+        assertEquals(400, byId.getValue(WindowId("w-2")).rect.width)
+    }
+
+    @Test fun layoutKeepsGeometryWithinAreaWhenMinimumsDoNotFit() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1"))
+        assertTrue(engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s1"), window("w-2", "com.example/.Second")))
+        val placed = engine.calculateLayout(LayoutArea(500, 1000), mapOf(
+            WindowId("w-1") to WindowMin(400, 0),
+            WindowId("w-2") to WindowMin(400, 0),
+        ))
+        for (item in placed) {
+            assertTrue(item.rect.x + item.rect.width <= 500)
+            assertTrue(item.rect.y + item.rect.height <= 1000)
+            assertTrue(item.rect.width >= 0)
+            assertTrue(item.rect.height >= 0)
+        }
+        assertTrue(placed.any { it.constrained })
+    }
+
+    @Test fun layoutNeverProducesNegativeSizes() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1"))
+        val placed = engine.calculateLayout(LayoutArea(-100, -50), mapOf(WindowId("w-1") to WindowMin(-20, -10)))
+        assertEquals(1, placed.size)
+        assertTrue(placed.single().rect.width >= 0)
+        assertTrue(placed.single().rect.height >= 0)
+    }
+
+    @Test fun roundTripEmptyTreeAndNestedTree() {
+        val empty = WorkspaceEngine().deserialize(WorkspaceEngine().serialize())
+        assertTrue(empty.root == null)
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1"))
+        assertTrue(engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s1"), window("w-2", "com.example/.Second")))
+        val restored = WorkspaceEngine().deserialize(engine.serialize())
+        val placedBefore = engine.calculateLayout(LayoutArea(640, 1280), mapOf(WindowId("w-1") to WindowMin(0, 0), WindowId("w-2") to WindowMin(0, 0)))
+        val placedAfter = restored.calculateLayout(LayoutArea(640, 1280), mapOf(WindowId("w-1") to WindowMin(0, 0), WindowId("w-2") to WindowMin(0, 0)))
+        assertEquals(placedBefore, placedAfter)
+    }
+
+    @Test fun deserializeRejectsMissingMandatoryFields() {
+        val missingRoot = JSONObject().put("version", 1).put("windows", JSONArray()).put("focused", JSONObject.NULL).toString()
+        try {
+            WorkspaceEngine().deserialize(missingRoot)
+            fail("Expected IOException for a missing root")
+        }
+        catch (expected: IOException) {
+            // expected
+        }
+        val missingWindows = JSONObject().put("version", 1).put("root", JSONObject.NULL).put("focused", JSONObject.NULL).toString()
+        try {
+            WorkspaceEngine().deserialize(missingWindows)
+            fail("Expected IOException for missing windows")
+        }
+        catch (expected: IOException) {
+            // expected
+        }
+        val missingFocused = JSONObject().put("version", 1).put("root", JSONObject.NULL).put("windows", JSONArray()).toString()
+        try {
+            WorkspaceEngine().deserialize(missingFocused)
+            fail("Expected IOException for missing focused")
+        }
+        catch (expected: IOException) {
+            // expected
+        }
+    }
+
+    @Test fun deserializeRejectsInvalidSplitPayloads() {
+        val missingRatio = JSONObject()
+            .put("version", 1)
+            .put("root", JSONObject().put("id", "s1").put("orientation", "HORIZONTAL").put("first", JSONObject().put("leaf", "w-1")).put("second", JSONObject().put("leaf", "w-2")))
+            .put("windows", JSONArray().put(JSONObject().put("windowId", "w-1").put("moduleId", "com.example/.Main")).put(JSONObject().put("windowId", "w-2").put("moduleId", "com.example/.Second")))
+            .put("focused", JSONObject.NULL)
+            .toString()
+        try {
+            WorkspaceEngine().deserialize(missingRatio)
+            fail("Expected IOException for a split without ratio")
+        }
+        catch (expected: IOException) {
+            // expected
+        }
+        val badOrientation = JSONObject()
+            .put("version", 1)
+            .put("root", JSONObject().put("id", "s1").put("orientation", "DIAGONAL").put("ratio", 0.5).put("first", JSONObject().put("leaf", "w-1")).put("second", JSONObject().put("leaf", "w-2")))
+            .put("windows", JSONArray().put(JSONObject().put("windowId", "w-1").put("moduleId", "com.example/.Main")).put(JSONObject().put("windowId", "w-2").put("moduleId", "com.example/.Second")))
+            .put("focused", JSONObject.NULL)
+            .toString()
+        try {
+            WorkspaceEngine().deserialize(badOrientation)
+            fail("Expected IOException for an unknown split orientation")
+        }
+        catch (expected: IOException) {
+            // expected
+        }
+        val badRatio = JSONObject()
+            .put("version", 1)
+            .put("root", JSONObject().put("id", "s1").put("orientation", "HORIZONTAL").put("ratio", 1.5).put("first", JSONObject().put("leaf", "w-1")).put("second", JSONObject().put("leaf", "w-2")))
+            .put("windows", JSONArray().put(JSONObject().put("windowId", "w-1").put("moduleId", "com.example/.Main")).put(JSONObject().put("windowId", "w-2").put("moduleId", "com.example/.Second")))
+            .put("focused", JSONObject.NULL)
+            .toString()
+        try {
+            WorkspaceEngine().deserialize(badRatio)
+            fail("Expected IOException for a split ratio out of range")
+        }
+        catch (expected: IOException) {
+            // expected
+        }
+    }
+
+    @Test fun deserializeRejectsDuplicateIdsAndInvalidFocusedWindow() {
+        val duplicateLeaf = JSONObject()
+            .put("version", 1)
+            .put("root", JSONObject().put("id", "s1").put("orientation", "HORIZONTAL").put("ratio", 0.5).put("first", JSONObject().put("leaf", "w-1")).put("second", JSONObject().put("leaf", "w-1")))
+            .put("windows", JSONArray().put(JSONObject().put("windowId", "w-1").put("moduleId", "com.example/.Main")))
+            .put("focused", JSONObject.NULL)
+            .toString()
+        try {
+            WorkspaceEngine().deserialize(duplicateLeaf)
+            fail("Expected IOException for duplicate window ids")
+        }
+        catch (expected: IOException) {
+            // expected
+        }
+        val innerSplit = JSONObject()
+            .put("id", "s1")
+            .put("orientation", "VERTICAL")
+            .put("ratio", 0.5)
+            .put("first", JSONObject().put("leaf", "w-1"))
+            .put("second", JSONObject().put("leaf", "w-2"))
+        val duplicateSplit = JSONObject()
+            .put("version", 1)
+            .put("root", JSONObject()
+                .put("id", "s1")
+                .put("orientation", "HORIZONTAL")
+                .put("ratio", 0.5)
+                .put("first", innerSplit)
+                .put("second", JSONObject().put("leaf", "w-3")))
+            .put("windows", JSONArray()
+                .put(JSONObject().put("windowId", "w-1").put("moduleId", "com.example/.Main"))
+                .put(JSONObject().put("windowId", "w-2").put("moduleId", "com.example/.Second"))
+                .put(JSONObject().put("windowId", "w-3").put("moduleId", "com.example/.Third")))
+            .put("focused", JSONObject.NULL)
+            .toString()
+        try {
+            WorkspaceEngine().deserialize(duplicateSplit)
+            fail("Expected IOException for duplicate split ids")
+        }
+        catch (expected: IOException) {
+            // expected
+        }
+        val badFocused = JSONObject()
+            .put("version", 1)
+            .put("root", JSONObject().put("leaf", "w-1"))
+            .put("windows", JSONArray().put(JSONObject().put("windowId", "w-1").put("moduleId", "com.example/.Main")))
+            .put("focused", "w-2")
+            .toString()
+        try {
+            WorkspaceEngine().deserialize(badFocused)
+            fail("Expected IOException for a focused window outside the tree")
         }
         catch (expected: IOException) {
             // expected
