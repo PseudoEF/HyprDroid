@@ -11,6 +11,7 @@ import dev.hyprdroid.launcher.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withContext
 
 private val Context.workspaceStore by preferencesDataStore(
     name = "workspaces",
@@ -45,7 +46,10 @@ class WorkspaceRepository(private val store: DataStore<Preferences>) {
         it.withAppearance(workspace, it.workspaces[workspace].appearance.copy(gridLayout = enabled))
     }
 
+    /** The transform runs in the caller's context, so keep JSON work off the main thread. */
     private suspend fun update(transform: (WorkspaceSettings) -> WorkspaceSettings) {
-        store.edit { data -> WorkspaceCodec.encode(transform(WorkspaceCodec.decode(data)), data) }
+        withContext(Dispatchers.Default) {
+            store.edit { data -> WorkspaceCodec.encode(transform(WorkspaceCodec.decode(data)), data) }
+        }
     }
 }
