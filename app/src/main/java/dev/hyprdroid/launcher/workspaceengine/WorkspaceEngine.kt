@@ -30,6 +30,7 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
 
     /** Splits the window that owns [windowId] and inserts [secondWindow] as the second child. */
     fun splitWindow(windowId: WindowId, orientation: Orientation, splitId: SplitId, secondWindow: WorkspaceWindow): Boolean {
+        if (findSplit(root, splitId) != null) return false
         if (windows.containsKey(secondWindow.windowId)) return false
         val found = locate(root, null, null, false, windowId) ?: return false
         val split = SplitNode(
@@ -65,7 +66,10 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
             }
         }
         windows.remove(windowId)
-        if (focusedWindowId == windowId) focusedWindowId = null
+        if (focusedWindowId == windowId) {
+            val remaining = leaves()
+            focusedWindowId = remaining.firstOrNull()
+        }
         return true
     }
 
@@ -107,10 +111,15 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
                 val firstMin = minExtent(split.first, constrainedAxis, mins)
                 val secondMin = minExtent(split.second, constrainedAxis, mins)
                 val available = if (split.orientation == Orientation.HORIZONTAL) rect.width else rect.height
-                var firstSize = (available * split.ratio).toInt()
-                if (firstSize < firstMin) firstSize = firstMin
-                if (available - firstSize < secondMin) firstSize = available - secondMin
-                val secondSize = available - firstSize
+                val firstSize: Int
+                val secondSize: Int
+                if (firstMin + secondMin <= available) {
+                    firstSize = maxOf((available * split.ratio).toInt(), firstMin).coerceAtMost(available - secondMin)
+                }
+                else {
+                    firstSize = firstMin.coerceAtMost(available)
+                }
+                secondSize = available - firstSize
                 val firstRect = if (split.orientation == Orientation.HORIZONTAL) LayoutRect(x = rect.x, y = rect.y, width = firstSize, height = rect.height)
                 else LayoutRect(x = rect.x, y = rect.y, width = rect.width, height = firstSize)
                 val secondRect = if (split.orientation == Orientation.HORIZONTAL) LayoutRect(x = rect.x + firstSize, y = rect.y, width = secondSize, height = rect.height)
@@ -171,9 +180,11 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
         }
         val windowsJson = document.optJSONArray("windows") ?: throw IOException("Invalid workspace engine state: windows must be an array")
         val loaded = mutableMapOf<WindowId, WorkspaceWindow>()
+        val seenWindowIds = mutableSetOf<String>()
         for (index in 0 until windowsJson.length()) {
             val item = windowsJson.optJSONObject(index) ?: throw IOException("Invalid workspace engine state: window entry must be an object")
             val windowId = WindowId(item.getString("windowId"))
+            if (!seenWindowIds.add(windowId.value)) throw IOException("Damaged workspace engine state: duplicate window id ${windowId.value}")
             loaded[windowId] = WorkspaceWindow(windowId = windowId, moduleId = item.getString("moduleId"), minWidthDp = item.optInt("minWidthDp", 0), minHeightDp = item.optInt("minHeightDp", 0))
         }
         engine.windows.clear()

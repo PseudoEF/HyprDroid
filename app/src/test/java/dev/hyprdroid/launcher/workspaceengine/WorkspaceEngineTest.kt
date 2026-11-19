@@ -376,4 +376,79 @@ class WorkspaceEngineTest {
             // expected
         }
     }
+
+    @Test fun layoutWithUnfittableMinimumsKeepsGeometryAndFlagsConstrained() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1"))
+        assertTrue(engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s1"), window("w-2", "com.example/.Second")))
+        val placed = engine.calculateLayout(LayoutArea(100, 1000), mapOf(
+            WindowId("w-1") to WindowMin(200, 0),
+            WindowId("w-2") to WindowMin(200, 0),
+        ))
+        assertEquals(2, placed.size)
+        val byId = placed.associateBy { it.windowId }
+        val first = byId.getValue(WindowId("w-1"))
+        val second = byId.getValue(WindowId("w-2"))
+        assertTrue(first.rect.width >= 0)
+        assertTrue(second.rect.width >= 0)
+        assertEquals(100, first.rect.width + second.rect.width)
+        assertTrue(first.constrained)
+        assertTrue(second.constrained)
+    }
+
+    @Test fun splitWindowRejectsDuplicateSplitIdWithoutStateChange() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1"))
+        assertTrue(engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s1"), window("w-2", "com.example/.Second")))
+        assertFalse(engine.splitWindow(WindowId("w-2"), Orientation.VERTICAL, SplitId("s1"), window("w-3", "com.example/.Third")))
+        val placed = engine.calculateLayout(LayoutArea(1000, 1000), mapOf(
+            WindowId("w-1") to WindowMin(0, 0),
+            WindowId("w-2") to WindowMin(0, 0),
+        ))
+        assertEquals(2, placed.size)
+    }
+
+    @Test fun deserializeRejectsDuplicateWindowEntries() {
+        val firstWindow = JSONObject().put("windowId", "w-1").put("moduleId", "com.example/.Main")
+        val duplicateWindows = JSONObject()
+            .put("version", 1)
+            .put("root", JSONObject().put("leaf", "w-1"))
+            .put("windows", JSONArray().put(firstWindow).put(firstWindow))
+            .put("focused", JSONObject.NULL)
+            .toString()
+        try {
+            WorkspaceEngine().deserialize(duplicateWindows)
+            fail("Expected IOException for duplicate window entries")
+        }
+        catch (expected: IOException) {
+            // expected
+        }
+    }
+
+    @Test fun removeWindowMovesFocusToRemainingWindowOrClearsIt() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1"))
+        assertTrue(engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s1"), window("w-2", "com.example/.Second")))
+        engine.focusWindow(WindowId("w-1"))
+        assertTrue(engine.removeWindow(WindowId("w-1")))
+        assertEquals(WindowId("w-2"), engine.focusedWindowId)
+        val empty = WorkspaceEngine()
+        empty.addFirstWindow(window("w-1"))
+        assertTrue(empty.removeWindow(WindowId("w-1")))
+        assertTrue(empty.focusedWindowId == null)
+    }
+
+    @Test fun operationsAfterDeserializationKeepInvariants() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1"))
+        engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s1"), window("w-2", "com.example/.Second"))
+        val restored = WorkspaceEngine().deserialize(engine.serialize())
+        assertTrue(restored.splitWindow(WindowId("w-2"), Orientation.VERTICAL, SplitId("s2"), window("w-3", "com.example/.Third")))
+        assertTrue(restored.removeWindow(WindowId("w-2")))
+        val placed = restored.calculateLayout(LayoutArea(1000, 1000), mapOf(
+            WindowId("w-1") to WindowMin(0, 0),
+            WindowId("w-3") to WindowMin(0, 0),
+        ))
+        assertEquals(2, placed.size)
+    }
 }
