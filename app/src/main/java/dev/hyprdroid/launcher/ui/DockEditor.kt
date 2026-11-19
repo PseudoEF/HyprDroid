@@ -20,7 +20,7 @@ import dev.hyprdroid.launcher.model.MAX_DOCK_APPS
 internal fun DockEditor(state: WorkspaceUiState, pin: (String, Boolean) -> Unit,
     place: (String, String?) -> Unit, onClose: () -> Unit) {
     val order = state.shell?.dockComponents.orEmpty()
-    val apps = state.apps.associateBy { it.componentId }
+    val apps = remember(state.apps) { state.apps.associateBy { it.componentId } }
     var query by remember { mutableStateOf("") }
     var adding by remember { mutableStateOf(false) }
     val enabled = state.shell != null && !state.shellError
