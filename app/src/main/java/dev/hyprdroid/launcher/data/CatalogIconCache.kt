@@ -9,6 +9,13 @@ package dev.hyprdroid.launcher.data
 internal data class IconKey(val componentId: String, val densityDpi: Int, val sizePx: Int)
 
 /**
+ * A shortcut icon is stale when either the shortcut itself or its package changed. Without a
+ * readable package timestamp the icon must not be cached, so a missed callback cannot keep it.
+ */
+internal fun shortcutIconStamp(shortcutChanged: Long, packageUpdated: Long?): Long? =
+    packageUpdated?.let { maxOf(shortcutChanged, it) }
+
+/**
  * In-memory icon store limited by decoded bytes. Values are never recycled: Compose may still draw
  * the previous catalogue while the next one is being built.
  */

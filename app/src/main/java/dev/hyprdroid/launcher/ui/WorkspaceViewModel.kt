@@ -3,6 +3,7 @@ package dev.hyprdroid.launcher.ui
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hyprdroid.launcher.data.CatalogRefreshGate
@@ -54,7 +55,7 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
     private val mutableState = MutableStateFlow(WorkspaceUiState())
     val state = mutableState.asStateFlow()
     private val catalogGate = CatalogRefreshGate()
-    private val catalogRefresher = CatalogRefresher(catalogGate, System::currentTimeMillis, ::loadCatalog)
+    private val catalogRefresher = CatalogRefresher(catalogGate, SystemClock::elapsedRealtime, ::loadCatalog)
     private var storageJob: Job? = null
     private var shellJob: Job? = null
     private var stopObserving: (() -> Unit)? = null
@@ -115,7 +116,7 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    /** Explicit request from the menu or a failed launch: bypasses the safety interval. */
+    /** Explicit request from the menu or a failed launch: bypasses the safety interval and re-decodes icons. */
     fun refreshApps() = requestCatalog(force = true)
 
     /** Returning to Home re-reads the catalogue only for a package event or the safety interval. */
@@ -131,14 +132,14 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
      * The only visible change on a background pass is that [WorkspaceUiState.loadingApps] stays
      * false: the already loaded catalogue remains on screen. A cold start keeps the old behaviour.
      */
-    private suspend fun loadCatalog(invalidate: Set<String>): Boolean {
+    private suspend fun loadCatalog(invalidate: Set<String>, refreshIcons: Boolean): Boolean {
         if (mutableState.value.apps.isEmpty()) mutableState.update { it.copy(loadingApps = true) }
         return try {
             val pins = mutableState.value.settings?.workspaces?.flatMap { it.pinnedApps }?.toSet().orEmpty() +
                 mutableState.value.shell?.favorites.orEmpty() + mutableState.value.shell?.sidebar.orEmpty()
                     .filterIsInstance<WorkspaceItem.AppShortcut>().map { it.componentId }
             val (apps, entries, missing) = withContext(Dispatchers.IO) {
-                val snapshot = catalog.reload(invalidate)
+                val snapshot = catalog.reload(invalidate, refreshIcons)
                 val visiblePackages = snapshot.apps.map { it.componentId.substringBefore('/') }.toSet()
                 Triple(snapshot.apps, snapshot.entries,
                     catalog.missingPackages(pins.filterNot { it.substringBefore('/') in visiblePackages }.toSet()))
