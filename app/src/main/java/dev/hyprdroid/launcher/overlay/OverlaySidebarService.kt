@@ -46,15 +46,14 @@ class OverlaySidebarService : Service() {
     private var root: View? = null
     private var compose: ComposeView? = null
     private var openSide: PanelSide? = null
-    private val handles = mutableListOf<View>()
+    private val handles = mutableMapOf<PanelSide, View>()
     private var settings = OverlaySettings()
     private var panels = PanelsSettings()
     private var observing: Job? = null
     private var registered = false
     private var screenOff = false
     /** What the current windows actually show; only a matching, still attached window is reused. */
-    private data class Rendered(val side: PanelSide?, val panels: PanelsSettings, val screen: Int, val density: Float)
-    private var rendered: Rendered? = null
+    private var rendered: OverlayWindowState? = null
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             screenOff = intent?.action == Intent.ACTION_SCREEN_OFF
@@ -125,12 +124,13 @@ class OverlaySidebarService : Service() {
         if (rendered == target && attached(target)) return
         render()
     }
-    private fun state(side: PanelSide?) = Rendered(side, panels, windowContext.resources.displayMetrics.heightPixels,
+    private fun state(side: PanelSide?) = OverlayWindowState(side, panels,
+        windowContext.resources.displayMetrics.widthPixels, windowContext.resources.displayMetrics.heightPixels,
         windowContext.resources.displayMetrics.density)
     /** Reuse only a window that is still in the window manager for exactly this state. */
-    private fun attached(state: Rendered): Boolean = if (state.side != null)
+    private fun attached(state: OverlayWindowState): Boolean = if (state.side != null)
         root?.isAttachedToWindow == true && compose != null
-    else handles.size == PanelSide.entries.count { panels[it].scope.apps } && handles.all { it.isAttachedToWindow }
+    else handlesCover(state.panels, handles.keys) { handles[it]?.isAttachedToWindow == true }
     private fun render() {
         removeWindow()
         try {
@@ -190,7 +190,7 @@ class OverlaySidebarService : Service() {
                 params.x = dp(value.insetDp)
                 params.y = ((screen - height) * value.positionPercent / 100).coerceAtLeast(dp(32))
                 params.setTitle("HyprDroid ${side.name} activation")
-                handles.add(view)
+                handles[side] = view
                 windows.addView(view, params)
     }
     private fun closePanel() {
@@ -209,7 +209,7 @@ class OverlaySidebarService : Service() {
     }
     private fun removeWindow() {
         rendered = null
-        handles.forEach { try { windows.removeViewImmediate(it) } catch (_: IllegalArgumentException) { } }
+        handles.values.forEach { try { windows.removeViewImmediate(it) } catch (_: IllegalArgumentException) { } }
         handles.clear()
         root?.let { view -> view.animate().cancel(); try { windows.removeViewImmediate(view) } catch (_: IllegalArgumentException) { } }
         compose?.disposeComposition(); compose = null; root = null
