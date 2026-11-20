@@ -178,19 +178,19 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
             return split
         }
 
-        fun rows(rows: List<List<LeafNode>>): LayoutNode {
-            if (rows.size == 1) return line(rows.single(), Orientation.HORIZONTAL)
+        fun rows(groups: List<List<LeafNode>>): LayoutNode {
+            if (groups.size == 1) return line(groups.single(), Orientation.HORIZONTAL)
             val split = next(Orientation.VERTICAL)
-            split.first = line(rows.first(), Orientation.HORIZONTAL)
-            split.second = rows(rows.drop(1))
+            split.first = line(groups.first(), Orientation.HORIZONTAL)
+            split.second = rows(groups.drop(1))
             return split
         }
 
-        fun columns(columns: List<List<LeafNode>>): LayoutNode {
-            if (columns.size == 1) return line(columns.single(), Orientation.VERTICAL)
+        fun columns(groups: List<List<LeafNode>>): LayoutNode {
+            if (groups.size == 1) return line(groups.single(), Orientation.VERTICAL)
             val split = next(Orientation.HORIZONTAL)
-            split.first = line(columns.first(), Orientation.VERTICAL)
-            split.second = columns(columns.drop(1))
+            split.first = line(groups.first(), Orientation.VERTICAL)
+            split.second = columns(groups.drop(1))
             return split
         }
     }
