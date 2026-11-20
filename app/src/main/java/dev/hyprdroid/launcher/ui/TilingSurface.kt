@@ -20,7 +20,6 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.awaitPointerEvent
 import kotlin.math.abs
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
