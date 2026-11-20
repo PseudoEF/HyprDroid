@@ -28,6 +28,35 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
     /** All internal windows with module manifests; the UI layer derives minimum sizes from them. */
     fun windowsById(): Map<WindowId, WorkspaceWindow> = windows
 
+    private var windowSequence = 0
+    private var splitSequence = 0
+
+    /**
+     * Allocates a window id that is not used by the current tree or window map. The allocator scans
+     * live ids and advances a per-engine counter, so removing a window never makes the next id
+     * collide with a surviving window (the bug where `size + 1` reused `tile-3` after closing
+     * `tile-1`).
+     */
+    fun nextWindowId(): WindowId {
+        val used = collectLeaves(root).mapTo(mutableSetOf()) { it.windowId.value }
+        windows.keys.mapTo(used) { it.value }
+        while (true) {
+            windowSequence += 1
+            val candidate = "tile-$windowSequence"
+            if (candidate !in used) return WindowId(candidate)
+        }
+    }
+
+    /** Allocates a split id that no current split uses; same guarantee as [nextWindowId]. */
+    fun nextSplitId(): SplitId {
+        val used = collectSplits(root).mapTo(mutableSetOf()) { it.id.value }
+        while (true) {
+            splitSequence += 1
+            val candidate = "tile-split-$splitSequence"
+            if (candidate !in used) return SplitId(candidate)
+        }
+    }
+
     /** Independent copy for immutable publishing; mutations never leak back into a published snapshot. */
     internal fun snapshot(): WorkspaceEngine {
         val copy = WorkspaceEngine()

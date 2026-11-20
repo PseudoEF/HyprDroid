@@ -313,9 +313,8 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
         try {
             val engine = engines.getOrPut(workspaceId) { WorkspaceEngine() }
             val target = engine.focusedWindowId ?: engine.leaves().firstOrNull() ?: return@launch
-            val splitIndex = engine.windowsById().size
-            val newWindowId = WindowId("tile-${splitIndex + 1}")
-            val splitId = SplitId("tile-split-${System.currentTimeMillis()}-$splitIndex")
+            val newWindowId = engine.nextWindowId()
+            val splitId = engine.nextSplitId()
             val mins = engine.windowsById().mapValues { (_, window) -> tilingWindowMin(window, densityScale) }
             val window = WorkspaceWindow(newWindowId, TILING_TEST_MODULE_ID, TILING_TEST_MIN_WIDTH_DP, TILING_TEST_MIN_HEIGHT_DP)
             if (!engine.addWindowAdaptive(target, splitId, window, area, mins)) return@launch

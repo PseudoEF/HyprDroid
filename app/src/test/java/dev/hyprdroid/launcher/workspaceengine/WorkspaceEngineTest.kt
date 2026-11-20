@@ -822,4 +822,56 @@ class WorkspaceEngineTest {
         ))
         assertEquals(2, placed.size)
     }
+
+    @Test fun allocatedWindowAndSplitIdsNeverCollideWithLiveIds() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("tile-1"))
+        assertEquals("tile-2", engine.nextWindowId().value)
+        assertEquals("tile-3", engine.nextWindowId().value)
+        assertEquals("tile-split-1", engine.nextSplitId().value)
+        assertEquals("tile-split-2", engine.nextSplitId().value)
+        assertTrue(engine.removeWindow(WindowId("tile-2")))
+        assertEquals("tile-4", engine.nextWindowId().value)
+        assertEquals("tile-split-3", engine.nextSplitId().value)
+    }
+
+    @Test fun addingAfterRemovingFirstWindowDoesNotReuseSurvivingId() {
+        val area = LayoutArea(1080, 1920)
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("tile-1"))
+        engine.splitWindow(WindowId("tile-1"), Orientation.HORIZONTAL, SplitId("tile-split-1"), window("tile-2", "com.example/.Second"))
+        engine.splitWindow(WindowId("tile-2"), Orientation.VERTICAL, SplitId("tile-split-2"), window("tile-3", "com.example/.Third"))
+        engine.focusWindow(WindowId("tile-1"))
+        assertTrue(engine.removeWindow(WindowId("tile-1")))
+        val newWindowId = engine.nextWindowId()
+        val newSplitId = engine.nextSplitId()
+        val target = engine.focusedWindowId ?: return
+        assertTrue(engine.addWindowAdaptive(target, newSplitId, window(newWindowId.value, "com.example/.New"), area, minsFor(engine)))
+        assertEquals(3, engine.leaves().size)
+        assertEquals(3, engine.leaves().toSet().size)
+        assertTrue("The re-added window must be the focused window", engine.focusedWindowId == newWindowId)
+        assertTrue("The removed window must stay removed", WindowId("tile-1") !in engine.leaves().toSet())
+        val placed = engine.calculateLayout(area, minsFor(engine))
+        assertTilingLayout(placed, area)
+    }
+
+    @Test fun addingAfterRemovingMiddleWindowDoesNotReuseSurvivingId() {
+        val area = LayoutArea(1920, 1080)
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("tile-1"))
+        engine.splitWindow(WindowId("tile-1"), Orientation.HORIZONTAL, SplitId("tile-split-1"), window("tile-2", "com.example/.Second"))
+        engine.splitWindow(WindowId("tile-2"), Orientation.VERTICAL, SplitId("tile-split-2"), window("tile-3", "com.example/.Third"))
+        engine.splitWindow(WindowId("tile-3"), Orientation.HORIZONTAL, SplitId("tile-split-3"), window("tile-4", "com.example/.Fourth"))
+        engine.focusWindow(WindowId("tile-2"))
+        assertTrue(engine.removeWindow(WindowId("tile-2")))
+        val newWindowId = engine.nextWindowId()
+        val newSplitId = engine.nextSplitId()
+        val target = engine.focusedWindowId ?: return
+        assertTrue(engine.addWindowAdaptive(target, newSplitId, window(newWindowId.value, "com.example/.New"), area, minsFor(engine)))
+        assertEquals(4, engine.leaves().size)
+        assertEquals(4, engine.leaves().toSet().size)
+        assertTrue("The re-added window must be the focused window", engine.focusedWindowId == newWindowId)
+        val placed = engine.calculateLayout(area, minsFor(engine))
+        assertTilingLayout(placed, area)
+    }
 }
