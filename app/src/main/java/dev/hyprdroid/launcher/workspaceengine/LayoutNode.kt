@@ -6,7 +6,7 @@ internal sealed interface LayoutNode
 /** Binary split node: two children with a normalized ratio. No lists, exactly two slots. */
 internal data class SplitNode(
     val id: SplitId,
-    val orientation: Orientation,
+    var orientation: Orientation,
     var ratio: Float,
     var first: LayoutNode,
     var second: LayoutNode,
