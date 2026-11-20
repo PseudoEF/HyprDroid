@@ -1,6 +1,7 @@
 package dev.hyprdroid.launcher.workspaceengine
 
 import java.io.IOException
+import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -823,54 +824,125 @@ class WorkspaceEngineTest {
         assertEquals(2, placed.size)
     }
 
-    @Test fun allocatedWindowAndSplitIdsNeverCollideWithLiveIds() {
+    @Test fun allocatedWindowAndSplitIdsUseUuidAndNeverCollide() {
         val engine = WorkspaceEngine()
-        assertTrue("first window must be added", engine.addFirstWindow(window("tile-1")))
-        assertEquals("tile-2", engine.nextWindowId().value)
-        assertEquals("tile-3", engine.nextWindowId().value)
-        assertEquals("tile-split-1", engine.nextSplitId().value)
-        assertEquals("tile-split-2", engine.nextSplitId().value)
-        assertTrue("middle window must be removable", engine.removeWindow(WindowId("tile-2")))
-        assertEquals("tile-4", engine.nextWindowId().value)
-        assertEquals("tile-split-3", engine.nextSplitId().value)
+        val id1 = engine.nextWindowId()
+        val id2 = engine.nextWindowId()
+        val s1 = engine.nextSplitId()
+        val s2 = engine.nextSplitId()
+        assertFalse("window IDs must be unique", id1 == id2)
+        assertFalse("split IDs must be unique", s1 == s2)
+        assertTrue(engine.addFirstWindow(window(id1.value)))
+        val id3 = engine.nextWindowId()
+        assertFalse(id3 == id1)
+        assertFalse(id3 == id2)
     }
 
-    @Test fun addingAfterRemovingFirstWindowDoesNotReuseSurvivingId() {
+    @Test fun addThreeWindowsRemoveFirstAndAddAgainRegression() {
         val area = LayoutArea(1080, 1920)
         val engine = WorkspaceEngine()
-        assertTrue(engine.addFirstWindow(window("tile-1")))
-        assertTrue(engine.splitWindow(WindowId("tile-1"), Orientation.HORIZONTAL, SplitId("tile-split-1"), window("tile-2", "com.example/.Second")))
-        assertTrue(engine.splitWindow(WindowId("tile-2"), Orientation.VERTICAL, SplitId("tile-split-2"), window("tile-3", "com.example/.Third")))
-        assertTrue(engine.removeWindow(WindowId("tile-1")))
-        val newWindowId = engine.nextWindowId()
-        val newSplitId = engine.nextSplitId()
-        val target = engine.focusedWindowId ?: fail("focused window must exist")
-        assertTrue(engine.addWindowAdaptive(target, newSplitId, window(newWindowId.value, "com.example/.New"), area, minsFor(engine)))
+        val w1 = WindowId(UUID.randomUUID().toString())
+        val w2 = WindowId(UUID.randomUUID().toString())
+        val w3 = WindowId(UUID.randomUUID().toString())
+        val s1 = SplitId(UUID.randomUUID().toString())
+        val s2 = SplitId(UUID.randomUUID().toString())
+
+        // 1. Add 3 windows
+        assertTrue("first window added", engine.addFirstWindow(window(w1.value)))
+        assertTrue("second window added", engine.addWindowAdaptive(w1, s1, window(w2.value, "com.example/.Second"), area, minsFor(engine)))
+        assertTrue("third window added", engine.addWindowAdaptive(w2, s2, window(w3.value, "com.example/.Third"), area, minsFor(engine)))
         assertEquals(3, engine.leaves().size)
-        assertEquals(3, engine.leaves().toSet().size)
-        assertTrue(engine.focusWindow(newWindowId))
-        assertEquals(newWindowId, engine.focusedWindowId)
-        assertTrue("removed window must stay removed", WindowId("tile-1") !in engine.leaves().toSet())
+        assertEquals(setOf(w1, w2, w3), engine.leaves().toSet())
+
+        // 2. Remove first window
+        assertTrue("first window removed", engine.removeWindow(w1))
+        assertEquals(2, engine.leaves().size)
+        assertEquals(setOf(w2, w3), engine.leaves().toSet())
+
+        // 3. Add again (using UUID as in WorkspaceViewModel.addTilingWindow)
+        val target = engine.focusedWindowId ?: fail("focused window must exist")
+        val wNew = WindowId(UUID.randomUUID().toString())
+        val sNew = SplitId(UUID.randomUUID().toString())
+        assertTrue("re-adding window must succeed", engine.addWindowAdaptive(target, sNew, window(wNew.value, "com.example/.New"), area, minsFor(engine)))
+
+        // Verify state: 3 windows, all IDs unique, first window id not reused
+        val leaves = engine.leaves()
+        assertEquals(3, leaves.size)
+        assertEquals(3, leaves.toSet().size)
+        assertTrue("removed first window must not be in active leaves", w1 !in leaves.toSet())
+        assertTrue("re-added window must be in active leaves", wNew in leaves.toSet())
+        assertEquals(setOf(w2, w3, wNew), leaves.toSet())
+        assertTrue(engine.focusWindow(wNew))
+        assertEquals(wNew, engine.focusedWindowId)
+
         val placed = engine.calculateLayout(area, minsFor(engine))
+        assertEquals(3, placed.size)
+        assertTilingLayout(placed, area)
+    }
+
+    @Test fun addThreeWindowsRemoveFirstAndAddAgainLandscapeRegression() {
+        val area = LayoutArea(1920, 1080)
+        val engine = WorkspaceEngine()
+        val w1 = WindowId(UUID.randomUUID().toString())
+        val w2 = WindowId(UUID.randomUUID().toString())
+        val w3 = WindowId(UUID.randomUUID().toString())
+        val s1 = SplitId(UUID.randomUUID().toString())
+        val s2 = SplitId(UUID.randomUUID().toString())
+
+        // 1. Add 3 windows
+        assertTrue("first window added", engine.addFirstWindow(window(w1.value)))
+        assertTrue("second window added", engine.addWindowAdaptive(w1, s1, window(w2.value, "com.example/.Second"), area, minsFor(engine)))
+        assertTrue("third window added", engine.addWindowAdaptive(w2, s2, window(w3.value, "com.example/.Third"), area, minsFor(engine)))
+        assertEquals(3, engine.leaves().size)
+        assertEquals(setOf(w1, w2, w3), engine.leaves().toSet())
+
+        // 2. Remove first window
+        assertTrue("first window removed", engine.removeWindow(w1))
+        assertEquals(2, engine.leaves().size)
+        assertEquals(setOf(w2, w3), engine.leaves().toSet())
+
+        // 3. Add again (using UUID as in WorkspaceViewModel.addTilingWindow)
+        val target = engine.focusedWindowId ?: fail("focused window must exist")
+        val wNew = WindowId(UUID.randomUUID().toString())
+        val sNew = SplitId(UUID.randomUUID().toString())
+        assertTrue("re-adding window must succeed", engine.addWindowAdaptive(target, sNew, window(wNew.value, "com.example/.New"), area, minsFor(engine)))
+
+        // Verify state: 3 windows, all IDs unique, first window id not reused
+        val leaves = engine.leaves()
+        assertEquals(3, leaves.size)
+        assertEquals(3, leaves.toSet().size)
+        assertTrue("removed first window must not be in active leaves", w1 !in leaves.toSet())
+        assertTrue("re-added window must be in active leaves", wNew in leaves.toSet())
+        assertEquals(setOf(w2, w3, wNew), leaves.toSet())
+        assertTrue(engine.focusWindow(wNew))
+        assertEquals(wNew, engine.focusedWindowId)
+
+        val placed = engine.calculateLayout(area, minsFor(engine))
+        assertEquals(3, placed.size)
         assertTilingLayout(placed, area)
     }
 
     @Test fun addingAfterRemovingMiddleWindowDoesNotReuseSurvivingId() {
         val area = LayoutArea(1920, 1080)
         val engine = WorkspaceEngine()
-        assertTrue(engine.addFirstWindow(window("tile-1")))
-        assertTrue(engine.splitWindow(WindowId("tile-1"), Orientation.HORIZONTAL, SplitId("tile-split-1"), window("tile-2", "com.example/.Second")))
-        assertTrue(engine.splitWindow(WindowId("tile-2"), Orientation.VERTICAL, SplitId("tile-split-2"), window("tile-3", "com.example/.Third")))
-        assertTrue(engine.splitWindow(WindowId("tile-3"), Orientation.HORIZONTAL, SplitId("tile-split-3"), window("tile-4", "com.example/.Fourth")))
-        assertTrue(engine.removeWindow(WindowId("tile-2")))
-        val newWindowId = engine.nextWindowId()
-        val newSplitId = engine.nextSplitId()
+        val w1 = WindowId(UUID.randomUUID().toString())
+        val w2 = WindowId(UUID.randomUUID().toString())
+        val w3 = WindowId(UUID.randomUUID().toString())
+        val w4 = WindowId(UUID.randomUUID().toString())
+        assertTrue(engine.addFirstWindow(window(w1.value)))
+        assertTrue(engine.splitWindow(w1, Orientation.HORIZONTAL, SplitId(UUID.randomUUID().toString()), window(w2.value, "com.example/.Second")))
+        assertTrue(engine.splitWindow(w2, Orientation.VERTICAL, SplitId(UUID.randomUUID().toString()), window(w3.value, "com.example/.Third")))
+        assertTrue(engine.splitWindow(w3, Orientation.HORIZONTAL, SplitId(UUID.randomUUID().toString()), window(w4.value, "com.example/.Fourth")))
+        assertTrue(engine.removeWindow(w2))
+        val newWindowId = WindowId(UUID.randomUUID().toString())
+        val newSplitId = SplitId(UUID.randomUUID().toString())
         val target = engine.focusedWindowId ?: fail("focused window must exist")
         assertTrue(engine.addWindowAdaptive(target, newSplitId, window(newWindowId.value, "com.example/.New"), area, minsFor(engine)))
         assertEquals(4, engine.leaves().size)
         assertEquals(4, engine.leaves().toSet().size)
         assertTrue(engine.focusWindow(newWindowId))
         assertEquals(newWindowId, engine.focusedWindowId)
+        assertTrue("removed window must stay removed", w2 !in engine.leaves().toSet())
         val placed = engine.calculateLayout(area, minsFor(engine))
         assertTilingLayout(placed, area)
     }

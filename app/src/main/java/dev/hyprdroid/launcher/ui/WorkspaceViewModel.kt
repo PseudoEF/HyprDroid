@@ -27,6 +27,7 @@ import dev.hyprdroid.launcher.workspaceengine.WorkspaceEngine
 import dev.hyprdroid.launcher.workspaceengine.WorkspaceWindow
 import dev.hyprdroid.launcher.workspaceengine.WindowId
 import java.io.IOException
+import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -313,8 +314,8 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
         try {
             val engine = engines.getOrPut(workspaceId) { WorkspaceEngine() }
             val target = engine.focusedWindowId ?: engine.leaves().firstOrNull() ?: return@launch
-            val newWindowId = engine.nextWindowId()
-            val splitId = engine.nextSplitId()
+            val newWindowId = WindowId(UUID.randomUUID().toString())
+            val splitId = SplitId(UUID.randomUUID().toString())
             val mins = engine.windowsById().mapValues { (_, window) -> tilingWindowMin(window, densityScale) }
             val window = WorkspaceWindow(newWindowId, TILING_TEST_MODULE_ID, TILING_TEST_MIN_WIDTH_DP, TILING_TEST_MIN_HEIGHT_DP)
             if (!engine.addWindowAdaptive(target, splitId, window, area, mins)) return@launch
