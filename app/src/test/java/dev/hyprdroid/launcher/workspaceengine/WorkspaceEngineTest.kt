@@ -576,15 +576,32 @@ class WorkspaceEngineTest {
         }
     }
 
-    @Test fun splitIsRejectedWhenSecondWindowMinimumDoesNotFit() {
+    @Test fun splitIsAllowedWhileBothChildrenStayVisible() {
         val engine = WorkspaceEngine()
         engine.addFirstWindow(window("w-1", "com.example/.Main", 400, 400))
-        val mins = mapOf(WindowId("w-1") to WindowMin(400, 400))
-        assertFalse(engine.canSplit(WindowId("w-1"), Orientation.HORIZONTAL, WindowMin(400, 400), LayoutArea(500, 500), mins))
-        assertTrue(engine.canSplit(WindowId("w-1"), Orientation.HORIZONTAL, WindowMin(50, 50), LayoutArea(500, 500), mins))
-        assertTrue(engine.canSplit(WindowId("w-1"), Orientation.VERTICAL, WindowMin(50, 50), LayoutArea(500, 500), mins))
-        val missingTarget = engine.canSplit(WindowId("w-missing"), Orientation.HORIZONTAL, WindowMin(50, 50), LayoutArea(500, 500), mins)
-        assertFalse(missingTarget)
+        assertTrue(engine.canSplit(WindowId("w-1"), Orientation.HORIZONTAL, LayoutArea(500, 500)))
+        assertTrue(engine.canSplit(WindowId("w-1"), Orientation.VERTICAL, LayoutArea(500, 500)))
+        assertFalse(engine.canSplit(WindowId("w-1"), Orientation.HORIZONTAL, LayoutArea(1, 500)))
+        assertFalse(engine.canSplit(WindowId("w-missing"), Orientation.HORIZONTAL, LayoutArea(500, 500)))
+    }
+
+    @Test fun oversizedMinimumsStillGiveEveryWindowPositiveSize() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1", "com.example/.Main", 320, 240))
+        assertTrue(engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s1"), window("w-2", "com.example/.Second", 320, 240)))
+        assertTrue(engine.splitWindow(WindowId("w-2"), Orientation.HORIZONTAL, SplitId("s2"), window("w-3", "com.example/.Third", 320, 240)))
+        val placed = engine.calculateLayout(LayoutArea(1019, 2000), mapOf(
+            WindowId("w-1") to WindowMin(840, 630),
+            WindowId("w-2") to WindowMin(840, 630),
+            WindowId("w-3") to WindowMin(840, 630),
+        ))
+        assertEquals(3, placed.size)
+        for (item in placed) {
+            assertTrue("Window ${item.windowId} must stay visible", item.rect.width > 0)
+            assertTrue("Window ${item.windowId} must stay visible", item.rect.height > 0)
+            assertTrue(item.rect.x + item.rect.width <= 1019)
+            assertTrue(item.rect.y + item.rect.height <= 2000)
+        }
     }
 
     @Test fun splitIdsBecomeFreeAgainAfterWindowRemoval() {

@@ -167,7 +167,8 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
             firstSize = maxOf((available * split.ratio).toInt(), firstMin.toInt()).coerceAtMost(available - secondMin.toInt())
         }
         else {
-            firstSize = firstMin.coerceAtMost(available.toLong()).toInt()
+            // Minimums cannot all fit: share the area by ratio so every window stays visible instead of starving one child.
+            firstSize = (available * split.ratio).toInt().coerceIn(0, available)
         }
         secondSize = available - firstSize
         val firstRect = if (split.orientation == Orientation.HORIZONTAL) LayoutRect(x = rect.x, y = rect.y, width = firstSize, height = rect.height) else LayoutRect(x = rect.x, y = rect.y, width = rect.width, height = firstSize)
@@ -177,20 +178,20 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
 
     internal data class SplitPlacement(val split: SplitNode, val firstRect: LayoutRect, val secondRect: LayoutRect)
 
-    /** Whether a second window with [secondMin] fits next to the window owning [windowId] inside [area]. */
-    fun canSplit(windowId: WindowId, orientation: Orientation, secondMin: WindowMin, area: LayoutArea, mins: Map<WindowId, WindowMin>): Boolean {
-        val target = locate(root, null, null, false, windowId) ?: return false
-        val axis = if (orientation == Orientation.HORIZONTAL) 0 else 1
+    /**
+     * Whether one more window can be added next to the window owning [windowId] without producing an
+     * invisible region. Minimum sizes stay soft constraints: when they cannot be satisfied the layout
+     * shares the area by ratio, so only the absence of room for two visible regions rejects the split.
+     */
+    fun canSplit(windowId: WindowId, orientation: Orientation, area: LayoutArea): Boolean {
+        locate(root, null, null, false, windowId) ?: return false
         val available = if (orientation == Orientation.HORIZONTAL) area.widthPx else area.heightPx
-        val focusedMin = mins[windowId] ?: WindowMin(0, 0)
-        val firstMin = if (axis == 0) focusedMin.widthPx.coerceAtLeast(0).toLong() else focusedMin.heightPx.coerceAtLeast(0).toLong()
-        val secondMinTotal = if (axis == 0) secondMin.widthPx.coerceAtLeast(0).toLong() else secondMin.heightPx.coerceAtLeast(0).toLong()
-        return firstMin + secondMinTotal <= available.toLong()
+        return available >= 2
     }
 
-    private fun minExtent(node: LayoutNode?, axis: Int, mins: Map<WindowId, WindowMin>, fallback: WindowMin = WindowMin(0, 0)): Long {
+    private fun minExtent(node: LayoutNode?, axis: Int, mins: Map<WindowId, WindowMin>): Long {
         if (node is LeafNode) {
-            val min = mins[node.windowId] ?: fallback
+            val min = mins[node.windowId] ?: WindowMin(0, 0)
             return if (axis == 0) min.widthPx.coerceAtLeast(0).toLong() else min.heightPx.coerceAtLeast(0).toLong()
         }
         val split = node as SplitNode

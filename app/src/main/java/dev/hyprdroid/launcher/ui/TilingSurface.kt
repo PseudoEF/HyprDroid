@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -30,8 +29,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import dev.hyprdroid.launcher.workspaceengine.LayoutArea
 import dev.hyprdroid.launcher.workspaceengine.LayoutRect
@@ -40,7 +41,6 @@ import dev.hyprdroid.launcher.workspaceengine.SplitId
 import dev.hyprdroid.launcher.workspaceengine.WindowId
 import dev.hyprdroid.launcher.workspaceengine.WindowMin
 import dev.hyprdroid.launcher.workspaceengine.WorkspaceEngine
-import dev.hyprdroid.launcher.workspaceengine.WorkspaceWindow
 
 /** Internal tiling surface: renders one workspace of internal windows from the engine layout. */
 @Composable
@@ -53,7 +53,7 @@ internal fun TilingSurface(
     onResizeSplit: (SplitId, Float) -> Unit = { _, _ -> },
 ) {
     val density = LocalDensity.current
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize().testTag("tiling-surface")) {
         val area = LayoutArea(
             widthPx = with(density) { maxWidth.roundToPx().toInt() },
             heightPx = with(density) { maxHeight.roundToPx().toInt() },
@@ -67,34 +67,48 @@ internal fun TilingSurface(
         }
         val focusedId = engine.focusedWindowId
         val addableWindowId = engine.focusedWindowId ?: engine.leaves().firstOrNull()
-        val canAddWindow = addableWindowId != null && engine.canSplit(addableWindowId, Orientation.HORIZONTAL, tilingWindowMin(WorkspaceWindow(WindowId("tile-add"), TILING_TEST_MODULE_ID, 320, 240), density.density), area, mins)
+        val canAddWindow = addableWindowId != null && engine.canSplit(addableWindowId, Orientation.HORIZONTAL, area)
 
-        placed.forEach { placedWindow ->
-            val rect = placedWindow.rect
-            val isFocused = placedWindow.windowId == focusedId
-            Box(
-                modifier = Modifier
-                    .size(width = with(density) { rect.width.toInt().toDp() }, height = with(density) { rect.height.toInt().toDp() })
-                    .offset(x = with(density) { rect.x.toInt().toDp() }, y = with(density) { rect.y.toInt().toDp() })
-                    .background(if (isFocused) Mocha.Surface else Mocha.Mantle, RoundedCornerShape(12.dp))
-                    .border(BorderStroke(1.dp, if (isFocused) Mocha.Mauve else Mocha.Outline.copy(alpha = .5f)), RoundedCornerShape(12.dp))
-                    .testTag("tiling-window-${placedWindow.windowId.value}")
-                    .clickable { onFocusWindow(placedWindow.windowId) },
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Text("Окно ${placedWindow.windowId.value}", style = MaterialTheme.typography.titleSmall, color = Mocha.Subtext)
-                    engine.windowsById()[placedWindow.windowId]?.let { window ->
-                        Text(window.moduleId, style = MaterialTheme.typography.bodySmall, color = Mocha.Subtext)
+        Layout(
+            content = {
+                placed.forEach { placedWindow ->
+                    val isFocused = placedWindow.windowId == focusedId
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(if (isFocused) Mocha.Surface else Mocha.Mantle, RoundedCornerShape(12.dp))
+                            .border(BorderStroke(1.dp, if (isFocused) Mocha.Mauve else Mocha.Outline.copy(alpha = .5f)), RoundedCornerShape(12.dp))
+                            .testTag("tiling-window-${placedWindow.windowId.value}")
+                            .clickable { onFocusWindow(placedWindow.windowId) },
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Text("Окно ${placedWindow.windowId.value}", style = MaterialTheme.typography.titleSmall, color = Mocha.Subtext)
+                            engine.windowsById()[placedWindow.windowId]?.let { window ->
+                                Text(window.moduleId, style = MaterialTheme.typography.bodySmall, color = Mocha.Subtext)
+                            }
+                        }
+                        if (isFocused) {
+                            IconButton(onClick = { onCloseWindow(placedWindow.windowId) }, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).testTag("tiling-close-window-${placedWindow.windowId.value}")) {
+                                Icon(Icons.Default.Close, contentDescription = "Закрыть окно", tint = Mocha.Red)
+                            }
+                        }
                     }
                 }
-                if (isFocused) {
-                    IconButton(onClick = { onCloseWindow(placedWindow.windowId) }, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).testTag("tiling-close-window-${placedWindow.windowId.value}")) {
-                        Icon(Icons.Default.Close, contentDescription = "Закрыть окно", tint = Mocha.Red)
-                    }
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) { measurables, constraints ->
+            val placeables = measurables.mapIndexed { index, measurable ->
+                val rect = placed[index].rect
+                measurable.measure(Constraints.fixed(rect.width, rect.height))
+            }
+            layout(constraints.maxWidth, constraints.maxHeight) {
+                placeables.forEachIndexed { index, placeable ->
+                    val rect = placed[index].rect
+                    placeable.place(rect.x, rect.y)
                 }
             }
         }

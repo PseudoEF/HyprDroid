@@ -24,7 +24,7 @@ jobs:
       - name: Verify code without distribution credentials
         run: |
           python3 scripts/test_versions.py
-          ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace
+          ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace
       # PR builds are checks, never distributed with an ephemeral signing key.
   distribute:
     if: github.event_name != 'pull_request'

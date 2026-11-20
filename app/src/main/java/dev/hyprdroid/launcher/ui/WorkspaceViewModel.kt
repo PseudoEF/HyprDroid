@@ -41,7 +41,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-internal const val TILING_TEST_MODULE_ID = "dev.hyprdroid.launcher.tiling/.Test"
+private const val TILING_TEST_MODULE_ID = "dev.hyprdroid.launcher.tiling/.Test"
+private const val TILING_TEST_MIN_WIDTH_DP = 120
+private const val TILING_TEST_MIN_HEIGHT_DP = 80
 
 internal data class WorkspaceUiState(
     val settings: WorkspaceSettings? = null,
@@ -294,7 +296,7 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
     fun openTilingSurface(workspaceId: Int) = viewModelScope.launch {
         try {
             val engine = engines.getOrPut(workspaceId) { WorkspaceEngine() }
-            if (engine.root == null) engine.addFirstWindow(WorkspaceWindow(WindowId("tile-1"), TILING_TEST_MODULE_ID, 320, 240))
+            if (engine.root == null) engine.addFirstWindow(WorkspaceWindow(WindowId("tile-1"), TILING_TEST_MODULE_ID, TILING_TEST_MIN_WIDTH_DP, TILING_TEST_MIN_HEIGHT_DP))
             save { engineStore.save(workspaceId.toString(), engine) }
             openTilingSession(workspaceId, engine)
         } catch (cancelled: CancellationException) { throw cancelled }
@@ -314,7 +316,7 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
             val splitIndex = engine.windowsById().size
             val newWindowId = WindowId("tile-${splitIndex + 1}")
             val splitId = SplitId("tile-split-${System.currentTimeMillis()}")
-            if (!engine.splitWindow(target, orientation, splitId, WorkspaceWindow(newWindowId, TILING_TEST_MODULE_ID, 320, 240))) return@launch
+            if (!engine.splitWindow(target, orientation, splitId, WorkspaceWindow(newWindowId, TILING_TEST_MODULE_ID, TILING_TEST_MIN_WIDTH_DP, TILING_TEST_MIN_HEIGHT_DP))) return@launch
             engine.focusWindow(newWindowId)
             save { engineStore.save(workspaceId.toString(), engine) }
             publishTiling(workspaceId, engine)

@@ -306,14 +306,14 @@ internal fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdro
             if (!classic) Box(Modifier.fillMaxSize().testTag("workspace-canvas-$page")) {
                 Box(Modifier.fillMaxSize().testTag("clean-workspace-$page")
                     .homeBlankGestures(!overlayOpen, true, openPresentation, openDrawer, openControl, revealDock))
-                if (tilingSession != null) {
+                if (tilingSession != null && tilingSession.workspaceId == page) {
                     TilingSurface(
                         engine = tilingSession.engine,
                         modifier = Modifier.fillMaxSize(),
-                        onFocusWindow = { windowId -> actions.focusTilingWindow(pager.currentPage, windowId) },
-                        onCloseWindow = { windowId -> actions.closeTilingWindow(pager.currentPage, windowId) },
-                        onAddWindow = { orientation -> actions.addTilingWindow(pager.currentPage, orientation) },
-                        onResizeSplit = { splitId, ratio -> actions.resizeTilingSplit(pager.currentPage, splitId, ratio) },
+                        onFocusWindow = { windowId -> actions.focusTilingWindow(page, windowId) },
+                        onCloseWindow = { windowId -> actions.closeTilingWindow(page, windowId) },
+                        onAddWindow = { orientation -> actions.addTilingWindow(page, orientation) },
+                        onResizeSplit = { splitId, ratio -> actions.resizeTilingSplit(page, splitId, ratio) },
                     )
                 }
             }
