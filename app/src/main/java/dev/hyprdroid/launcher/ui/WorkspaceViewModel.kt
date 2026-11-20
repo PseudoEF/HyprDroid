@@ -21,7 +21,7 @@ import dev.hyprdroid.launcher.model.ShellSettings
 import dev.hyprdroid.launcher.model.WorkspaceSettings
 import dev.hyprdroid.launcher.model.WorkspaceAppearance
 import dev.hyprdroid.launcher.model.WorkspaceMoveConflictException
-import dev.hyprdroid.launcher.workspaceengine.Orientation
+import dev.hyprdroid.launcher.workspaceengine.LayoutArea
 import dev.hyprdroid.launcher.workspaceengine.SplitId
 import dev.hyprdroid.launcher.workspaceengine.WorkspaceEngine
 import dev.hyprdroid.launcher.workspaceengine.WorkspaceWindow
@@ -308,20 +308,30 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
         mutableState.update { it.copy(tiling = null) }
     }
 
-    /** Splits the focused internal window with a new test window. */
-    internal fun addTilingWindow(workspaceId: Int, orientation: Orientation) = viewModelScope.launch {
+    /** Splits the focused internal window with a new test window using the adaptive layout. */
+    internal fun addTilingWindow(workspaceId: Int, area: LayoutArea, densityScale: Float) = viewModelScope.launch {
         try {
             val engine = engines.getOrPut(workspaceId) { WorkspaceEngine() }
             val target = engine.focusedWindowId ?: engine.leaves().firstOrNull() ?: return@launch
             val splitIndex = engine.windowsById().size
             val newWindowId = WindowId("tile-${splitIndex + 1}")
-            val splitId = SplitId("tile-split-${System.currentTimeMillis()}")
-            if (!engine.splitWindow(target, orientation, splitId, WorkspaceWindow(newWindowId, TILING_TEST_MODULE_ID, TILING_TEST_MIN_WIDTH_DP, TILING_TEST_MIN_HEIGHT_DP))) return@launch
+            val splitId = SplitId("tile-split-${System.currentTimeMillis()}-$splitIndex")
+            val mins = engine.windowsById().mapValues { (_, window) -> tilingWindowMin(window, densityScale) }
+            val window = WorkspaceWindow(newWindowId, TILING_TEST_MODULE_ID, TILING_TEST_MIN_WIDTH_DP, TILING_TEST_MIN_HEIGHT_DP)
+            if (!engine.addWindowAdaptive(target, splitId, window, area, mins)) return@launch
             engine.focusWindow(newWindowId)
             save { engineStore.save(workspaceId.toString(), engine) }
             publishTiling(workspaceId, engine)
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: IOException) { showMessage("Не удалось добавить окно. Проверьте место в памяти.") }
+    }
+
+    /** Rebuilds the adaptive split topology when the workspace area or its orientation changes. */
+    internal fun reflowTiling(workspaceId: Int, area: LayoutArea) {
+        val engine = engines[workspaceId] ?: return
+        if (!engine.reflow(area)) return
+        save { engineStore.save(workspaceId.toString(), engine) }
+        publishTiling(workspaceId, engine)
     }
 
     /** Removes one internal window; the surface closes itself when the tree becomes empty. */

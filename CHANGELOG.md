@@ -1,6 +1,13 @@
 # История изменений
 
 ## Не выпущено
+### Stage 5 — адаптивный внутренний тайлинг
+
+- `WorkspaceEngine.addWindowAdaptive`: ориентация split выбирается по rect выбранного leaf (выше/шире — верх/низ, иначе лево/право), затем дерево перебалансируется под количество окон и portrait/landscape.
+- Portrait: 2 окна — верх/низ, 3 — одно сверху и два снизу, 4 — 2×2; landscape — зеркально. 5–6 окон — сетка без нулевых размеров.
+- Reflow переиспользует существующие `SplitNode`, `SplitId` и ratios, сохраняет окна и фокус; layout не даёт overlap и выхода за workspace, `canAddWindow` требует хотя бы 1 px на ячейку.
+- Unit-тесты 2–6 окон (bounds, ориентации, поворот) и Compose UI-тест реальных bounds; жесты, pager, sidebar, дизайн и drag-разделители не изменены.
+
 ### Workspace Engine v0.9 — архитектурный фундамент
 
 - Внутренний пакет `dev.hyprdroid.launcher.workspaceengine`: чистый Kotlin-движок размещения без Android/Compose и новых зависимостей; модель `WorkspaceTree`, `SplitNode` (ratio 0.05..0.95), `LeafNode`, `WorkspaceWindow`, layout-геометрия.

@@ -12,6 +12,40 @@ import org.junit.Test
 class WorkspaceEngineTest {
     private fun window(windowId: String, moduleId: String = "com.example/.Main", minWidthDp: Int = 48, minHeightDp: Int = 48) = WorkspaceWindow(WindowId(windowId), moduleId, minWidthDp, minHeightDp)
 
+    private fun minsFor(engine: WorkspaceEngine): Map<WindowId, WindowMin> =
+        engine.windowsById().keys.associateWith { WindowMin(120, 80) }
+
+    private fun adaptiveEngine(count: Int, area: LayoutArea): WorkspaceEngine {
+        val engine = WorkspaceEngine()
+        assertTrue(engine.addFirstWindow(window("w-1", "com.example/.Main", 120, 80)))
+        for (index in 2..count) {
+            val target = engine.focusedWindowId ?: engine.leaves().last()
+            assertTrue(engine.addWindowAdaptive(target, SplitId("s${index - 1}"), window("w-$index", "com.example/.W$index", 120, 80), area, minsFor(engine)))
+            engine.focusWindow(WindowId("w-$index"))
+        }
+        return engine
+    }
+
+    private fun assertTilingLayout(placed: List<PlacedWindow>, area: LayoutArea) {
+        for (item in placed) {
+            assertTrue("${item.windowId} width must be positive", item.rect.width > 0)
+            assertTrue("${item.windowId} height must be positive", item.rect.height > 0)
+            assertTrue("${item.windowId} left must be inside the area", item.rect.x >= 0)
+            assertTrue("${item.windowId} top must be inside the area", item.rect.y >= 0)
+            assertTrue("${item.windowId} right must be inside the area", item.rect.x + item.rect.width <= area.widthPx)
+            assertTrue("${item.windowId} bottom must be inside the area", item.rect.y + item.rect.height <= area.heightPx)
+        }
+        for (i in placed.indices) {
+            for (j in i + 1 until placed.size) {
+                val first = placed[i].rect
+                val second = placed[j].rect
+                val overlaps = first.x < second.x + second.width && second.x < first.x + first.width &&
+                    first.y < second.y + second.height && second.y < first.y + first.height
+                assertFalse("${placed[i].windowId} and ${placed[j].windowId} overlap", overlaps)
+            }
+        }
+    }
+
     @Test fun firstWindowLaysOutWholeArea() {
         val engine = WorkspaceEngine()
         assertTrue(engine.addFirstWindow(window("w-1")))
@@ -602,6 +636,178 @@ class WorkspaceEngineTest {
             assertTrue(item.rect.x + item.rect.width <= 1019)
             assertTrue(item.rect.y + item.rect.height <= 2000)
         }
+    }
+
+    @Test fun splitOrientationFollowsTheSelectedLeafRect() {
+        assertEquals(Orientation.VERTICAL, orientationFor(LayoutRect(0, 0, 300, 600)))
+        assertEquals(Orientation.HORIZONTAL, orientationFor(LayoutRect(0, 0, 600, 300)))
+        assertEquals(Orientation.HORIZONTAL, orientationFor(LayoutRect(0, 0, 400, 400)))
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1"))
+        assertEquals(Orientation.VERTICAL, engine.splitOrientation(WindowId("w-1"), LayoutArea(400, 800), emptyMap()))
+        assertEquals(Orientation.HORIZONTAL, engine.splitOrientation(WindowId("w-1"), LayoutArea(800, 400), emptyMap()))
+        assertEquals(null, engine.splitOrientation(WindowId("missing"), LayoutArea(800, 400), emptyMap()))
+    }
+
+    @Test fun adaptiveOrientationUsesTheLeafRectNotTheWholeWorkspace() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1"))
+        assertTrue(engine.addWindowAdaptive(WindowId("w-1"), SplitId("s1"), window("w-2", "com.example/.Second"), LayoutArea(1080, 1920), emptyMap()))
+        // The portrait workspace is taller than wide, but each leaf is 1080x960 and therefore wider than tall.
+        assertEquals(Orientation.HORIZONTAL, engine.splitOrientation(WindowId("w-2"), LayoutArea(1080, 1920), emptyMap()))
+    }
+
+    @Test fun portraitAdaptiveLayoutsCoverTwoToSixWindows() {
+        val area = LayoutArea(1080, 1920)
+        for (count in 2..6) {
+            val engine = adaptiveEngine(count, area)
+            val placed = engine.calculateLayout(area, minsFor(engine))
+            assertEquals("$count windows", count, placed.size)
+            assertTilingLayout(placed, area)
+            val root = engine.root as SplitNode
+            assertEquals("Portrait root for $count windows", Orientation.VERTICAL, root.orientation)
+            val rect = placed.associate { it.windowId to it.rect }
+            when (count) {
+                2 -> {
+                    val first = rect.getValue(WindowId("w-1"))
+                    val second = rect.getValue(WindowId("w-2"))
+                    assertTrue(second.y >= first.y + first.height)
+                    assertEquals(first.x, second.x)
+                    assertEquals(first.width, second.width)
+                }
+                3 -> {
+                    assertTrue(root.second is SplitNode)
+                    assertEquals(Orientation.HORIZONTAL, (root.second as SplitNode).orientation)
+                    val top = rect.getValue(WindowId("w-1"))
+                    val left = rect.getValue(WindowId("w-2"))
+                    val right = rect.getValue(WindowId("w-3"))
+                    assertTrue(left.y >= top.y + top.height)
+                    assertEquals(left.y, right.y)
+                    assertTrue(left.x < right.x)
+                }
+                4 -> {
+                    val topLeft = rect.getValue(WindowId("w-1"))
+                    val topRight = rect.getValue(WindowId("w-2"))
+                    val bottomLeft = rect.getValue(WindowId("w-3"))
+                    val bottomRight = rect.getValue(WindowId("w-4"))
+                    assertEquals(topLeft.y, topRight.y)
+                    assertEquals(bottomLeft.y, bottomRight.y)
+                    assertTrue(bottomLeft.y >= topLeft.y + topLeft.height)
+                    assertEquals(topLeft.x, bottomLeft.x)
+                    assertEquals(topRight.x, bottomRight.x)
+                    assertTrue(topLeft.x < topRight.x)
+                }
+                5 -> {
+                    val top = (1..2).map { rect.getValue(WindowId("w-$it")) }
+                    val bottom = (3..5).map { rect.getValue(WindowId("w-$it")) }
+                    assertEquals(top[0].y, top[1].y)
+                    assertEquals(bottom[0].y, bottom[1].y)
+                    assertEquals(bottom[1].y, bottom[2].y)
+                    assertTrue(bottom[0].y >= top[0].y + top[0].height)
+                }
+                6 -> {
+                    for (row in 0 until 3) {
+                        val left = rect.getValue(WindowId("w-${row * 2 + 1}"))
+                        val right = rect.getValue(WindowId("w-${row * 2 + 2}"))
+                        assertEquals(left.y, right.y)
+                        assertTrue(left.x < right.x)
+                        if (row > 0) {
+                            val above = rect.getValue(WindowId("w-${(row - 1) * 2 + 1}"))
+                            assertTrue(left.y >= above.y + above.height)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test fun landscapeAdaptiveLayoutsCoverTwoToSixWindows() {
+        val area = LayoutArea(1920, 1080)
+        for (count in 2..6) {
+            val engine = adaptiveEngine(count, area)
+            val placed = engine.calculateLayout(area, minsFor(engine))
+            assertEquals("$count windows", count, placed.size)
+            assertTilingLayout(placed, area)
+            val root = engine.root as SplitNode
+            assertEquals("Landscape root for $count windows", Orientation.HORIZONTAL, root.orientation)
+            val rect = placed.associate { it.windowId to it.rect }
+            when (count) {
+                2 -> {
+                    val first = rect.getValue(WindowId("w-1"))
+                    val second = rect.getValue(WindowId("w-2"))
+                    assertTrue(second.x >= first.x + first.width)
+                    assertEquals(first.y, second.y)
+                }
+                3 -> {
+                    assertTrue(root.second is SplitNode)
+                    assertEquals(Orientation.VERTICAL, (root.second as SplitNode).orientation)
+                    val left = rect.getValue(WindowId("w-1"))
+                    val topRight = rect.getValue(WindowId("w-2"))
+                    val bottomRight = rect.getValue(WindowId("w-3"))
+                    assertTrue(topRight.x >= left.x + left.width)
+                    assertEquals(topRight.x, bottomRight.x)
+                    assertTrue(topRight.y < bottomRight.y)
+                }
+                4 -> {
+                    val topLeft = rect.getValue(WindowId("w-1"))
+                    val bottomLeft = rect.getValue(WindowId("w-2"))
+                    val topRight = rect.getValue(WindowId("w-3"))
+                    val bottomRight = rect.getValue(WindowId("w-4"))
+                    assertEquals(topLeft.x, bottomLeft.x)
+                    assertEquals(topRight.x, bottomRight.x)
+                    assertTrue(topRight.x >= topLeft.x + topLeft.width)
+                    assertEquals(topLeft.y, topRight.y)
+                    assertEquals(bottomLeft.y, bottomRight.y)
+                    assertTrue(topLeft.y < bottomLeft.y)
+                }
+            }
+        }
+    }
+
+    @Test fun reflowPreservesWindowStateRatiosAndAdaptsToRotation() {
+        val engine = adaptiveEngine(4, LayoutArea(1080, 1920))
+        val rootBefore = engine.root as SplitNode
+        assertTrue(engine.resizeSplit(rootBefore.id, 0.7f))
+        val windowsBefore = engine.windowsById().toMap()
+        val focusedBefore = engine.focusedWindowId
+        assertEquals(Orientation.VERTICAL, rootBefore.orientation)
+
+        assertTrue(engine.reflow(LayoutArea(1920, 1080)))
+        val rotated = engine.root as SplitNode
+        assertEquals(Orientation.HORIZONTAL, rotated.orientation)
+        assertEquals(windowsBefore.keys, engine.windowsById().keys)
+        assertEquals(focusedBefore, engine.focusedWindowId)
+        assertEquals(0.7f, rotated.ratio, 0.0001f)
+        assertTilingLayout(engine.calculateLayout(LayoutArea(1920, 1080), minsFor(engine)), LayoutArea(1920, 1080))
+
+        assertFalse(engine.reflow(LayoutArea(1920, 1080)))
+        assertTrue(engine.reflow(LayoutArea(1080, 1920)))
+        assertEquals(Orientation.VERTICAL, (engine.root as SplitNode).orientation)
+    }
+
+    @Test fun canAddWindowKeepsEveryCellVisible() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1"))
+        assertTrue(engine.canAddWindow(LayoutArea(1080, 1920)))
+        assertTrue(engine.canAddWindow(LayoutArea(1, 1920)))
+        assertFalse(engine.canAddWindow(LayoutArea(1, 1)))
+        assertFalse(engine.canAddWindow(LayoutArea(0, 100)))
+        val five = adaptiveEngine(5, LayoutArea(1080, 1920))
+        assertFalse(five.canAddWindow(LayoutArea(1, 1920)))
+        assertTrue(five.canAddWindow(LayoutArea(1080, 1920)))
+        val fiveLandscape = adaptiveEngine(5, LayoutArea(1920, 1080))
+        assertFalse(fiveLandscape.canAddWindow(LayoutArea(1920, 2)))
+        assertTrue(fiveLandscape.canAddWindow(LayoutArea(1920, 1080)))
+    }
+
+    @Test fun extremeRatioStillGivesEveryWindowAtLeastOnePixel() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1"))
+        assertTrue(engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s1"), window("w-2", "com.example/.Second")))
+        assertTrue(engine.resizeSplit(SplitId("s1"), WorkspaceEngine.MIN_RATIO))
+        val placed = engine.calculateLayout(LayoutArea(10, 100), emptyMap())
+        assertEquals(2, placed.size)
+        assertTrue(placed.all { it.rect.width >= 1 })
     }
 
     @Test fun splitIdsBecomeFreeAgainAfterWindowRemoval() {

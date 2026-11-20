@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,7 +50,8 @@ internal fun TilingSurface(
     modifier: Modifier = Modifier,
     onFocusWindow: (WindowId) -> Unit = {},
     onCloseWindow: (WindowId) -> Unit = {},
-    onAddWindow: (Orientation) -> Unit = {},
+    onAddWindow: (LayoutArea, Float) -> Unit = { _, _ -> },
+    onLayoutArea: (LayoutArea) -> Unit = {},
     onResizeSplit: (SplitId, Float) -> Unit = { _, _ -> },
 ) {
     val density = LocalDensity.current
@@ -58,6 +60,7 @@ internal fun TilingSurface(
             widthPx = with(density) { maxWidth.roundToPx().toInt() },
             heightPx = with(density) { maxHeight.roundToPx().toInt() },
         )
+        LaunchedEffect(area.widthPx, area.heightPx) { onLayoutArea(area) }
         val mins: Map<WindowId, WindowMin> = remember(engine, area) {
             engine.windowsById().mapValues { entry -> tilingWindowMin(entry.value, density.density) }.toMap()
         }
@@ -66,8 +69,7 @@ internal fun TilingSurface(
             engine.splitsWithRects(engine.root, LayoutRect(x = 0, y = 0, width = area.widthPx, height = area.heightPx), mins)
         }
         val focusedId = engine.focusedWindowId
-        val addableWindowId = engine.focusedWindowId ?: engine.leaves().firstOrNull()
-        val canAddWindow = addableWindowId != null && engine.canSplit(addableWindowId, Orientation.HORIZONTAL, area)
+        val canAddWindow = engine.canAddWindow(area)
 
         Layout(
             content = {
@@ -145,7 +147,7 @@ internal fun TilingSurface(
                 .align(Alignment.BottomEnd)
                 .padding(12.dp)
                 .testTag("tiling-add-window")
-                .clickable { if (canAddWindow) onAddWindow(Orientation.HORIZONTAL) },
+                .clickable { if (canAddWindow) onAddWindow(area, density.density) },
         ) {
             Icon(Icons.Default.Add, contentDescription = "Добавить окно", tint = Mocha.Text)
         }

@@ -40,7 +40,7 @@ import dev.hyprdroid.launcher.model.DesktopMode
 import dev.hyprdroid.launcher.model.DockVisibility
 import dev.hyprdroid.launcher.model.PanelSide
 import dev.hyprdroid.launcher.model.PanelsSettings
-import dev.hyprdroid.launcher.workspaceengine.Orientation
+import dev.hyprdroid.launcher.workspaceengine.LayoutArea
 import dev.hyprdroid.launcher.workspaceengine.SplitId
 import dev.hyprdroid.launcher.workspaceengine.WindowId
 import kotlinx.coroutines.delay
@@ -89,7 +89,8 @@ internal fun WorkspaceScreen(model: WorkspaceViewModel, requestedScreen: String?
                 systemSettings = { action -> if (!openSystemSettings(context, action)) model.showMessage("Системные настройки недоступны.") },
                 openTiling = model::openTilingSurface,
                 closeTilingSurface = model::closeTilingSurface,
-                addTilingWindow = { workspaceId, orientation -> model.addTilingWindow(workspaceId, orientation) },
+                addTilingWindow = { workspaceId, area, density -> model.addTilingWindow(workspaceId, area, density) },
+                reflowTiling = { workspaceId, area -> model.reflowTiling(workspaceId, area) },
                 closeTilingWindow = { workspaceId, windowId -> model.closeTilingWindow(workspaceId, windowId) },
                 focusTilingWindow = { workspaceId, windowId -> model.focusTilingWindow(workspaceId, windowId) },
                 resizeTilingSplit = { workspaceId, splitId, ratio -> model.resizeTilingSplit(workspaceId, splitId, ratio) },
@@ -126,7 +127,8 @@ internal data class ShellActions(
     val presentation: (ShellPresentation, () -> Unit) -> Unit,
     val openTiling: (Int) -> Unit,
     val closeTilingSurface: () -> Unit,
-    internal val addTilingWindow: (Int, Orientation) -> Unit,
+    internal val addTilingWindow: (Int, LayoutArea, Float) -> Unit,
+    internal val reflowTiling: (Int, LayoutArea) -> Unit,
     internal val closeTilingWindow: (Int, WindowId) -> Unit,
     internal val focusTilingWindow: (Int, WindowId) -> Unit,
     internal val resizeTilingSplit: (Int, SplitId, Float) -> Unit,
@@ -312,7 +314,8 @@ internal fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdro
                         modifier = Modifier.fillMaxSize(),
                         onFocusWindow = { windowId -> actions.focusTilingWindow(page, windowId) },
                         onCloseWindow = { windowId -> actions.closeTilingWindow(page, windowId) },
-                        onAddWindow = { orientation -> actions.addTilingWindow(page, orientation) },
+                        onAddWindow = { area, density -> actions.addTilingWindow(page, area, density) },
+                        onLayoutArea = { area -> actions.reflowTiling(page, area) },
                         onResizeSplit = { splitId, ratio -> actions.resizeTilingSplit(page, splitId, ratio) },
                     )
                 }

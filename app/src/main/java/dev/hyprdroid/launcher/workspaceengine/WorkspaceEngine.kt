@@ -4,6 +4,12 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
+import kotlin.math.ceil
+import kotlin.math.sqrt
+
+/** Orientation for one leaf rect: taller than wide is split top/bottom, otherwise left/right. */
+internal fun orientationFor(rect: LayoutRect): Orientation =
+    if (rect.height > rect.width) Orientation.VERTICAL else Orientation.HORIZONTAL
 
 /** In-memory placement engine for internal workspace modules. Pure Kotlin, no Android dependencies. */
 internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTree()) {
@@ -70,6 +76,123 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
         }
         windows[secondWindow.windowId] = secondWindow
         return true
+    }
+
+    /**
+     * Adaptive split: the immediate orientation follows the current rect of the selected leaf
+     * (taller than wide -> top/bottom, otherwise left/right), then the tree is rebalanced for the
+     * new window count and the portrait/landscape aspect of [area].
+     */
+    fun addWindowAdaptive(
+        windowId: WindowId,
+        splitId: SplitId,
+        secondWindow: WorkspaceWindow,
+        area: LayoutArea,
+        mins: Map<WindowId, WindowMin>,
+    ): Boolean {
+        val orientation = splitOrientation(windowId, area, mins) ?: return false
+        if (!splitWindow(windowId, orientation, splitId, secondWindow)) return false
+        reflow(area)
+        return true
+    }
+
+    /** Orientation for the selected leaf: taller than wide is split top/bottom, otherwise left/right. */
+    fun splitOrientation(windowId: WindowId, area: LayoutArea, mins: Map<WindowId, WindowMin>): Orientation? =
+        calculateLayout(area, mins).firstOrNull { it.windowId == windowId }?.let { orientationFor(it.rect) }
+
+    /**
+     * Rebuilds the split topology for the current leaf count and the orientation of [area]. Every
+     * existing SplitNode is reused together with its id and ratio, so the tree, user-resized
+     * dividers, window order and window state survive the adaptive pass.
+     */
+    internal fun reflow(area: LayoutArea): Boolean {
+        if (area.widthPx <= 0 || area.heightPx <= 0) return false
+        val leaves = collectLeaves(root)
+        if (leaves.size <= 1) return false
+        val splits = collectSplits(root)
+        if (splits.size != leaves.size - 1) return false
+        val before = serialize()
+        val portrait = area.heightPx >= area.widthPx
+        val grouped = mutableListOf<List<LeafNode>>()
+        var offset = 0
+        targetGroups(leaves.size, portrait).forEach { size ->
+            grouped += leaves.subList(offset, offset + size)
+            offset += size
+        }
+        val builder = AdaptiveTreeBuilder(splits)
+        root = if (portrait) builder.rows(grouped) else builder.columns(grouped)
+        return serialize() != before
+    }
+
+    /** Whether the next adaptive layout still gives every window at least one pixel in both axes. */
+    fun canAddWindow(area: LayoutArea): Boolean {
+        if (area.widthPx < 1 || area.heightPx < 1) return false
+        val next = leaves().size + 1
+        if (next <= 1) return true
+        val portrait = area.heightPx >= area.widthPx
+        val groups = targetGroups(next, portrait)
+        val rows = if (portrait) groups.size else (groups.maxOrNull() ?: 1)
+        val columns = if (portrait) (groups.maxOrNull() ?: 1) else groups.size
+        return area.widthPx / columns >= 1 && area.heightPx / rows >= 1
+    }
+
+    private fun collectLeaves(node: LayoutNode?): List<LeafNode> = when (node) {
+        null -> emptyList()
+        is LeafNode -> listOf(node)
+        is SplitNode -> collectLeaves(node.first) + collectLeaves(node.second)
+    }
+
+    private fun collectSplits(node: LayoutNode?): List<SplitNode> = when (node) {
+        null -> emptyList()
+        is LeafNode -> emptyList()
+        is SplitNode -> listOf(node) + collectSplits(node.first) + collectSplits(node.second)
+    }
+
+    private fun targetGroups(count: Int, portrait: Boolean): List<Int> = when (count) {
+        2 -> listOf(1, 1)
+        3 -> listOf(1, 2)
+        4 -> listOf(2, 2)
+        5 -> listOf(2, 3)
+        6 -> if (portrait) listOf(2, 2, 2) else listOf(3, 3)
+        else -> {
+            val columns = if (portrait) sqrt(count.toDouble()).toInt().coerceAtLeast(1)
+                else ceil(sqrt(count.toDouble())).toInt().coerceAtLeast(1)
+            val rows = ceil(count.toDouble() / columns).toInt().coerceAtLeast(1)
+            val base = count / rows
+            val extra = count % rows
+            List(rows) { index -> base + if (index < extra) 1 else 0 }
+        }
+    }
+
+    /** Reuses the existing split nodes in pre-order so ids and ratios are never replaced. */
+    private class AdaptiveTreeBuilder(private val splits: List<SplitNode>) {
+        private var index = 0
+
+        private fun next(orientation: Orientation): SplitNode = splits[index++].also { it.orientation = orientation }
+
+        fun line(items: List<LeafNode>, orientation: Orientation): LayoutNode {
+            if (items.size == 1) return items.single()
+            val split = next(orientation)
+            split.first = items.first()
+            split.second = line(items.drop(1), orientation)
+            return split
+        }
+
+        fun rows(rows: List<List<LeafNode>>): LayoutNode {
+            if (rows.size == 1) return line(rows.single(), Orientation.HORIZONTAL)
+            val split = next(Orientation.VERTICAL)
+            split.first = line(rows.first(), Orientation.HORIZONTAL)
+            split.second = rows(rows.drop(1))
+            return split
+        }
+
+        fun columns(columns: List<List<LeafNode>>): LayoutNode {
+            if (columns.size == 1) return line(columns.single(), Orientation.VERTICAL)
+            val split = next(Orientation.HORIZONTAL)
+            split.first = line(columns.first(), Orientation.VERTICAL)
+            split.second = columns(columns.drop(1))
+            return split
+        }
     }
 
     /** Removes a window and collapses the parent split; the focused window is cleared when lost. */
@@ -161,14 +284,17 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
         val firstMin = minExtent(split.first, constrainedAxis, mins)
         val secondMin = minExtent(split.second, constrainedAxis, mins)
         val available = if (split.orientation == Orientation.HORIZONTAL) rect.width else rect.height
+        val minVisible = if (available >= 2) 1 else 0
         val firstSize: Int
         val secondSize: Int
         if (firstMin + secondMin <= available.toLong()) {
-            firstSize = maxOf((available * split.ratio).toInt(), firstMin.toInt()).coerceAtMost(available - secondMin.toInt())
+            firstSize = maxOf((available * split.ratio).toInt(), firstMin.toInt())
+                .coerceAtMost(available - secondMin.toInt())
+                .coerceIn(minVisible, available - minVisible)
         }
         else {
             // Minimums cannot all fit: share the area by ratio so every window stays visible instead of starving one child.
-            firstSize = (available * split.ratio).toInt().coerceIn(0, available)
+            firstSize = (available * split.ratio).toInt().coerceIn(minVisible, available - minVisible)
         }
         secondSize = available - firstSize
         val firstRect = if (split.orientation == Orientation.HORIZONTAL) LayoutRect(x = rect.x, y = rect.y, width = firstSize, height = rect.height) else LayoutRect(x = rect.x, y = rect.y, width = rect.width, height = firstSize)
