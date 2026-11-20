@@ -312,7 +312,9 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
             val engine = engines.getOrPut(workspaceId) { WorkspaceEngine() }
             val target = engine.focusedWindowId ?: engine.leaves().firstOrNull() ?: return@launch
             val splitIndex = engine.windowsById().size
-            if (!engine.splitWindow(target, orientation, SplitId("tile-split-$splitIndex"), WorkspaceWindow(WindowId("tile-${splitIndex + 1}"), TILING_TEST_MODULE_ID, 320, 240))) return@launch
+            val newWindowId = WindowId("tile-${splitIndex + 1}")
+            if (!engine.splitWindow(target, orientation, SplitId("tile-split-$splitIndex"), WorkspaceWindow(newWindowId, TILING_TEST_MODULE_ID, 320, 240))) return@launch
+            engine.focusWindow(newWindowId)
             save { engineStore.save(workspaceId.toString(), engine) }
             publishTiling(workspaceId, engine)
         } catch (cancelled: CancellationException) { throw cancelled }

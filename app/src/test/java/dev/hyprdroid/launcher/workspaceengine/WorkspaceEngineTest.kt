@@ -506,4 +506,53 @@ class WorkspaceEngineTest {
         ))
         assertEquals(2, placedAfterSplit.size)
     }
+
+    @Test fun sequentialAddsExposeAllWindowsUpToSix() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1"))
+        engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s1"), window("w-2", "com.example/.Second"))
+        engine.splitWindow(WindowId("w-2"), Orientation.VERTICAL, SplitId("s2"), window("w-3", "com.example/.Third"))
+        engine.splitWindow(WindowId("w-3"), Orientation.HORIZONTAL, SplitId("s3"), window("w-4", "com.example/.Fourth"))
+        engine.splitWindow(WindowId("w-4"), Orientation.VERTICAL, SplitId("s4"), window("w-5", "com.example/.Fifth"))
+        engine.splitWindow(WindowId("w-5"), Orientation.HORIZONTAL, SplitId("s5"), window("w-6", "com.example/.Sixth"))
+        val mins = (1..6).associate { index -> WindowId("w-$index") to WindowMin(0, 0) }
+        val placed = engine.calculateLayout(LayoutArea(1000, 1000), mins)
+        assertEquals(6, placed.size)
+        for (item in placed) {
+            assertTrue(item.rect.x + item.rect.width <= 1000)
+            assertTrue(item.rect.y + item.rect.height <= 1000)
+        }
+    }
+
+    @Test fun nestedSplitsExposeAllWindowsAfterThirdAdd() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1"))
+        assertTrue(engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s1"), window("w-2", "com.example/.Second")))
+        assertTrue(engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s2"), window("w-3", "com.example/.Third")))
+        val placed = engine.calculateLayout(LayoutArea(1000, 1000), (1..3).associate { WindowId("w-$it") to WindowMin(0, 0) })
+        assertEquals(3, placed.size)
+        for (item in placed) {
+            assertTrue(item.rect.x + item.rect.width <= 1000)
+            assertTrue(item.rect.y + item.rect.height <= 1000)
+        }
+    }
+
+    @Test fun nestedSplitsRespectMinimumsWithoutNegativeSizes() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1", "com.example/.Main", 80, 80))
+        assertTrue(engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s1"), window("w-2", "com.example/.Second", 80, 80)))
+        assertTrue(engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s2"), window("w-3", "com.example/.Third", 80, 80)))
+        val placed = engine.calculateLayout(LayoutArea(200, 200), mapOf(
+            WindowId("w-1") to WindowMin(80, 80),
+            WindowId("w-2") to WindowMin(80, 80),
+            WindowId("w-3") to WindowMin(80, 80),
+        ))
+        assertEquals(3, placed.size)
+        for (item in placed) {
+            assertTrue(item.rect.width >= 0)
+            assertTrue(item.rect.height >= 0)
+            assertTrue(item.rect.x + item.rect.width <= 200)
+            assertTrue(item.rect.y + item.rect.height <= 200)
+        }
+    }
 }
