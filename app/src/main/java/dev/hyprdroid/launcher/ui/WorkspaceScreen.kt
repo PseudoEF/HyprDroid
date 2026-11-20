@@ -89,7 +89,7 @@ internal fun WorkspaceScreen(model: WorkspaceViewModel, requestedScreen: String?
                 systemSettings = { action -> if (!openSystemSettings(context, action)) model.showMessage("Системные настройки недоступны.") },
                 openTiling = model::openTilingSurface,
                 closeTilingSurface = model::closeTilingSurface,
-                addTilingWindow = { workspaceId, area, density -> model.addTilingWindow(workspaceId, area, density) },
+                addTilingWindow = { workspaceId, area, density, target -> model.addTilingWindow(workspaceId, area, density, target) },
                 reflowTiling = { workspaceId, area -> model.reflowTiling(workspaceId, area) },
                 closeTilingWindow = { workspaceId, windowId -> model.closeTilingWindow(workspaceId, windowId) },
                 focusTilingWindow = { workspaceId, windowId -> model.focusTilingWindow(workspaceId, windowId) },
@@ -127,7 +127,7 @@ internal data class ShellActions(
     val presentation: (ShellPresentation, () -> Unit) -> Unit,
     val openTiling: (Int) -> Unit,
     val closeTilingSurface: () -> Unit,
-    internal val addTilingWindow: (Int, LayoutArea, Float) -> Unit,
+    internal val addTilingWindow: (Int, LayoutArea, Float, WindowId?) -> Unit,
     internal val reflowTiling: (Int, LayoutArea) -> Unit,
     internal val closeTilingWindow: (Int, WindowId) -> Unit,
     internal val focusTilingWindow: (Int, WindowId) -> Unit,
@@ -314,7 +314,7 @@ internal fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdro
                         modifier = Modifier.fillMaxSize(),
                         onFocusWindow = { windowId -> actions.focusTilingWindow(page, windowId) },
                         onCloseWindow = { windowId -> actions.closeTilingWindow(page, windowId) },
-                        onAddWindow = { area, density -> actions.addTilingWindow(page, area, density) },
+                        onAddWindow = { area, density -> actions.addTilingWindow(page, area, density, null) },
                         onAddWindowAt = { id, area, density ->
                             actions.addTilingWindow(page, area, density, id)
                         },
