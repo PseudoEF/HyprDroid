@@ -9,7 +9,7 @@ import dev.hyprdroid.launcher.workspaceengine.WindowMin
  * Compose-facing view of one internal tiling session. The engine instance is an immutable snapshot
  * published by the ViewModel; the surface never mutates it.
  */
-data class TilingState(
+internal data class TilingState(
     val open: Boolean = false,
     val workspaceId: Int = 0,
     val focusedWindowId: WindowId? = null,

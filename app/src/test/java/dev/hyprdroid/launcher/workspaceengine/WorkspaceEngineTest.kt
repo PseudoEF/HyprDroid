@@ -486,4 +486,24 @@ class WorkspaceEngineTest {
         assertEquals(600, byId.getValue(WindowId("w-2")).rect.width)
         assertFalse(byId.getValue(WindowId("w-2")).constrained)
     }
+
+    @Test fun snapshotStaysIndependentFromSplitAndResizeMutations() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1"))
+        assertTrue(engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s1"), window("w-2", "com.example/.Second")))
+        val snapshot = engine.snapshot()
+        assertTrue(engine.resizeSplit(SplitId("s1"), 0.75f))
+        val placedAfterResize = snapshot.calculateLayout(LayoutArea(1000, 1000), mapOf(
+            WindowId("w-1") to WindowMin(0, 0),
+            WindowId("w-2") to WindowMin(0, 0),
+        ))
+        assertEquals(2, placedAfterResize.size)
+        assertEquals(500, placedAfterResize.first { it.windowId == WindowId("w-1") }.rect.width)
+        assertTrue(engine.splitWindow(WindowId("w-2"), Orientation.VERTICAL, SplitId("s2"), window("w-3", "com.example/.Third")))
+        val placedAfterSplit = snapshot.calculateLayout(LayoutArea(1000, 1000), mapOf(
+            WindowId("w-1") to WindowMin(0, 0),
+            WindowId("w-2") to WindowMin(0, 0),
+        ))
+        assertEquals(2, placedAfterSplit.size)
+    }
 }

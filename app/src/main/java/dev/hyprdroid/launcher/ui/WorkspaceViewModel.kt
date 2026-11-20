@@ -53,7 +53,7 @@ data class WorkspaceUiState(
     val storageError: Boolean = false,
     val shellError: Boolean = false,
     val message: String? = null,
-    val tiling: TilingState? = null,
+    internal val tiling: TilingState? = null,
 )
 
 class WorkspaceViewModel(application: Application) : AndroidViewModel(application) {
@@ -307,7 +307,7 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     /** Splits the focused internal window with a new test window. */
-    fun addTilingWindow(workspaceId: Int, orientation: Orientation) = viewModelScope.launch {
+    internal fun addTilingWindow(workspaceId: Int, orientation: Orientation) = viewModelScope.launch {
         try {
             val engine = engines.getOrPut(workspaceId) { WorkspaceEngine() }
             val target = engine.focusedWindowId ?: engine.leaves().firstOrNull() ?: return@launch
@@ -320,7 +320,7 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     /** Removes one internal window; the surface closes itself when the tree becomes empty. */
-    fun closeTilingWindow(workspaceId: Int, windowId: WindowId) = viewModelScope.launch {
+    internal fun closeTilingWindow(workspaceId: Int, windowId: WindowId) = viewModelScope.launch {
         try {
             val engine = engines[workspaceId] ?: return@launch
             if (!engine.removeWindow(windowId)) return@launch
@@ -331,14 +331,14 @@ class WorkspaceViewModel(application: Application) : AndroidViewModel(applicatio
         catch (_: IOException) { showMessage("Не удалось закрыть окно. Проверьте место в памяти.") }
     }
 
-    fun focusTilingWindow(workspaceId: Int, windowId: WindowId) {
+    internal fun focusTilingWindow(workspaceId: Int, windowId: WindowId) {
         val engine = engines[workspaceId] ?: return
         if (!engine.focusWindow(windowId)) return
         save { engineStore.save(workspaceId.toString(), engine) }
         publishTiling(workspaceId, engine)
     }
 
-    fun resizeTilingSplit(workspaceId: Int, splitId: SplitId, ratio: Float) {
+    internal fun resizeTilingSplit(workspaceId: Int, splitId: SplitId, ratio: Float) {
         val engine = engines[workspaceId] ?: return
         if (!engine.resizeSplit(splitId, ratio)) return
         save { engineStore.save(workspaceId.toString(), engine) }

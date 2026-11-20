@@ -45,7 +45,7 @@ import dev.hyprdroid.launcher.workspaceengine.WorkspaceWindow
 
 /** Internal tiling surface: renders one workspace of internal windows from the engine layout. */
 @Composable
-fun TilingSurface(
+internal fun TilingSurface(
     engine: WorkspaceEngine,
     modifier: Modifier = Modifier,
     onFocusWindow: (WindowId) -> Unit = {},

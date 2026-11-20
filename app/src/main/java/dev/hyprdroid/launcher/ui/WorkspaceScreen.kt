@@ -126,10 +126,10 @@ data class ShellActions(
     val presentation: (ShellPresentation, () -> Unit) -> Unit,
     val openTiling: (Int) -> Unit,
     val closeTilingSurface: () -> Unit,
-    val addTilingWindow: (Int, Orientation) -> Unit,
-    val closeTilingWindow: (Int, WindowId) -> Unit,
-    val focusTilingWindow: (Int, WindowId) -> Unit,
-    val resizeTilingSplit: (Int, SplitId, Float) -> Unit,
+    internal val addTilingWindow: (Int, Orientation) -> Unit,
+    internal val closeTilingWindow: (Int, WindowId) -> Unit,
+    internal val focusTilingWindow: (Int, WindowId) -> Unit,
+    internal val resizeTilingSplit: (Int, SplitId, Float) -> Unit,
 )
 
 @Composable

@@ -24,9 +24,21 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
 
     /** Independent copy for immutable publishing; mutations never leak back into a published snapshot. */
     internal fun snapshot(): WorkspaceEngine = WorkspaceEngine().apply {
-        root = this@snapshot.root
+        root = copyNode(this@snapshot.root)
         focusedWindowId = this@snapshot.focusedWindowId
         this@snapshot.windows.forEach { (windowId, window) -> this.windows[windowId] = window }
+    }
+
+    private fun copyNode(node: LayoutNode?): LayoutNode? = when (node) {
+        null -> null
+        is LeafNode -> LeafNode(node.windowId)
+        is SplitNode -> SplitNode(
+            id = SplitId(node.id.value),
+            orientation = node.orientation,
+            ratio = node.ratio,
+            first = copyNode(node.first),
+            second = copyNode(node.second),
+        )
     }
 
     /** Creates the first window of a workspace; an engine that already owns a tree rejects this. */
