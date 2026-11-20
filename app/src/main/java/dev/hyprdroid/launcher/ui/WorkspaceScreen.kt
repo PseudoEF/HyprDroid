@@ -315,6 +315,9 @@ internal fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdro
                         onFocusWindow = { windowId -> actions.focusTilingWindow(page, windowId) },
                         onCloseWindow = { windowId -> actions.closeTilingWindow(page, windowId) },
                         onAddWindow = { area, density -> actions.addTilingWindow(page, area, density) },
+                        onAddWindowAt = { id, area, density ->
+                            actions.addTilingWindow(page, area, density, id)
+                        },
                         onLayoutArea = { area -> actions.reflowTiling(page, area) },
                         onResizeSplit = { splitId, ratio -> actions.resizeTilingSplit(page, splitId, ratio) },
                     )

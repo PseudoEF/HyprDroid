@@ -56,6 +56,7 @@ internal fun TilingSurface(
     onFocusWindow: (WindowId) -> Unit = {},
     onCloseWindow: (WindowId) -> Unit = {},
     onAddWindow: (LayoutArea, Float) -> Unit = { _, _ -> },
+    onAddWindowAt: (WindowId, LayoutArea, Float) -> Unit = { _, _, _ -> },
     onLayoutArea: (LayoutArea) -> Unit = {},
     onResizeSplit: (SplitId, Float) -> Unit = { _, _ -> },
 ) {
@@ -79,8 +80,15 @@ internal fun TilingSurface(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(canAddWindow, area, density.density) {
+                .pointerInput(placed, canAddWindow, area, density.density) {
                     val threshold = 48.dp.toPx()
+
+                    fun tileAt(x: Float, y: Float): WindowId? =
+                        placed.firstOrNull { item ->
+                            val r = item.rect
+                            x >= r.x && x < r.x + r.width &&
+                            y >= r.y && y < r.y + r.height
+                        }?.windowId
 
                     awaitEachGesture {
                         awaitFirstDown(
@@ -88,9 +96,12 @@ internal fun TilingSurface(
                             pass = PointerEventPass.Initial,
                         )
 
-                        var initialDistance: Float? = null
+                        var target: WindowId? = null
+                        var initialX: Float? = null
+                        var initialY: Float? = null
                         var triggered = false
                         var multiTouch = false
+                        var rejected = false
 
                         do {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
@@ -98,23 +109,38 @@ internal fun TilingSurface(
 
                             if (active.size >= 2) {
                                 multiTouch = true
-
-                                // Reserve multi-touch for the tiling surface.
                                 event.changes.forEach { it.consume() }
 
-                                val a = active[0].position
-                                val b = active[1].position
-                                val horizontalDistance = abs(a.x - b.x)
-                                val verticalDistance = abs(a.y - b.y)
+                                if (initialX == null && !rejected) {
+                                    val first = active[0].position
+                                    val second = active[1].position
+                                    val firstTile = tileAt(first.x, first.y)
+                                    val secondTile = tileAt(second.x, second.y)
 
-                                if (initialDistance == null) {
-                                    initialDistance = horizontalDistance
-                                } else if (!triggered && canAddWindow) {
-                                    val expansion = horizontalDistance - initialDistance
-                                    if (expansion > threshold &&
-                                        horizontalDistance > verticalDistance) {
+                                    if (firstTile != null && firstTile == secondTile) {
+                                        target = firstTile
+                                        initialX = abs(first.x - second.x)
+                                        initialY = abs(first.y - second.y)
+                                    } else {
+                                        rejected = true
+                                    }
+                                } else if (!triggered && !rejected) {
+                                    val first = active[0].position
+                                    val second = active[1].position
+                                    val dx = abs(first.x - second.x) - (initialX ?: 0f)
+                                    val dy = abs(first.y - second.y) - (initialY ?: 0f)
+
+                                    // Horizontal spread/pinch only.
+                                    if (abs(dx) > threshold &&
+                                        abs(dx) > abs(dy) * 1.5f) {
                                         triggered = true
-                                        onAddWindow(area, density.density)
+                                        target?.let { id ->
+                                            if (dx > 0f && canAddWindow) {
+                                                onAddWindowAt(id, area, density.density)
+                                            } else if (dx < 0f && placed.size > 1) {
+                                                onCloseWindow(id)
+                                            }
+                                        }
                                     }
                                 }
                             } else if (multiTouch) {

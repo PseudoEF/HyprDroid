@@ -310,10 +310,19 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
     }
 
     /** Splits the focused internal window with a new test window using the adaptive layout. */
-    internal fun addTilingWindow(workspaceId: Int, area: LayoutArea, densityScale: Float) = viewModelScope.launch {
+    internal fun addTilingWindow(
+        workspaceId: Int,
+        area: LayoutArea,
+        densityScale: Float,
+        targetWindowId: WindowId? = null,
+    ) = viewModelScope.launch {
         try {
             val engine = engines.getOrPut(workspaceId) { WorkspaceEngine() }
-            val target = engine.focusedWindowId ?: engine.leaves().firstOrNull() ?: return@launch
+            val target = targetWindowId
+                ?: engine.focusedWindowId
+                ?: engine.leaves().firstOrNull()
+                ?: return@launch
+            if (target !in engine.leaves()) return@launch
             val newWindowId = WindowId(UUID.randomUUID().toString())
             val splitId = SplitId(UUID.randomUUID().toString())
             val mins = engine.windowsById().mapValues { (_, window) -> tilingWindowMin(window, densityScale) }
