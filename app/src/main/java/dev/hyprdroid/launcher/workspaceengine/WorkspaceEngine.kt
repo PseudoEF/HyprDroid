@@ -17,6 +17,8 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
     var root: LayoutNode? = initial.root
     private val windows: MutableMap<WindowId, WorkspaceWindow> = initial.windows.toMutableMap()
     var focusedWindowId: WindowId? = initial.focusedWindowId
+    private val knownLeafIds = mutableSetOf<String>()
+    private val knownSplitIds = mutableSetOf<String>()
 
     companion object {
         const val ENGINE_SCHEMA_VERSION = 1
@@ -357,6 +359,8 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
     }
 
     fun deserialize(raw: String): WorkspaceEngine {
+        knownLeafIds.clear()
+        knownSplitIds.clear()
         val document = try { JSONObject(raw) } catch (error: JSONException) { throw IOException("Invalid workspace engine state", error) }
         val version = document.optInt("version", -1)
         if (version != ENGINE_SCHEMA_VERSION) throw IOException("Unsupported workspace engine schema version: $version")
