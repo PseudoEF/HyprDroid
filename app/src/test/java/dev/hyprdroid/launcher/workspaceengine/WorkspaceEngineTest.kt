@@ -860,7 +860,7 @@ class WorkspaceEngineTest {
         assertEquals(setOf(w2, w3), engine.leaves().toSet())
 
         // 3. Add again (using UUID as in WorkspaceViewModel.addTilingWindow)
-        val target = engine.focusedWindowId ?: fail("focused window must exist")
+        val target = requireNotNull(engine.focusedWindowId) { "focused window must exist" }
         val wNew = WindowId(UUID.randomUUID().toString())
         val sNew = SplitId(UUID.randomUUID().toString())
         assertTrue("re-adding window must succeed", engine.addWindowAdaptive(target, sNew, window(wNew.value, "com.example/.New"), area, minsFor(engine)))
@@ -902,7 +902,7 @@ class WorkspaceEngineTest {
         assertEquals(setOf(w2, w3), engine.leaves().toSet())
 
         // 3. Add again (using UUID as in WorkspaceViewModel.addTilingWindow)
-        val target = engine.focusedWindowId ?: fail("focused window must exist")
+        val target = requireNotNull(engine.focusedWindowId) { "focused window must exist" }
         val wNew = WindowId(UUID.randomUUID().toString())
         val sNew = SplitId(UUID.randomUUID().toString())
         assertTrue("re-adding window must succeed", engine.addWindowAdaptive(target, sNew, window(wNew.value, "com.example/.New"), area, minsFor(engine)))
@@ -936,7 +936,7 @@ class WorkspaceEngineTest {
         assertTrue(engine.removeWindow(w2))
         val newWindowId = WindowId(UUID.randomUUID().toString())
         val newSplitId = SplitId(UUID.randomUUID().toString())
-        val target = engine.focusedWindowId ?: fail("focused window must exist")
+        val target = requireNotNull(engine.focusedWindowId) { "focused window must exist" }
         assertTrue(engine.addWindowAdaptive(target, newSplitId, window(newWindowId.value, "com.example/.New"), area, minsFor(engine)))
         assertEquals(4, engine.leaves().size)
         assertEquals(4, engine.leaves().toSet().size)
