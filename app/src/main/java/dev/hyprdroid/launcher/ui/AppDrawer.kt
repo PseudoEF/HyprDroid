@@ -23,7 +23,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun AppDrawer(
+internal fun AppDrawer(
     state: WorkspaceUiState, selectingWorkspace: Int?, onClose: () -> Unit,
     onLaunch: (String) -> Unit, onPin: (String, Boolean) -> Unit,
     menu: (String) -> List<AppMenuAction>, onRetry: () -> Unit,

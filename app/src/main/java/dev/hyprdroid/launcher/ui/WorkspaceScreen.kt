@@ -49,7 +49,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 @Composable
-fun WorkspaceScreen(model: WorkspaceViewModel, requestedScreen: String? = null, onRouteConsumed: () -> Unit = {}) {
+internal fun WorkspaceScreen(model: WorkspaceViewModel, requestedScreen: String? = null, onRouteConsumed: () -> Unit = {}) {
     val state by model.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -99,7 +99,7 @@ fun WorkspaceScreen(model: WorkspaceViewModel, requestedScreen: String? = null, 
     }
 }
 
-data class ShellActions(
+internal data class ShellActions(
     val launch: (String) -> Unit,
     val pin: (Int, String, Boolean) -> Unit,
     val favorite: (String, Boolean) -> Unit,
@@ -133,7 +133,7 @@ data class ShellActions(
 )
 
 @Composable
-fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (ShellPresentation, Boolean) -> Unit = { _, _ -> }, requestedScreen: String? = null, onRouteConsumed: () -> Unit = {}) {
+internal fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdropState: (ShellPresentation, Boolean) -> Unit = { _, _ -> }, requestedScreen: String? = null, onRouteConsumed: () -> Unit = {}) {
     var aboutOpen by rememberSaveable { mutableStateOf(false) }
     var quickEditorOpen by rememberSaveable { mutableStateOf(false) }
     var powerOpen by rememberSaveable { mutableStateOf(false) }

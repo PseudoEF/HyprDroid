@@ -51,7 +51,7 @@ private data class PanelModuleKey(val id: String) : java.io.Serializable
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ModularSidebar(
+internal fun ModularSidebar(
     state: WorkspaceUiState, onClose: () -> Unit, onLaunch: (WorkspaceItem.AppShortcut) -> Unit,
     onPin: (WorkspaceItem.AppShortcut, Boolean) -> Unit, onRemove: (String) -> Unit,
     onReorder: (String, Int) -> Unit, onPlaceBefore: (String, String?, () -> Unit) -> Unit,

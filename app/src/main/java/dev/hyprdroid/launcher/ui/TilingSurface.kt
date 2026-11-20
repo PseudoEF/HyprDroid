@@ -29,7 +29,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.background
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -60,7 +59,7 @@ internal fun TilingSurface(
             heightPx = with(density) { maxHeight.roundToPx().toInt() },
         )
         val mins: Map<WindowId, WindowMin> = remember(engine, area) {
-            engine.windowsById().mapValues { _, window -> tilingWindowMin(window, density.density) }.toMap()
+            engine.windowsById().mapValues { entry -> tilingWindowMin(entry.value, density.density) }.toMap()
         }
         val placed = remember(engine, area, mins) { engine.calculateLayout(area, mins) }
         val splits = remember(engine, area, mins) {

@@ -23,14 +23,15 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
     fun windowsById(): Map<WindowId, WorkspaceWindow> = windows
 
     /** Independent copy for immutable publishing; mutations never leak back into a published snapshot. */
-    internal fun snapshot(): WorkspaceEngine = WorkspaceEngine().apply {
-        root = copyNode(this@snapshot.root)
-        focusedWindowId = this@snapshot.focusedWindowId
-        this@snapshot.windows.forEach { (windowId, window) -> this.windows[windowId] = window }
+    internal fun snapshot(): WorkspaceEngine {
+        val copy = WorkspaceEngine()
+        copy.root = root?.let { copyNode(it) }
+        copy.focusedWindowId = focusedWindowId
+        windows.forEach { entry -> copy.windows[entry.key] = entry.value }
+        return copy
     }
 
-    private fun copyNode(node: LayoutNode?): LayoutNode? = when (node) {
-        null -> null
+    private fun copyNode(node: LayoutNode): LayoutNode = when (node) {
         is LeafNode -> LeafNode(node.windowId)
         is SplitNode -> SplitNode(
             id = SplitId(node.id.value),

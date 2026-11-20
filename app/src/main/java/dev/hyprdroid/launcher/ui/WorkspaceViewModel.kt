@@ -43,7 +43,7 @@ import kotlinx.coroutines.withContext
 
 private const val TILING_TEST_MODULE_ID = "dev.hyprdroid.launcher.tiling/.Test"
 
-data class WorkspaceUiState(
+internal data class WorkspaceUiState(
     val settings: WorkspaceSettings? = null,
     val shell: ShellSettings? = null,
     val apps: List<LauncherApp> = emptyList(),
@@ -56,7 +56,7 @@ data class WorkspaceUiState(
     internal val tiling: TilingState? = null,
 )
 
-class WorkspaceViewModel(application: Application) : AndroidViewModel(application) {
+internal class WorkspaceViewModel(application: Application) : AndroidViewModel(application) {
     private val wallpaperOperations = AnimatedWallpaperFiles.operations
     private val repository = WorkspaceRepository(application)
     private val shellRepository = ShellRepository(application)
