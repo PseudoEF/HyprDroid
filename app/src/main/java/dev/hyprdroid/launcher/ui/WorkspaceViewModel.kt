@@ -41,7 +41,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private const val TILING_TEST_MODULE_ID = "dev.hyprdroid.launcher.tiling/.Test"
+internal const val TILING_TEST_MODULE_ID = "dev.hyprdroid.launcher.tiling/.Test"
 
 internal data class WorkspaceUiState(
     val settings: WorkspaceSettings? = null,
@@ -313,7 +313,8 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
             val target = engine.focusedWindowId ?: engine.leaves().firstOrNull() ?: return@launch
             val splitIndex = engine.windowsById().size
             val newWindowId = WindowId("tile-${splitIndex + 1}")
-            if (!engine.splitWindow(target, orientation, SplitId("tile-split-$splitIndex"), WorkspaceWindow(newWindowId, TILING_TEST_MODULE_ID, 320, 240))) return@launch
+            val splitId = SplitId("tile-split-${System.currentTimeMillis()}")
+            if (!engine.splitWindow(target, orientation, splitId, WorkspaceWindow(newWindowId, TILING_TEST_MODULE_ID, 320, 240))) return@launch
             engine.focusWindow(newWindowId)
             save { engineStore.save(workspaceId.toString(), engine) }
             publishTiling(workspaceId, engine)

@@ -519,8 +519,18 @@ class WorkspaceEngineTest {
         val placed = engine.calculateLayout(LayoutArea(1000, 1000), mins)
         assertEquals(6, placed.size)
         for (item in placed) {
+            assertTrue("Window ${item.windowId} must have a positive size", item.rect.width > 0)
+            assertTrue("Window ${item.windowId} must have a positive size", item.rect.height > 0)
             assertTrue(item.rect.x + item.rect.width <= 1000)
             assertTrue(item.rect.y + item.rect.height <= 1000)
+        }
+        for (i in placed.indices) {
+            for (j in i + 1 until placed.size) {
+                val first = placed[i]
+                val second = placed[j]
+                val overlaps = first.rect.x < second.rect.x + second.rect.width && second.rect.x < first.rect.x + first.rect.width && first.rect.y < second.rect.y + second.rect.height && second.rect.y < first.rect.y + first.rect.height
+                assertFalse("Windows ${first.windowId} and ${second.windowId} overlap", overlaps)
+            }
         }
     }
 
@@ -532,8 +542,18 @@ class WorkspaceEngineTest {
         val placed = engine.calculateLayout(LayoutArea(1000, 1000), (1..3).associate { WindowId("w-$it") to WindowMin(0, 0) })
         assertEquals(3, placed.size)
         for (item in placed) {
+            assertTrue(item.rect.width > 0)
+            assertTrue(item.rect.height > 0)
             assertTrue(item.rect.x + item.rect.width <= 1000)
             assertTrue(item.rect.y + item.rect.height <= 1000)
+        }
+        for (i in placed.indices) {
+            for (j in i + 1 until placed.size) {
+                val first = placed[i]
+                val second = placed[j]
+                val overlaps = first.rect.x < second.rect.x + second.rect.width && second.rect.x < first.rect.x + first.rect.width && first.rect.y < second.rect.y + second.rect.height && second.rect.y < first.rect.y + first.rect.height
+                assertFalse("Windows ${first.windowId} and ${second.windowId} overlap", overlaps)
+            }
         }
     }
 
@@ -554,5 +574,29 @@ class WorkspaceEngineTest {
             assertTrue(item.rect.x + item.rect.width <= 200)
             assertTrue(item.rect.y + item.rect.height <= 200)
         }
+    }
+
+    @Test fun splitIsRejectedWhenSecondWindowMinimumDoesNotFit() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1", "com.example/.Main", 400, 400))
+        val mins = mapOf(WindowId("w-1") to WindowMin(400, 400))
+        assertFalse(engine.canSplit(WindowId("w-1"), Orientation.HORIZONTAL, WindowMin(400, 400), LayoutArea(500, 500), mins))
+        assertTrue(engine.canSplit(WindowId("w-1"), Orientation.HORIZONTAL, WindowMin(50, 50), LayoutArea(500, 500), mins))
+        assertTrue(engine.canSplit(WindowId("w-1"), Orientation.VERTICAL, WindowMin(50, 50), LayoutArea(500, 500), mins))
+        val missingTarget = engine.canSplit(WindowId("w-missing"), Orientation.HORIZONTAL, WindowMin(50, 50), LayoutArea(500, 500), mins)
+        assertFalse(missingTarget)
+    }
+
+    @Test fun splitIdsBecomeFreeAgainAfterWindowRemoval() {
+        val engine = WorkspaceEngine()
+        engine.addFirstWindow(window("w-1"))
+        assertTrue(engine.splitWindow(WindowId("w-1"), Orientation.HORIZONTAL, SplitId("s1"), window("w-2", "com.example/.Second")))
+        assertTrue(engine.removeWindow(WindowId("w-1")))
+        assertTrue(engine.splitWindow(WindowId("w-2"), Orientation.VERTICAL, SplitId("s1"), window("w-3", "com.example/.Third")))
+        val placed = engine.calculateLayout(LayoutArea(1000, 1000), mapOf(
+            WindowId("w-2") to WindowMin(0, 0),
+            WindowId("w-3") to WindowMin(0, 0),
+        ))
+        assertEquals(2, placed.size)
     }
 }

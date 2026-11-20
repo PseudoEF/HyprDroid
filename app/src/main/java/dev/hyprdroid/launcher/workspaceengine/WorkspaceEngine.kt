@@ -177,9 +177,20 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
 
     internal data class SplitPlacement(val split: SplitNode, val firstRect: LayoutRect, val secondRect: LayoutRect)
 
-    private fun minExtent(node: LayoutNode?, axis: Int, mins: Map<WindowId, WindowMin>): Long {
+    /** Whether a second window with [secondMin] fits next to the window owning [windowId] inside [area]. */
+    fun canSplit(windowId: WindowId, orientation: Orientation, secondMin: WindowMin, area: LayoutArea, mins: Map<WindowId, WindowMin>): Boolean {
+        val target = locate(root, null, null, false, windowId) ?: return false
+        val axis = if (orientation == Orientation.HORIZONTAL) 0 else 1
+        val available = if (orientation == Orientation.HORIZONTAL) area.widthPx else area.heightPx
+        val focusedMin = mins[windowId] ?: WindowMin(0, 0)
+        val firstMin = if (axis == 0) focusedMin.widthPx.coerceAtLeast(0).toLong() else focusedMin.heightPx.coerceAtLeast(0).toLong()
+        val secondMinTotal = if (axis == 0) secondMin.widthPx.coerceAtLeast(0).toLong() else secondMin.heightPx.coerceAtLeast(0).toLong()
+        return firstMin + secondMinTotal <= available.toLong()
+    }
+
+    private fun minExtent(node: LayoutNode?, axis: Int, mins: Map<WindowId, WindowMin>, fallback: WindowMin = WindowMin(0, 0)): Long {
         if (node is LeafNode) {
-            val min = mins[node.windowId] ?: WindowMin(0, 0)
+            val min = mins[node.windowId] ?: fallback
             return if (axis == 0) min.widthPx.coerceAtLeast(0).toLong() else min.heightPx.coerceAtLeast(0).toLong()
         }
         val split = node as SplitNode

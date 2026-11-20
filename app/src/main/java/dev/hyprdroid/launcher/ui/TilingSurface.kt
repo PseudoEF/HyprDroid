@@ -66,6 +66,8 @@ internal fun TilingSurface(
             engine.splitsWithRects(engine.root, LayoutRect(x = 0, y = 0, width = area.widthPx, height = area.heightPx), mins)
         }
         val focusedId = engine.focusedWindowId
+        val addableWindowId = engine.focusedWindowId ?: engine.leaves().firstOrNull()
+        val canAddWindow = addableWindowId != null && engine.canSplit(addableWindowId, Orientation.HORIZONTAL, tilingWindowMin(WorkspaceWindow(WindowId("tile-add"), TILING_TEST_MODULE_ID, 320, 240), density.density), area, mins)
 
         placed.forEach { placedWindow ->
             val rect = placedWindow.rect
@@ -129,7 +131,7 @@ internal fun TilingSurface(
                 .align(Alignment.BottomEnd)
                 .padding(12.dp)
                 .testTag("tiling-add-window")
-                .clickable { onAddWindow(Orientation.HORIZONTAL) },
+                .clickable { if (canAddWindow) onAddWindow(Orientation.HORIZONTAL) },
         ) {
             Icon(Icons.Default.Add, contentDescription = "Добавить окно", tint = Mocha.Text)
         }
