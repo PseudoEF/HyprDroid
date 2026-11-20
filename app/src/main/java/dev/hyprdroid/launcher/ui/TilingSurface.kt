@@ -102,6 +102,9 @@ internal fun TilingSurface(
                         var triggered = false
                         var multiTouch = false
                         var rejected = false
+                        var resizeX = 0f
+                        var resizeY = 0f
+                        var resizing = false
 
                         do {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
@@ -130,9 +133,9 @@ internal fun TilingSurface(
                                     val dx = abs(first.x - second.x) - (initialX ?: 0f)
                                     val dy = abs(first.y - second.y) - (initialY ?: 0f)
 
-                                    // Horizontal spread/pinch only.
                                     if (abs(dx) > threshold &&
                                         abs(dx) > abs(dy) * 1.5f) {
+                                        // Horizontal gesture: add/remove.
                                         triggered = true
                                         target?.let { id ->
                                             if (dx > 0f && canAddWindow) {
@@ -141,12 +144,109 @@ internal fun TilingSurface(
                                                 onCloseWindow(id)
                                             }
                                         }
+                                    } else if (abs(dy) > threshold &&
+                                        abs(dy) > abs(dx) * 1.5f) {
+                                        // Vertical gesture: resize height.
+                                        resizing = true
+                                    } else if (
+                                        abs(dx) > threshold &&
+                                        abs(dy) > threshold
+                                    ) {
+                                        // Diagonal gesture: resize both axes.
+                                        resizing = true
+                                    }
+
+                                    if (resizing) {
+                                        resizeX = dx
+                                        resizeY = dy
                                     }
                                 }
                             } else if (multiTouch) {
                                 event.changes.forEach { it.consume() }
                             }
+
+                            if (resizing && active.size >= 2) {
+                                val first = active[0].position
+                                val second = active[1].position
+                                resizeX = abs(first.x - second.x) - (initialX ?: 0f)
+                                resizeY = abs(first.y - second.y) - (initialY ?: 0f)
+                            }
                         } while (event.changes.any { it.pressed })
+
+                        if (resizing && !triggered) {
+                            val selected = placed.firstOrNull {
+                                it.windowId == target
+                            }
+
+                            if (selected != null) {
+                                val rect = selected.rect
+                                val cx = rect.x + rect.width / 2f
+                                val cy = rect.y + rect.height / 2f
+
+                                fun resizeAxis(
+                                    orientation: Orientation,
+                                    delta: Float,
+                                ) {
+                                    if (abs(delta) < 12.dp.toPx()) return
+
+                                    val candidates = splits.mapNotNull { item ->
+                                        if (item.split.orientation != orientation) {
+                                            return@mapNotNull null
+                                        }
+
+                                        val first = item.firstRect
+                                        val second = item.secondRect
+
+                                        fun contains(r: LayoutRect): Boolean =
+                                            cx >= r.x && cx < r.x + r.width &&
+                                            cy >= r.y && cy < r.y + r.height
+
+                                        val inFirst = contains(first)
+                                        val inSecond = contains(second)
+
+                                        if (!inFirst && !inSecond) {
+                                            null
+                                        } else {
+                                            val size = if (
+                                                orientation == Orientation.HORIZONTAL
+                                            ) {
+                                                first.width + second.width
+                                            } else {
+                                                first.height + second.height
+                                            }
+
+                                            Triple(item, inFirst, size)
+                                        }
+                                    }
+
+                                    val candidate = candidates.minByOrNull {
+                                        it.third
+                                    } ?: return
+
+                                    val (placement, inFirst, extent) = candidate
+                                    if (extent <= 0) return
+
+                                    val direction = if (inFirst) 1f else -1f
+                                    val ratio = (
+                                        placement.split.ratio +
+                                        direction * delta / extent
+                                    ).coerceIn(0.2f, 0.8f)
+
+                                    onResizeSplit(placement.split.id, ratio)
+                                }
+
+                                if (abs(resizeY) > threshold) {
+                                    resizeAxis(Orientation.VERTICAL, resizeY)
+                                }
+
+                                if (
+                                    abs(resizeX) > threshold &&
+                                    abs(resizeY) > threshold
+                                ) {
+                                    resizeAxis(Orientation.HORIZONTAL, resizeX)
+                                }
+                            }
+                        }
                     }
                 },
         ) {
