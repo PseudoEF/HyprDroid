@@ -302,10 +302,10 @@ internal fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdro
             onSettings = openPresentation, onMenuVisibilityChanged = { shellMenuOpen = it })
         Spacer(Modifier.height(12.dp))
         HorizontalPager(state = pager, modifier = Modifier.weight(1f).widthIn(max = 960.dp).fillMaxWidth().testTag("home-pager"),
-            userScrollEnabled = !overlayOpen && !dragging && tilingSession == null) { page ->
+            userScrollEnabled = !overlayOpen && !dragging) { page ->
             if (!classic) Box(Modifier.fillMaxSize().testTag("workspace-canvas-$page")) {
                 Box(Modifier.fillMaxSize().testTag("clean-workspace-$page")
-                    .homeBlankGestures(!overlayOpen && tilingSession == null, true, openPresentation, openDrawer, openControl, revealDock))
+                    .homeBlankGestures(!overlayOpen, true, openPresentation, openDrawer, openControl, revealDock))
                 if (tilingSession != null) {
                     TilingSurface(
                         engine = tilingSession.engine,
