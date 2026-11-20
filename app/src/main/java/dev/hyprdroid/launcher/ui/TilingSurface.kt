@@ -17,6 +17,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.awaitPointerEvent
+import kotlin.math.abs
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -81,6 +86,41 @@ internal fun TilingSurface(
                             .background(if (isFocused) Mocha.Surface else Mocha.Mantle, RoundedCornerShape(12.dp))
                             .border(BorderStroke(1.dp, if (isFocused) Mocha.Mauve else Mocha.Outline.copy(alpha = .5f)), RoundedCornerShape(12.dp))
                             .testTag("tiling-window-${placedWindow.windowId.value}")
+                            .pointerInput(isFocused, canAddWindow, area, density.density) {
+                                if (isFocused && canAddWindow) {
+                                    val threshold = 64.dp.toPx()
+                                    awaitEachGesture {
+                                        awaitFirstDown(requireUnconsumed = false)
+                                        var start: Offset? = null
+                                        var triggered = false
+
+                                        do {
+                                            val event = awaitPointerEvent()
+                                            val active = event.changes.filter { it.pressed }
+
+                                            if (active.size == 2 && !triggered) {
+                                                val a = active[0].position
+                                                val b = active[1].position
+                                                val separation = Offset(
+                                                    abs(a.x - b.x),
+                                                    abs(a.y - b.y),
+                                                )
+                                                val initial = start
+                                                if (initial == null) {
+                                                    start = separation
+                                                } else {
+                                                    val dx = separation.x - initial.x
+                                                    val dy = separation.y - initial.y
+                                                    if (dx > threshold && abs(dx) > abs(dy) * 1.5f) {
+                                                        triggered = true
+                                                        onAddWindow(area, density.density)
+                                                    }
+                                                }
+                                            }
+                                        } while (event.changes.any { it.pressed })
+                                    }
+                                }
+                            }
                             .clickable { onFocusWindow(placedWindow.windowId) },
                     ) {
                         Column(
