@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -26,11 +27,11 @@ internal class WorkspaceEngineStore(private val store: DataStore<Preferences>) {
     }
 
     suspend fun isOpen(workspaceId: String): Boolean =
-        store.data.first()[stringPreferencesKey("tiling/$workspaceId/open")] ?: false
+        store.data.first()[booleanPreferencesKey("tiling/$workspaceId/open")] ?: false
 
     suspend fun setOpen(workspaceId: String, open: Boolean) {
         store.edit { preferences ->
-            preferences[stringPreferencesKey("tiling/$workspaceId/open")] = open
+            preferences[booleanPreferencesKey("tiling/$workspaceId/open")] = open
         }
     }
 
