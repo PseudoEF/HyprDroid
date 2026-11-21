@@ -38,33 +38,29 @@ internal fun AnimatedTerminalCursor(
 
         val left = minOf(targetX, trailX.value)
         val right = maxOf(targetX, trailX.value)
-        val centerY = (targetTop + targetBottom) / 2f
+
+        val top = targetTop.coerceIn(0f, size.height)
+        val bottom = targetBottom.coerceIn(top, size.height)
+        val height = bottom - top
 
         // Мягкое свечение
-        drawLine(
+        drawRect(
             color = Mocha.Mauve.copy(alpha = 0.12f),
-            start = Offset(left, centerY),
-            end = Offset(right, centerY),
-            strokeWidth = 12.dp.toPx(),
-            cap = StrokeCap.Round,
+            topLeft = Offset(left, top),
+            size = androidx.compose.ui.geometry.Size(
+                right - left,
+                height,
+            ),
         )
 
         // Основной шлейф
-        drawLine(
-            color = Mocha.Mauve.copy(alpha = 0.45f),
-            start = Offset(left, centerY),
-            end = Offset(right, centerY),
-            strokeWidth = 4.dp.toPx(),
-            cap = StrokeCap.Round,
-        )
-
-        // Яркая сердцевина
-        drawLine(
-            color = Mocha.Mauve.copy(alpha = 0.8f),
-            start = Offset(left, centerY),
-            end = Offset(right, centerY),
-            strokeWidth = 1.5.dp.toPx(),
-            cap = StrokeCap.Round,
+        drawRect(
+            color = Mocha.Mauve.copy(alpha = 0.35f),
+            topLeft = Offset(left, top),
+            size = androidx.compose.ui.geometry.Size(
+                right - left,
+                height,
+            ),
         )
     }
 }

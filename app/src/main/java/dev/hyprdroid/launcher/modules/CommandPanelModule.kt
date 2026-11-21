@@ -54,10 +54,6 @@ internal class CommandPanelState(windowId: WindowId) : ModuleState(windowId) {
         val raw = input.trim()
         if (raw.isEmpty()) return
         input = ""
-        lines = (lines + CommandLine(
-            "DEBUG: submit('$raw') вызван",
-            CommandLineKind.SYSTEM,
-        )).takeLast(MAX_LINES)
         when (val result = processor.execute(raw)) {
             is CommandResult.Output -> {
                 val next = buildList {
@@ -99,15 +95,14 @@ internal object CommandPanelModule : TileModule {
         var cursorTop by remember { mutableStateOf(0f) }
         var cursorBottom by remember { mutableStateOf(0f) }
 
-        LaunchedEffect(commandState.lines.size) {
-            if (commandState.lines.isNotEmpty()) listState.scrollToItem(commandState.lines.lastIndex)
+        LaunchedEffect(commandState.lines.size, commandState.input.length) {
+            listState.animateScrollToItem(commandState.lines.size)
         }
 
         Column(modifier.fillMaxSize().padding(horizontal = 6.dp)) {
             LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxWidth().weight(1f).testTag("module-command-log-${state.windowId.value}"),
-            ) {
+                modifier = Modifier.fillMaxWidth().weight(1f).testTag("module-command-log-${state.windowId.value
                 items(commandState.lines) { line ->
                     Text(
                         text = line.text,
@@ -121,63 +116,68 @@ internal object CommandPanelModule : TileModule {
                         modifier = Modifier.padding(vertical = 1.dp),
                     )
                 }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth()
-                    .padding(vertical = 3.dp)
-                    .background(Mocha.Mantle.copy(alpha = 0.7f), RoundedCornerShape(7.dp))
-                    .padding(horizontal = 6.dp, vertical = 5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "›",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = Mocha.Mauve,
-                    modifier = Modifier.padding(end = 4.dp),
-                )
-                BasicTextField(
-                    value = commandState.input,
-                    onValueChange = commandState::updateInput,
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.labelSmall.copy(
-                        color = Mocha.Text,
+                item {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(vertical = 3.dp)
+                        .background(Mocha.Mantle.copy(alpha = 0.7f), RoundedCornerShape(7.dp))
+                        .padding(horizontal = 6.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "›",
+                        style = MaterialTheme.typography.labelSmall,
                         fontFamily = FontFamily.Monospace,
-                    ),
-                    cursorBrush = SolidColor(Mocha.Mauve),
-                    onTextLayout = { layout ->
-                        val rect = layout.getCursorRect(
-                            commandState.input.length
-                        )
-                        cursorX = rect.left
-                        cursorTop = rect.top
-                        cursorBottom = rect.bottom
-                    },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = { commandState.submit(processor) }),
-                    modifier = Modifier.weight(1f).testTag("module-command-input-${state.windowId.value}"),
-                    decorationBox = { inner ->
-                        Box(Modifier.fillMaxWidth()) {
-                            if (commandState.input.isEmpty()) {
-                                Text(
-                                    "help",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = Mocha.Subtext,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+                        color = Mocha.Mauve,
+                        modifier = Modifier.padding(end = 4.dp),
+                    )
+                    BasicTextField(
+                        value = commandState.input,
+                        onValueChange = commandState::updateInput,
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.labelSmall.copy(
+                            color = Mocha.Text,
+                            fontFamily = FontFamily.Monospace,
+                        ),
+                        cursorBrush = SolidColor(Mocha.Mauve),
+                        onTextLayout = { layout ->
+                            val rect = layout.getCursorRect(
+                                commandState.input.length
+                            )
+                            cursorX = rect.left
+                            cursorTop = rect.top
+                            cursorBottom = rect.bottom
+                        },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = { commandState.submit(processor) }),
+                        modifier = Modifier.weight(1f).testTag("module-command-input-${state.windowId.value}"),
+                        decorationBox = { inner ->
+                            Box(Modifier.fillMaxWidth()) {
+                                if (commandState.input.isEmpty()) {
+                                    Text(
+                                        "help",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = Mocha.Subtext,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                inner()
+                                AnimatedTerminalCursor(
+                                    targetX = cursorX,
+                                    targetTop = cursorTop,
+                                    targetBottom = cursorBottom,
                                 )
                             }
-                            inner()
-                            AnimatedTerminalCursor(
-                                targetX = cursorX,
-                                targetTop = cursorTop,
-                                targetBottom = cursorBottom,
-                            )
-                        }
-                    },
-                )
+                        },
+                    )
+                }
+                }
+            }"),
+            ) {
             }
+
         }
     }
 }
