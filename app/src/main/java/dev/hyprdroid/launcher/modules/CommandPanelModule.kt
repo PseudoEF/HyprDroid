@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
@@ -82,9 +83,11 @@ internal object CommandPanelModule : TileModule {
     override fun Content(state: ModuleState, modifier: Modifier) {
         val commandState = state as CommandPanelState
         val registry = LocalTileModuleRegistry.current
-        val processor = remember(registry) {
+        val context = LocalContext.current.applicationContext
+        val processor = remember(registry, context) {
             CommandProcessor(
                 modules = { registry?.modules?.map { ModuleSummary(it.id, it.title) }.orEmpty() },
+                droidfetch = { DroidFetchFormatter.format(DroidFetchSystem.read(context)) },
             )
         }
         val listState = rememberLazyListState()

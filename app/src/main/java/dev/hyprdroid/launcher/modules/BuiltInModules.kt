@@ -9,6 +9,7 @@ internal object BuiltInModules {
                 SystemMonitorModule,
                 AppLauncherModule,
                 CommandPanelModule,
+                DroidFetchModule,
             ),
         )
     }

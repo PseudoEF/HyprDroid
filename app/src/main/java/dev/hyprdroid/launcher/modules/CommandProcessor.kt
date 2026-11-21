@@ -18,6 +18,7 @@ internal sealed interface CommandResult {
 internal class CommandProcessor(
     private val modules: () -> List<ModuleSummary> = { emptyList() },
     private val now: () -> LocalDateTime = { LocalDateTime.now() },
+    private val droidfetch: () -> String = { "DroidFetch unavailable" },
 ) {
     private val dateFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss", Locale.getDefault())
 
@@ -32,8 +33,10 @@ internal class CommandProcessor(
                     "clear — очистить журнал",
                     "modules — список модулей",
                     "date — текущие дата и время",
+                    "droidfetch — ASCII-информация об устройстве",
                 ).joinToString("\n"),
             )
+            "droidfetch" -> CommandResult.Output(droidfetch())
             "clear" -> CommandResult.Clear
             "modules" -> {
                 val items = modules()
