@@ -54,6 +54,10 @@ internal class CommandPanelState(windowId: WindowId) : ModuleState(windowId) {
         val raw = input.trim()
         if (raw.isEmpty()) return
         input = ""
+        lines = (lines + CommandLine(
+            "DEBUG: submit('$raw') вызван",
+            CommandLineKind.SYSTEM,
+        )).takeLast(MAX_LINES)
         when (val result = processor.execute(raw)) {
             is CommandResult.Output -> {
                 val next = buildList {
