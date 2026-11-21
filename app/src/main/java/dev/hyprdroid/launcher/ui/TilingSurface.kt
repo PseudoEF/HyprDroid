@@ -6,17 +6,11 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import kotlin.math.abs
@@ -322,33 +316,6 @@ internal fun TilingSurface(
                     val rect = placed[index].rect
                     placeable.place(rect.x, rect.y)
                 }
-            }
-        }
-
-        splits.forEach { placement ->
-            val split = placement.split
-            val isHorizontal = split.orientation == Orientation.HORIZONTAL
-            val boundary = if (isHorizontal) placement.firstRect.x + placement.firstRect.width else placement.firstRect.y + placement.firstRect.height
-            val hitModifier = if (isHorizontal) {
-                Modifier.fillMaxHeight().width(12.dp).background(Mocha.Outline.copy(alpha = .6f), RoundedCornerShape(6.dp)).offset(x = with(density) { boundary.toInt().toDp() })
-            }
-            else {
-                Modifier.fillMaxWidth().height(12.dp).background(Mocha.Outline.copy(alpha = .6f), RoundedCornerShape(6.dp)).offset(y = with(density) { boundary.toInt().toDp() })
-            }
-            Box(
-                modifier = hitModifier.pointerInput(split.id.value) {
-                    var dividerPos = 0f
-                    detectDragGestures(
-                        onDragStart = { dividerPos = if (split.orientation == Orientation.HORIZONTAL) it.x else it.y },
-                        onDrag = { _, dragDelta ->
-                            dividerPos += if (split.orientation == Orientation.HORIZONTAL) dragDelta.x else dragDelta.y
-                            val available = if (split.orientation == Orientation.HORIZONTAL) area.widthPx else area.heightPx
-                            val firstSize = dividerPos.toInt().coerceIn(0, available)
-                            onResizeSplit(split.id, tilingRatio(available, firstSize))
-                        },
-                    )
-                },
-            ) {
             }
         }
 
