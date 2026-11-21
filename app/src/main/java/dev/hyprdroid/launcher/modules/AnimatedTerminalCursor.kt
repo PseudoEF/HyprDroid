@@ -3,7 +3,8 @@ package dev.hyprdroid.launcher.modules
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -30,7 +31,7 @@ internal fun AnimatedTerminalCursor(
         )
     }
 
-    Canvas(modifier.fillMaxSize()) {
+    Canvas(modifier.fillMaxWidth().height(16.dp)) {
         val distance = abs(targetX - trailX.value)
 
         if (distance < 1f) return@Canvas
