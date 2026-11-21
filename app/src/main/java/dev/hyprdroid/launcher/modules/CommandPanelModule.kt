@@ -91,6 +91,10 @@ internal object CommandPanelModule : TileModule {
             )
         }
         val listState = rememberLazyListState()
+        var cursorX by remember { mutableStateOf(0f) }
+        var cursorTop by remember { mutableStateOf(0f) }
+        var cursorBottom by remember { mutableStateOf(0f) }
+
         LaunchedEffect(commandState.lines.size) {
             if (commandState.lines.isNotEmpty()) listState.scrollToItem(commandState.lines.lastIndex)
         }
@@ -137,6 +141,14 @@ internal object CommandPanelModule : TileModule {
                         fontFamily = FontFamily.Monospace,
                     ),
                     cursorBrush = SolidColor(Mocha.Mauve),
+                    onTextLayout = { layout ->
+                        val rect = layout.getCursorRect(
+                            commandState.input.length
+                        )
+                        cursorX = rect.left
+                        cursorTop = rect.top
+                        cursorBottom = rect.bottom
+                    },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(onSend = { commandState.submit(processor) }),
                     modifier = Modifier.weight(1f).testTag("module-command-input-${state.windowId.value}"),
@@ -153,6 +165,11 @@ internal object CommandPanelModule : TileModule {
                                 )
                             }
                             inner()
+                            AnimatedTerminalCursor(
+                                targetX = cursorX,
+                                targetTop = cursorTop,
+                                targetBottom = cursorBottom,
+                            )
                         }
                     },
                 )
