@@ -29,6 +29,16 @@ internal class WorkspaceEngineStore(private val store: DataStore<Preferences>) {
     suspend fun isOpen(workspaceId: String): Boolean =
         store.data.first()[booleanPreferencesKey("tiling/$workspaceId/open")] ?: false
 
+    /** All workspace ids whose tiling surface was left open before the process restarted. */
+    suspend fun openWorkspaces(): Set<String> {
+        val preferences = store.data.first()
+        return preferences.asMap().entries.mapNotNull { (key, value) ->
+            val name = key.name
+            if (value != true || !name.startsWith("tiling/") || !name.endsWith("/open")) return@mapNotNull null
+            name.removePrefix("tiling/").removeSuffix("/open")
+        }.toSet()
+    }
+
     suspend fun setOpen(workspaceId: String, open: Boolean) {
         store.edit { preferences ->
             preferences[booleanPreferencesKey("tiling/$workspaceId/open")] = open

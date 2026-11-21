@@ -127,7 +127,7 @@ internal data class ShellActions(
     val sidebarPlaceBefore: (String, String?, () -> Unit) -> Unit,
     val presentation: (ShellPresentation, () -> Unit) -> Unit,
     val openTiling: (Int) -> Unit,
-    val closeTilingSurface: () -> Unit,
+    val closeTilingSurface: (Int) -> Unit,
     internal val addTilingWindow: (Int, LayoutArea, Float, WindowId?) -> Unit,
     internal val reflowTiling: (Int, LayoutArea) -> Unit,
     internal val closeTilingWindow: (Int, WindowId) -> Unit,
@@ -163,7 +163,7 @@ internal fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdro
     }
     val pager = rememberPagerState(initialPage = settings.selectedWorkspace, pageCount = { WORKSPACE_COUNT })
     val scope = rememberCoroutineScope()
-    val tilingSession = state.tiling?.takeIf { it.open && it.workspaceId == pager.currentPage }
+    val tilingSession = state.tiling.sessionFor(pager.currentPage)
     val haptics = LocalHapticFeedback.current
     var editing by rememberSaveable { mutableStateOf(false) }
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
@@ -265,7 +265,7 @@ internal fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdro
             controlOpen -> controlOpen = false
             appearanceWorkspace != null -> appearanceWorkspace = null
             orderWorkspace != null -> orderWorkspace = null
-            tilingSession != null -> actions.closeTilingSurface()
+            tilingSession != null -> actions.closeTilingSurface(pager.currentPage)
             else -> editing = false
         }
     }
@@ -310,9 +310,10 @@ internal fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdro
             if (!classic) Box(Modifier.fillMaxSize().testTag("workspace-canvas-$page")) {
                 Box(Modifier.fillMaxSize().testTag("clean-workspace-$page")
                     .homeBlankGestures(!overlayOpen, true, openPresentation, openDrawer, openControl, revealDock))
-                if (tilingSession != null && tilingSession.workspaceId == page) {
+                val pageTiling = state.tiling.sessionFor(page)
+                if (pageTiling != null) {
                     TilingSurface(
-                        engine = tilingSession.engine,
+                        engine = pageTiling.engine,
                         modifier = Modifier.fillMaxSize(),
                         apps = state.apps,
                         appsLoading = state.loadingApps,
