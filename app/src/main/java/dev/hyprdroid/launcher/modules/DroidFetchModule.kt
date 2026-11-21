@@ -61,13 +61,8 @@ internal object DroidFetchModule : TileModule {
                 DroidFetchFormatter.format(it, compact)
             } ?: "Loading DroidFetch..."
 
-            Text(
-                text = output,
-                color = Mocha.Text,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 10.sp,
-                lineHeight = 14.sp,
-                softWrap = false,
+            DroidFetchText(
+                output = output,
                 modifier = Modifier
                     .horizontalScroll(rememberScrollState())
                     .verticalScroll(rememberScrollState())

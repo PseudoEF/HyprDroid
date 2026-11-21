@@ -57,7 +57,10 @@ internal object DroidFetchSystem {
 
         return DroidFetchInfo(
             os = "Android ${Build.VERSION.RELEASE}",
-            kernel = System.getProperty("os.version") ?: "N/A",
+            kernel = System.getProperty("os.version")
+                ?.substringBefore("-")
+                ?.takeIf { it.isNotBlank() }
+                ?: "N/A",
             device = "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
             cpu = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 Build.SOC_MODEL
