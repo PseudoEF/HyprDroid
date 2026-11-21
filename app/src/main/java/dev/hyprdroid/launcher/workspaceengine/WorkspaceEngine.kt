@@ -298,6 +298,26 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
         return placements
     }
 
+    /**
+     * Ratio range for one already placed split that keeps both subtrees at their minimum sizes.
+     * Returns null when the minimums cannot all fit, so callers keep the engine's own ratio limits.
+     */
+    internal fun splitRatioBounds(placement: SplitPlacement, mins: Map<WindowId, WindowMin>): ClosedFloatingPointRange<Float>? {
+        val horizontal = placement.split.orientation == Orientation.HORIZONTAL
+        val available = if (horizontal) placement.firstRect.width + placement.secondRect.width
+            else placement.firstRect.height + placement.secondRect.height
+        if (available <= 0) return null
+        val axis = if (horizontal) 0 else 1
+        val firstMin = minExtent(placement.split.first, axis, mins)
+        val secondMin = minExtent(placement.split.second, axis, mins)
+        if (firstMin + secondMin > available) return null
+        val minVisible = if (available >= 2) 1 else 0
+        val lower = maxOf(MIN_RATIO, minVisible.toFloat() / available, firstMin.toFloat() / available)
+        val upper = minOf(MAX_RATIO, 1f - minVisible.toFloat() / available, 1f - secondMin.toFloat() / available)
+        if (lower > upper) return null
+        return lower..upper
+    }
+
     private fun splitChildren(split: SplitNode, rect: LayoutRect, mins: Map<WindowId, WindowMin>): Pair<LayoutRect, LayoutRect> {
         val constrainedAxis = if (split.orientation == Orientation.HORIZONTAL) 0 else 1
         val firstMin = minExtent(split.first, constrainedAxis, mins)

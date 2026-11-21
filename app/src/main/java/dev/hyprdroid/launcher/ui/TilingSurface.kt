@@ -21,7 +21,10 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,7 +44,6 @@ import dev.hyprdroid.launcher.modules.ModuleHost
 import dev.hyprdroid.launcher.modules.ModuleRegistry
 import dev.hyprdroid.launcher.workspaceengine.LayoutArea
 import dev.hyprdroid.launcher.workspaceengine.LayoutRect
-import dev.hyprdroid.launcher.workspaceengine.Orientation
 import dev.hyprdroid.launcher.workspaceengine.SplitId
 import dev.hyprdroid.launcher.workspaceengine.WindowId
 import dev.hyprdroid.launcher.workspaceengine.WindowMin
@@ -76,185 +78,175 @@ internal fun TilingSurface(
             heightPx = with(density) { maxHeight.roundToPx().toInt() },
         )
         LaunchedEffect(area.widthPx, area.heightPx) { onLayoutArea(area) }
-        val mins: Map<WindowId, WindowMin> = remember(engine, area) {
-            engine.windowsById().mapValues { entry -> tilingWindowMin(entry.value, density.density) }.toMap()
+        val previewEngine = remember(engine) { mutableStateOf<WorkspaceEngine?>(null) }
+        val displayEngine = previewEngine.value ?: engine
+        val mins: Map<WindowId, WindowMin> = remember(displayEngine, area) {
+            displayEngine.windowsById().mapValues { entry -> tilingWindowMin(entry.value, density.density) }.toMap()
         }
-        val placed = remember(engine, area, mins) { engine.calculateLayout(area, mins) }
-        val splits = remember(engine, area, mins) {
-            engine.splitsWithRects(engine.root, LayoutRect(x = 0, y = 0, width = area.widthPx, height = area.heightPx), mins)
-        }
-        val focusedId = engine.focusedWindowId
-        val canAddWindow = engine.canAddWindow(area)
+        val placed = remember(displayEngine, area, mins) { displayEngine.calculateLayout(area, mins) }
+        val focusedId = displayEngine.focusedWindowId
+        val canAddWindow = displayEngine.canAddWindow(area)
+        val currentResizeSplit by rememberUpdatedState(onResizeSplit)
+        val currentAddWindowAt by rememberUpdatedState(onAddWindowAt)
+        val currentCloseWindow by rememberUpdatedState(onCloseWindow)
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(placed, canAddWindow, area, density.density) {
+                .pointerInput(engine, area, density.density) {
                     val threshold = 48.dp.toPx()
+                    val densityScale = density.density
+                    // Base geometry is captured once per engine; preview frames never restart pointerInput.
+                    val gestureMins = engine.windowsById()
+                        .mapValues { entry -> tilingWindowMin(entry.value, densityScale) }
+                    val gesturePlaced = engine.calculateLayout(area, gestureMins)
+                    val gestureSplits = engine.splitsWithRects(
+                        engine.root,
+                        LayoutRect(x = 0, y = 0, width = area.widthPx, height = area.heightPx),
+                        gestureMins,
+                    )
+                    val gestureCanAdd = engine.canAddWindow(area)
 
                     fun tileAt(x: Float, y: Float): WindowId? =
-                        placed.firstOrNull { item ->
+                        gesturePlaced.firstOrNull { item ->
                             val r = item.rect
                             x >= r.x && x < r.x + r.width &&
-                            y >= r.y && y < r.y + r.height
+                                y >= r.y && y < r.y + r.height
                         }?.windowId
 
                     awaitEachGesture {
-                        awaitFirstDown(
-                            requireUnconsumed = false,
-                            pass = PointerEventPass.Initial,
-                        )
+                        try {
+                            previewEngine.value = null
+                            awaitFirstDown(
+                                requireUnconsumed = false,
+                                pass = PointerEventPass.Initial,
+                            )
 
-                        var target: WindowId? = null
-                        var initialX: Float? = null
-                        var initialY: Float? = null
-                        var triggered = false
-                        var multiTouch = false
-                        var rejected = false
-                        var resizeX = 0f
-                        var resizeY = 0f
-                        var resizing = false
+                            var target: WindowId? = null
+                            var initialX: Float? = null
+                            var initialY: Float? = null
+                            var triggered = false
+                            var multiTouch = false
+                            var rejected = false
+                            var resizing = false
+                            var resize: TilingResizePreview? = null
+                            var horizontalActive = false
+                            var finished = false
+                            var lastSpanX = 0f
+                            var lastSpanY = 0f
 
-                        do {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            val active = event.changes.filter { it.pressed }
+                            fun applyPreview(spanX: Float, spanY: Float) {
+                                val session = resize ?: return
+                                lastSpanX = spanX
+                                lastSpanY = spanY
+                                previewEngine.value = session.update(spanX, spanY, horizontalActive)
+                            }
 
-                            if (active.size >= 2) {
-                                multiTouch = true
-                                event.changes.forEach { it.consume() }
+                            fun finish(commit: Boolean) {
+                                if (finished || resize == null) return
+                                finished = true
+                                resizing = false
+                                val session = resize!!
+                                if (commit) {
+                                    val changed = session.changedRatios(lastSpanX, lastSpanY, horizontalActive)
+                                    if (changed.isEmpty()) previewEngine.value = null
+                                    else changed.forEach { currentResizeSplit(it.splitId, it.ratio) }
+                                } else {
+                                    previewEngine.value = null
+                                }
+                            }
 
-                                if (initialX == null && !rejected) {
+                            do {
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                val active = event.changes.filter { it.pressed }
+
+                                if (active.size >= 2) {
+                                    multiTouch = true
+                                    event.changes.forEach { it.consume() }
                                     val first = active[0].position
                                     val second = active[1].position
-                                    val firstTile = tileAt(first.x, first.y)
-                                    val secondTile = tileAt(second.x, second.y)
+                                    val spanX = abs(first.x - second.x)
+                                    val spanY = abs(first.y - second.y)
 
-                                    if (firstTile != null && firstTile == secondTile) {
-                                        target = firstTile
-                                        initialX = abs(first.x - second.x)
-                                        initialY = abs(first.y - second.y)
-                                    } else {
-                                        rejected = true
-                                    }
-                                } else if (!triggered && !rejected) {
-                                    val first = active[0].position
-                                    val second = active[1].position
-                                    val dx = abs(first.x - second.x) - (initialX ?: 0f)
-                                    val dy = abs(first.y - second.y) - (initialY ?: 0f)
+                                    if (initialX == null && !rejected) {
+                                        val firstTile = tileAt(first.x, first.y)
+                                        val secondTile = tileAt(second.x, second.y)
 
-                                    if (abs(dx) > threshold &&
-                                        abs(dx) > abs(dy) * 1.5f) {
-                                        // Horizontal gesture: add/remove.
-                                        triggered = true
-                                        target?.let { id ->
-                                            if (dx > 0f && canAddWindow) {
-                                                onAddWindowAt(id, area, density.density)
-                                            } else if (dx < 0f && placed.size > 1) {
-                                                onCloseWindow(id)
+                                        if (firstTile != null && firstTile == secondTile) {
+                                            target = firstTile
+                                            initialX = spanX
+                                            initialY = spanY
+                                        } else {
+                                            rejected = true
+                                        }
+                                    } else if (!triggered && !finished) {
+                                        val dx = spanX - (initialX ?: 0f)
+                                        val dy = spanY - (initialY ?: 0f)
+
+                                        if (!resizing) {
+                                            when {
+                                                abs(dx) > threshold && abs(dx) > abs(dy) * 1.5f -> {
+                                                    // Horizontal gesture: add/remove.
+                                                    triggered = true
+                                                    target?.let { id ->
+                                                        if (dx > 0f && gestureCanAdd) {
+                                                            currentAddWindowAt(id, area, densityScale)
+                                                        } else if (dx < 0f && gesturePlaced.size > 1) {
+                                                            currentCloseWindow(id)
+                                                        }
+                                                    }
+                                                }
+                                                abs(dy) > threshold && abs(dy) > abs(dx) * 1.5f -> {
+                                                    // Vertical gesture: resize height.
+                                                    target?.let { id ->
+                                                        beginTilingResize(
+                                                            engine, id, area, gestureMins,
+                                                            initialX ?: 0f, initialY ?: 0f,
+                                                            gesturePlaced, gestureSplits,
+                                                        ).takeIf { it.vertical != null }?.let { session ->
+                                                            resize = session
+                                                            resizing = true
+                                                        }
+                                                    }
+                                                }
+                                                abs(dx) > threshold && abs(dy) > threshold -> {
+                                                    // Diagonal gesture: resize every available axis.
+                                                    target?.let { id ->
+                                                        beginTilingResize(
+                                                            engine, id, area, gestureMins,
+                                                            initialX ?: 0f, initialY ?: 0f,
+                                                            gesturePlaced, gestureSplits,
+                                                        ).takeIf { it.vertical != null || it.horizontal != null }?.let { session ->
+                                                            resize = session
+                                                            resizing = true
+                                                            horizontalActive = session.horizontal != null
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
-                                    } else if (abs(dy) > threshold &&
-                                        abs(dy) > abs(dx) * 1.5f) {
-                                        // Vertical gesture: resize height.
-                                        resizing = true
-                                    } else if (
-                                        abs(dx) > threshold &&
-                                        abs(dy) > threshold
-                                    ) {
-                                        // Diagonal gesture: resize both axes.
-                                        resizing = true
                                     }
 
                                     if (resizing) {
-                                        resizeX = dx
-                                        resizeY = dy
-                                    }
-                                }
-                            } else if (multiTouch) {
-                                event.changes.forEach { it.consume() }
-                            }
-
-                            if (resizing && active.size >= 2) {
-                                val first = active[0].position
-                                val second = active[1].position
-                                resizeX = abs(first.x - second.x) - (initialX ?: 0f)
-                                resizeY = abs(first.y - second.y) - (initialY ?: 0f)
-                            }
-                        } while (event.changes.any { it.pressed })
-
-                        if (resizing && !triggered) {
-                            val selected = placed.firstOrNull {
-                                it.windowId == target
-                            }
-
-                            if (selected != null) {
-                                val rect = selected.rect
-                                val cx = rect.x + rect.width / 2f
-                                val cy = rect.y + rect.height / 2f
-
-                                fun resizeAxis(
-                                    orientation: Orientation,
-                                    delta: Float,
-                                ) {
-                                    if (abs(delta) < 12.dp.toPx()) return
-
-                                    val candidates = splits.mapNotNull { item ->
-                                        if (item.split.orientation != orientation) {
-                                            return@mapNotNull null
+                                        val dx = spanX - (initialX ?: 0f)
+                                        val dy = spanY - (initialY ?: 0f)
+                                        if (!horizontalActive && abs(dx) > threshold && abs(dy) > threshold) {
+                                            horizontalActive = resize?.horizontal != null
                                         }
-
-                                        val first = item.firstRect
-                                        val second = item.secondRect
-
-                                        fun contains(r: LayoutRect): Boolean =
-                                            cx >= r.x && cx < r.x + r.width &&
-                                            cy >= r.y && cy < r.y + r.height
-
-                                        val inFirst = contains(first)
-                                        val inSecond = contains(second)
-
-                                        if (!inFirst && !inSecond) {
-                                            null
-                                        } else {
-                                            val size = if (
-                                                orientation == Orientation.HORIZONTAL
-                                            ) {
-                                                first.width + second.width
-                                            } else {
-                                                first.height + second.height
-                                            }
-
-                                            Triple(item, inFirst, size)
-                                        }
+                                        applyPreview(spanX, spanY)
                                     }
-
-                                    val candidate = candidates.minByOrNull {
-                                        it.third
-                                    } ?: return
-
-                                    val (placement, inFirst, extent) = candidate
-                                    if (extent <= 0) return
-
-                                    val direction = if (inFirst) 1f else -1f
-                                    val ratio = (
-                                        placement.split.ratio +
-                                        direction * delta / extent
-                                    ).coerceIn(0.2f, 0.8f)
-
-                                    onResizeSplit(placement.split.id, ratio)
+                                } else if (multiTouch) {
+                                    event.changes.forEach { it.consume() }
+                                    // A lifted finger ends the resize with the last two-finger geometry.
+                                    if (resizing) finish(commit = true)
                                 }
+                            } while (event.changes.any { it.pressed })
 
-                                if (abs(resizeY) > threshold) {
-                                    resizeAxis(Orientation.VERTICAL, resizeY)
-                                }
-
-                                if (
-                                    abs(resizeX) > threshold &&
-                                    abs(resizeY) > threshold
-                                ) {
-                                    resizeAxis(Orientation.HORIZONTAL, resizeX)
-                                }
-                            }
+                            if (resizing) finish(commit = true)
+                        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                            // Workspace switch or disposal cancels the gesture without persisting preview.
+                            previewEngine.value = null
+                            throw cancelled
                         }
                     }
                 },
@@ -277,7 +269,7 @@ internal fun TilingSurface(
                     ) {
                         ModuleHost(
                             windowId = placedWindow.windowId,
-                            moduleId = engine.windowsById()[placedWindow.windowId]?.moduleId.orEmpty(),
+                            moduleId = displayEngine.windowsById()[placedWindow.windowId]?.moduleId.orEmpty(),
                             registry = registry,
                             onSelectModule = { moduleId -> onSelectModule(placedWindow.windowId, moduleId) },
                             modifier = Modifier.fillMaxSize(),
