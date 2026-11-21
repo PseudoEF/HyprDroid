@@ -15,6 +15,7 @@ import dev.hyprdroid.launcher.data.ShellRepository
 import dev.hyprdroid.launcher.data.WorkspaceRepository
 import dev.hyprdroid.launcher.data.WorkspaceEngineStore
 import dev.hyprdroid.launcher.data.SidebarEntry
+import dev.hyprdroid.launcher.modules.ModuleRegistry
 import dev.hyprdroid.launcher.model.WorkspaceItem
 import dev.hyprdroid.launcher.model.ShellPresentation
 import dev.hyprdroid.launcher.model.ShellSettings
@@ -42,9 +43,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private const val TILING_TEST_MODULE_ID = "dev.hyprdroid.launcher.tiling/.Test"
-private const val TILING_TEST_MIN_WIDTH_DP = 120
-private const val TILING_TEST_MIN_HEIGHT_DP = 80
+private const val TILING_UNASSIGNED_MODULE_ID = ModuleRegistry.UNASSIGNED
 
 internal data class WorkspaceUiState(
     val settings: WorkspaceSettings? = null,
@@ -293,11 +292,11 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
         }
     }
 
-    /** Opens the internal tiling surface for one workspace; an empty tree receives the first test window. */
+    /** Opens the internal tiling surface for one workspace; an empty tree receives a neutral tile. */
     fun openTilingSurface(workspaceId: Int) = viewModelScope.launch {
         try {
             val engine = engines.getOrPut(workspaceId) { WorkspaceEngine() }
-            if (engine.root == null) engine.addFirstWindow(WorkspaceWindow(WindowId("tile-1"), TILING_TEST_MODULE_ID, TILING_TEST_MIN_WIDTH_DP, TILING_TEST_MIN_HEIGHT_DP))
+            if (engine.root == null) engine.addFirstWindow(WorkspaceWindow(WindowId("tile-1"), TILING_UNASSIGNED_MODULE_ID, 0, 0))
             save { engineStore.save(workspaceId.toString(), engine) }
             openTilingSession(workspaceId, engine)
         } catch (cancelled: CancellationException) { throw cancelled }
@@ -309,7 +308,7 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
         mutableState.update { it.copy(tiling = null) }
     }
 
-    /** Splits the focused internal window with a new test window using the adaptive layout. */
+    /** Splits the focused internal window with a fresh neutral window using the adaptive layout. */
     internal fun addTilingWindow(
         workspaceId: Int,
         area: LayoutArea,
@@ -326,7 +325,7 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
             val newWindowId = WindowId(UUID.randomUUID().toString())
             val splitId = SplitId(UUID.randomUUID().toString())
             val mins = engine.windowsById().mapValues { (_, window) -> tilingWindowMin(window, densityScale) }
-            val window = WorkspaceWindow(newWindowId, TILING_TEST_MODULE_ID, TILING_TEST_MIN_WIDTH_DP, TILING_TEST_MIN_HEIGHT_DP)
+            val window = WorkspaceWindow(newWindowId, TILING_UNASSIGNED_MODULE_ID, 0, 0)
             if (!engine.addWindowAdaptive(target, splitId, window, area, mins)) return@launch
             engine.focusWindow(newWindowId)
             save { engineStore.save(workspaceId.toString(), engine) }
@@ -360,6 +359,17 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
         if (!engine.focusWindow(windowId)) return
         save { engineStore.save(workspaceId.toString(), engine) }
         publishTiling(workspaceId, engine)
+    }
+
+    /** Rebinds one window to another built-in module; the split tree and tile geometry stay intact. */
+    internal fun setTilingModule(workspaceId: Int, windowId: WindowId, moduleId: String) = viewModelScope.launch {
+        try {
+            val engine = engines[workspaceId] ?: return@launch
+            if (!engine.setWindowModule(windowId, moduleId)) return@launch
+            save { engineStore.save(workspaceId.toString(), engine) }
+            publishTiling(workspaceId, engine)
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: IOException) { showMessage("Не удалось сохранить модуль окна. Проверьте свободное место.") }
     }
 
     internal fun resizeTilingSplit(workspaceId: Int, splitId: SplitId, ratio: Float) {

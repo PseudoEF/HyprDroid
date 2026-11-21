@@ -232,6 +232,18 @@ internal class WorkspaceEngine(private val initial: WorkspaceTree = WorkspaceTre
         return true
     }
 
+    /**
+     * Rebinds one window to another module without touching the split tree, ratios or focus.
+     * The UI keeps minimum sizes as they are, so switching content never changes tile geometry.
+     */
+    fun setWindowModule(windowId: WindowId, moduleId: String): Boolean {
+        if (moduleId.isBlank()) return false
+        val existing = windows[windowId] ?: return false
+        if (existing.moduleId == moduleId) return true
+        windows[windowId] = existing.copy(moduleId = moduleId)
+        return true
+    }
+
     fun resizeSplit(splitId: SplitId, ratio: Float): Boolean {
         val split = findSplit(root, splitId) ?: return false
         if (ratio.isNaN() || ratio.isInfinite() || ratio < MIN_RATIO || ratio > MAX_RATIO) return false

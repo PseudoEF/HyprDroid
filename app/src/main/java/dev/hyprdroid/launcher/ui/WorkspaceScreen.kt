@@ -94,6 +94,7 @@ internal fun WorkspaceScreen(model: WorkspaceViewModel, requestedScreen: String?
                 closeTilingWindow = { workspaceId, windowId -> model.closeTilingWindow(workspaceId, windowId) },
                 focusTilingWindow = { workspaceId, windowId -> model.focusTilingWindow(workspaceId, windowId) },
                 resizeTilingSplit = { workspaceId, splitId, ratio -> model.resizeTilingSplit(workspaceId, splitId, ratio) },
+                selectTilingModule = { workspaceId, windowId, moduleId -> model.setTilingModule(workspaceId, windowId, moduleId) },
             ), onBackdropState = { value, visible -> backdrop = value; desktopVisible = visible }, requestedScreen = requestedScreen, onRouteConsumed = onRouteConsumed)
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).safeDrawingPadding().imePadding().padding(12.dp))
         }
@@ -132,6 +133,7 @@ internal data class ShellActions(
     internal val closeTilingWindow: (Int, WindowId) -> Unit,
     internal val focusTilingWindow: (Int, WindowId) -> Unit,
     internal val resizeTilingSplit: (Int, SplitId, Float) -> Unit,
+    internal val selectTilingModule: (Int, WindowId, String) -> Unit,
 )
 
 @Composable
@@ -312,6 +314,12 @@ internal fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdro
                     TilingSurface(
                         engine = tilingSession.engine,
                         modifier = Modifier.fillMaxSize(),
+                        apps = state.apps,
+                        appsLoading = state.loadingApps,
+                        catalogError = state.catalogError,
+                        onLaunchApp = actions.launch,
+                        onRetryApps = actions.retryApps,
+                        onSelectModule = { windowId, moduleId -> actions.selectTilingModule(page, windowId, moduleId) },
                         onFocusWindow = { windowId -> actions.focusTilingWindow(page, windowId) },
                         onCloseWindow = { windowId -> actions.closeTilingWindow(page, windowId) },
                         onAddWindow = { area, density -> actions.addTilingWindow(page, area, density, null) },

@@ -1,6 +1,8 @@
 package dev.hyprdroid.launcher
 
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.test.core.app.ActivityScenario
@@ -27,6 +29,15 @@ class TilingSurfaceBoundsTest {
 
     private fun await(tag: String) = compose.waitUntil(15_000) { compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() }
     private fun bounds(tag: String): Rect = compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+
+    // Added tiles use unique UUIDs; select them by the stable tag prefix instead of an index.
+    private fun tileNodes() = compose.onAllNodes(
+        SemanticsMatcher("tiling window") { node ->
+            node.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("tiling-window-") == true
+        },
+    )
+    private fun awaitTileCount(count: Int) = compose.waitUntil(15_000) { tileNodes().fetchSemanticsNodes().size == count }
+    private fun tileBounds(index: Int): Rect = tileNodes()[index].fetchSemanticsNode().boundsInRoot
 
     private fun seed() = runBlocking {
         dismissBackgroundPixelLauncherAnr()
@@ -71,10 +82,10 @@ class TilingSurfaceBoundsTest {
 
             // Two windows must be visible at the same time inside the workspace.
             compose.onNodeWithTag("tiling-add-window").performClick()
-            await("tiling-window-tile-2")
+            awaitTileCount(2)
             compose.waitForIdle()
-            val first = bounds("tiling-window-tile-1")
-            val second = bounds("tiling-window-tile-2")
+            val first = tileBounds(0)
+            val second = tileBounds(1)
             assertVisibleInside(first, surface, "tile-1")
             assertVisibleInside(second, surface, "tile-2")
             assertFalse("Two tiled windows must not overlap", first.overlaps(second))
@@ -83,10 +94,10 @@ class TilingSurfaceBoundsTest {
             // Three or more windows divide the same surface; none of them moves outside the viewport.
             repeat(4) { index ->
                 compose.onNodeWithTag("tiling-add-window").performClick()
-                await("tiling-window-tile-${index + 3}")
+                awaitTileCount(index + 3)
                 compose.waitForIdle()
             }
-            val windows = (1..6).map { index -> bounds("tiling-window-tile-$index") }
+            val windows = (0 until 6).map { index -> tileBounds(index) }
             windows.forEachIndexed { index, window -> assertVisibleInside(window, surface, "tile-${index + 1}") }
             for (i in windows.indices) {
                 for (j in i + 1 until windows.size) {

@@ -4,35 +4,33 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.ui.geometry.Offset
 import kotlin.math.abs
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.Layout
@@ -40,6 +38,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import dev.hyprdroid.launcher.data.LauncherApp
+import dev.hyprdroid.launcher.modules.BuiltInModules
+import dev.hyprdroid.launcher.modules.LocalModuleEnvironment
+import dev.hyprdroid.launcher.modules.LocalTileModuleRegistry
+import dev.hyprdroid.launcher.modules.ModuleEnvironment
+import dev.hyprdroid.launcher.modules.ModuleHost
+import dev.hyprdroid.launcher.modules.ModuleRegistry
 import dev.hyprdroid.launcher.workspaceengine.LayoutArea
 import dev.hyprdroid.launcher.workspaceengine.LayoutRect
 import dev.hyprdroid.launcher.workspaceengine.Orientation
@@ -53,6 +58,13 @@ import dev.hyprdroid.launcher.workspaceengine.WorkspaceEngine
 internal fun TilingSurface(
     engine: WorkspaceEngine,
     modifier: Modifier = Modifier,
+    registry: ModuleRegistry = BuiltInModules.registry,
+    apps: List<LauncherApp> = emptyList(),
+    appsLoading: Boolean = false,
+    catalogError: Boolean = false,
+    onLaunchApp: (String) -> Unit = {},
+    onRetryApps: () -> Unit = {},
+    onSelectModule: (WindowId, String) -> Unit = { _, _ -> },
     onFocusWindow: (WindowId) -> Unit = {},
     onCloseWindow: (WindowId) -> Unit = {},
     onAddWindow: (LayoutArea, Float) -> Unit = { _, _ -> },
@@ -61,6 +73,9 @@ internal fun TilingSurface(
     onResizeSplit: (SplitId, Float) -> Unit = { _, _ -> },
 ) {
     val density = LocalDensity.current
+    val environment = remember(apps, appsLoading, catalogError, onLaunchApp, onRetryApps) {
+        ModuleEnvironment(apps, appsLoading, catalogError, onLaunchApp, onRetryApps)
+    }
     BoxWithConstraints(modifier = modifier.fillMaxSize().testTag("tiling-surface")) {
         val area = LayoutArea(
             widthPx = with(density) { maxWidth.roundToPx().toInt() },
@@ -252,6 +267,10 @@ internal fun TilingSurface(
         ) {
         Layout(
             content = {
+                CompositionLocalProvider(
+                    LocalModuleEnvironment provides environment,
+                    LocalTileModuleRegistry provides registry,
+                ) {
                 placed.forEach { placedWindow ->
                     val isFocused = placedWindow.windowId == focusedId
                     Box(
@@ -262,22 +281,34 @@ internal fun TilingSurface(
                             .testTag("tiling-window-${placedWindow.windowId.value}")
                             .clickable { onFocusWindow(placedWindow.windowId) },
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxSize().padding(12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            Text("Окно ${placedWindow.windowId.value}", style = MaterialTheme.typography.titleSmall, color = Mocha.Subtext)
-                            engine.windowsById()[placedWindow.windowId]?.let { window ->
-                                Text(window.moduleId, style = MaterialTheme.typography.bodySmall, color = Mocha.Subtext)
-                            }
-                        }
-                        if (isFocused) {
-                            IconButton(onClick = { onCloseWindow(placedWindow.windowId) }, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).testTag("tiling-close-window-${placedWindow.windowId.value}")) {
-                                Icon(Icons.Default.Close, contentDescription = "Закрыть окно", tint = Mocha.Red)
-                            }
-                        }
+                        ModuleHost(
+                            windowId = placedWindow.windowId,
+                            moduleId = engine.windowsById()[placedWindow.windowId]?.moduleId.orEmpty(),
+                            registry = registry,
+                            onSelectModule = { moduleId -> onSelectModule(placedWindow.windowId, moduleId) },
+                            modifier = Modifier.fillMaxSize(),
+                            headerActions = {
+                                if (isFocused) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .clickable { onCloseWindow(placedWindow.windowId) }
+                                            .testTag("tiling-close-window-${placedWindow.windowId.value}"),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = "Закрыть окно",
+                                            tint = Mocha.Red,
+                                            modifier = Modifier.size(14.dp),
+                                        )
+                                    }
+                                }
+                            },
+                        )
                     }
+                }
                 }
             },
             modifier = Modifier.fillMaxSize(),
