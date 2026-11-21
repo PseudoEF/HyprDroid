@@ -27,8 +27,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.hyprdroid.launcher.ui.Mocha
@@ -43,17 +45,27 @@ internal class CommandPanelState(windowId: WindowId) : ModuleState(windowId) {
         listOf(CommandLine("HyprDroid · безопасные команды. Введите help.", CommandLineKind.SYSTEM)),
     )
         private set
-    var input by mutableStateOf("")
+    var inputValue by mutableStateOf(TextFieldValue(""))
         private set
 
+    val input: String
+        get() = inputValue.text
+
     fun updateInput(value: String) {
-        input = value
+        inputValue = TextFieldValue(
+            text = value,
+            selection = androidx.compose.ui.text.TextRange(value.length),
+        )
+    }
+
+    fun updateInputValue(value: TextFieldValue) {
+        inputValue = value
     }
 
     fun submit(processor: CommandProcessor) {
         val raw = input.trim()
         if (raw.isEmpty()) return
-        input = ""
+        inputValue = TextFieldValue("")
         when (val result = processor.execute(raw)) {
             is CommandResult.Output -> {
                 val next = buildList {
@@ -91,6 +103,10 @@ internal object CommandPanelModule : TileModule {
             )
         }
         val listState = rememberLazyListState()
+        var cursorX by remember { mutableStateOf(0f) }
+        var cursorTop by remember { mutableStateOf(0f) }
+        var cursorBottom by remember { mutableStateOf(0f) }
+
 
         LaunchedEffect(commandState.lines.size) {
             if (commandState.lines.isNotEmpty()) listState.scrollToItem(commandState.lines.lastIndex)
@@ -130,14 +146,22 @@ internal object CommandPanelModule : TileModule {
                     modifier = Modifier.padding(end = 4.dp),
                 )
                 BasicTextField(
-                    value = commandState.input,
-                    onValueChange = commandState::updateInput,
+                    value = commandState.inputValue,
+                    onValueChange = commandState::updateInputValue,
                     singleLine = true,
                     textStyle = MaterialTheme.typography.labelSmall.copy(
                         color = Mocha.Text,
                         fontFamily = FontFamily.Monospace,
                     ),
-                    cursorBrush = SolidColor(Mocha.Mauve),
+                    cursorBrush = SolidColor(androidx.compose.ui.graphics.Color.Transparent),
+                    onTextLayout = { layout ->
+                        val position = commandState.inputValue.selection.end
+                            .coerceIn(0, commandState.inputValue.text.length)
+                        val rect = layout.getCursorRect(position)
+                        cursorX = rect.left
+                        cursorTop = rect.top
+                        cursorBottom = rect.bottom
+                    },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(onSend = { commandState.submit(processor) }),
                     modifier = Modifier.weight(1f).testTag("module-command-input-${state.windowId.value}"),
@@ -154,6 +178,11 @@ internal object CommandPanelModule : TileModule {
                                 )
                             }
                             inner()
+                            AnimatedTerminalCursor(
+                                targetX = cursorX,
+                                targetTop = cursorTop,
+                                targetBottom = cursorBottom,
+                            )
                         }
                     },
                 )
