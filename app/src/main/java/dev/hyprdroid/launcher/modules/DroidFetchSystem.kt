@@ -41,13 +41,37 @@ internal object DroidFetchSystem {
             append("${hours}h ${mins}m")
         }
 
+        val display = try {
+            val metrics = context.resources.displayMetrics
+            "${metrics.widthPixels}x${metrics.heightPixels}"
+        } catch (_: Exception) {
+            "N/A"
+        }
+
+        val version = try {
+            val info = context.packageManager.getPackageInfo(context.packageName, 0)
+            info.versionName ?: "N/A"
+        } catch (_: Exception) {
+            "N/A"
+        }
+
         return DroidFetchInfo(
             os = "Android ${Build.VERSION.RELEASE}",
+            kernel = System.getProperty("os.version") ?: "N/A",
             device = "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
-            cpu = Build.SUPPORTED_ABIS.firstOrNull() ?: "N/A",
+            cpu = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                Build.SOC_MODEL
+                    .takeIf { it.isNotBlank() && it != "unknown" }
+                    ?: Build.SUPPORTED_ABIS.firstOrNull()
+                    ?: "N/A"
+            } else {
+                Build.SUPPORTED_ABIS.firstOrNull() ?: "N/A"
+            },
             memory = memory,
             battery = battery,
             uptime = uptime,
+            display = display,
+            version = version,
         )
     }
 

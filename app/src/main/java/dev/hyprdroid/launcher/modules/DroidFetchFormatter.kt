@@ -3,11 +3,14 @@ package dev.hyprdroid.launcher.modules
 internal data class DroidFetchInfo(
     val os: String,
     val device: String,
+    val kernel: String = "N/A",
     val cpu: String,
     val memory: String,
     val battery: String,
     val uptime: String,
     val launcher: String = "HyprDroid",
+    val display: String = "N/A",
+    val version: String = "N/A",
 )
 
 internal object DroidFetchFormatter {
@@ -28,11 +31,14 @@ internal object DroidFetchFormatter {
         val fields = listOf(
             "OS" to info.os,
             "Device" to info.device,
-            "Arch" to info.cpu,
+            "Kernel" to info.kernel,
+            "SoC" to info.cpu,
             "RAM" to info.memory,
             "Battery" to info.battery,
             "Uptime" to info.uptime,
             "WM" to info.launcher,
+            "Display" to info.display,
+            "Version" to info.version,
         )
 
         if (compact) {
