@@ -102,7 +102,10 @@ internal object CommandPanelModule : TileModule {
         Column(modifier.fillMaxSize().padding(horizontal = 6.dp)) {
             LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxWidth().weight(1f).testTag("module-command-log-${state.windowId.value
+                modifier = Modifier.fillMaxWidth()
+                    .weight(1f)
+                    .testTag("module-command-log-${state.windowId.value}"),
+            ) {
                 items(commandState.lines) { line ->
                     Text(
                         text = line.text,
@@ -174,8 +177,6 @@ internal object CommandPanelModule : TileModule {
                     )
                 }
                 }
-            }"),
-            ) {
             }
 
         }
