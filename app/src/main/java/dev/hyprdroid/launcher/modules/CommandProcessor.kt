@@ -9,11 +9,20 @@ internal data class ModuleSummary(val id: String, val title: String)
 internal sealed interface CommandResult {
     data class Output(val text: String) : CommandResult
     object Clear : CommandResult
+    data class Stream(val events: List<CommandEvent>) : CommandResult
+}
+
+internal sealed interface CommandEvent {
+    data class Line(val text: String) : CommandEvent
+    data class Progress(val text: String) : CommandEvent
+    data class Pause(val millis: Long) : CommandEvent
 }
 
 /**
- * Safe, built-in HyprDroid command language. It never starts processes, evaluates shell syntax or
- * touches the file system; the only commands it understands are help, clear, modules and date.
+ * Safe, built-in HyprDroid command language. It never starts processes, evaluates shell syntax,
+ * sleeps or touches the file system; the commands it understands are help, clear, modules, date,
+ * droidfetch and the demo pair. `demo install` is a pure simulation: it returns a pre-computed
+ * [CommandResult.Stream] of [CommandEvent]s and leaves all timing to the UI.
  */
 internal class CommandProcessor(
     private val modules: () -> List<ModuleSummary> = { emptyList() },
@@ -34,6 +43,7 @@ internal class CommandProcessor(
                     "modules — список модулей",
                     "date — текущие дата и время",
                     "droidfetch — ASCII-информация об устройстве",
+                    "demo install — имитация потоковой установки (без shell)",
                 ).joinToString("\n"),
             )
             "droidfetch" -> CommandResult.Output(droidfetch())
@@ -46,9 +56,62 @@ internal class CommandProcessor(
                 )
             }
             "date" -> CommandResult.Output(now().format(dateFormat))
+            "demo install" -> CommandResult.Stream(demoInstallEvents())
+            "demo" -> CommandResult.Output(
+                "Использование: demo install — имитация потоковой установки (shell не запускается).",
+            )
             else -> CommandResult.Output(
                 "Неизвестная команда: ${raw.trim()}\nЭто не shell. Введите help для списка безопасных команд.",
             )
         }
     }
+
+    /**
+     * Deterministic demo install script. Every pause stays between 60 and 220 ms and the whole
+     * script runs for roughly 2.7 s; progress is always emitted on a single line via [CommandEvent.Progress].
+     */
+    private fun demoInstallEvents(): List<CommandEvent> = listOf(
+        CommandEvent.Line("demo: имитация установки модуля weather"),
+        CommandEvent.Pause(160),
+        CommandEvent.Line("Подготовка окружения…"),
+        CommandEvent.Pause(140),
+        CommandEvent.Line("Разрешение зависимостей…"),
+        CommandEvent.Pause(120),
+        CommandEvent.Line("  core 1.4.0 — уже установлен"),
+        CommandEvent.Pause(90),
+        CommandEvent.Line("  ui-kit 2.1.0 — будет добавлен"),
+        CommandEvent.Pause(90),
+        CommandEvent.Line("Скачивание weather 1.2.0 (2.4 МБ)"),
+        CommandEvent.Pause(100),
+        CommandEvent.Progress("Загрузка [----------]   0%"),
+        CommandEvent.Pause(160),
+        CommandEvent.Progress("Загрузка [##--------]  20%"),
+        CommandEvent.Pause(160),
+        CommandEvent.Progress("Загрузка [####------]  40%"),
+        CommandEvent.Pause(160),
+        CommandEvent.Progress("Загрузка [######----]  60%"),
+        CommandEvent.Pause(160),
+        CommandEvent.Progress("Загрузка [########--]  80%"),
+        CommandEvent.Pause(160),
+        CommandEvent.Progress("Загрузка [##########] 100%"),
+        CommandEvent.Pause(140),
+        CommandEvent.Line("Контрольная сумма SHA-256 совпадает"),
+        CommandEvent.Pause(180),
+        CommandEvent.Line("Распаковка и проверка файлов…"),
+        CommandEvent.Pause(90),
+        CommandEvent.Progress("Файлы [###-------]  30%"),
+        CommandEvent.Pause(120),
+        CommandEvent.Progress("Файлы [######----]  60%"),
+        CommandEvent.Pause(120),
+        CommandEvent.Progress("Файлы [#########-]  90%"),
+        CommandEvent.Pause(120),
+        CommandEvent.Progress("Файлы [##########] 100%"),
+        CommandEvent.Pause(100),
+        CommandEvent.Line("Регистрация модуля weather…"),
+        CommandEvent.Pause(140),
+        CommandEvent.Line("Установлено: weather 1.2.0 (2.4 МБ)"),
+        CommandEvent.Pause(80),
+        CommandEvent.Line("Готово. Модуль доступен в списке модулей."),
+        CommandEvent.Pause(120),
+    )
 }
