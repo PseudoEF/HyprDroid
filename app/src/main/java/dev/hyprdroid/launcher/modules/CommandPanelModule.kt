@@ -49,6 +49,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import dev.hyprdroid.launcher.packages.AndroidPackages
 import dev.hyprdroid.launcher.ui.Mocha
 import dev.hyprdroid.launcher.workspaceengine.WindowId
 import kotlinx.coroutines.Job
@@ -86,7 +87,7 @@ internal class CommandPanelState(windowId: WindowId) : ModuleState(windowId) {
     /**
      * Applies the command. Immediate results are written to [lines] right away; for a streaming
      * result the echoed input line is added and the pre-computed events are returned for the UI to
-     * play with [play]. The processor never starts a process, so this stays fully deterministic.
+     * play with [play]. Any asynchronous work happens during playback.
      */
     fun submit(processor: CommandProcessor): List<CommandEvent>? {
         val raw = input.trim()
@@ -129,6 +130,7 @@ internal class CommandPanelState(windowId: WindowId) : ModuleState(windowId) {
                     is CommandEvent.Line -> appendOutput(event.text)
                     is CommandEvent.Progress -> updateLastOutput(event)
                     is CommandEvent.Pause -> pause(event.millis.coerceAtLeast(0))
+                    is CommandEvent.Operation -> event.run().forEach(::appendOutput)
                 }
             }
         } finally {
@@ -178,6 +180,7 @@ internal object CommandPanelModule : TileModule {
             CommandProcessor(
                 modules = { registry?.modules?.map { ModuleSummary(it.id, it.title) }.orEmpty() },
                 droidfetch = { DroidFetchFormatter.format(DroidFetchSystem.read(context)) },
+                packageCommands = PackageCommands { AndroidPackages.manager(context) },
             )
         }
         val listState = rememberLazyListState()

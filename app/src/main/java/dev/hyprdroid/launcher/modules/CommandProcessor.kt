@@ -16,24 +16,25 @@ internal sealed interface CommandEvent {
     data class Line(val text: String) : CommandEvent
     data class Progress(val text: String, val cursorOffset: Int = text.length) : CommandEvent
     data class Pause(val millis: Long) : CommandEvent
+    data class Operation(val run: suspend () -> List<String>) : CommandEvent
 }
 
-/**
- * Safe, built-in HyprDroid command language. It never starts processes, evaluates shell syntax,
- * sleeps or touches the file system; the commands it understands are help, clear, modules, date,
- * droidfetch and the demo pair. `demo install` is a pure simulation: it returns a pre-computed
- * [CommandResult.Stream] of [CommandEvent]s and leaves all timing to the UI.
- */
+/** Routes built-in commands. Streaming operations run separately from command parsing. */
 internal class CommandProcessor(
     private val modules: () -> List<ModuleSummary> = { emptyList() },
     private val now: () -> LocalDateTime = { LocalDateTime.now() },
     private val droidfetch: () -> String = { "DroidFetch unavailable" },
+    private val packageCommands: PackageCommands? = null,
 ) {
     private val dateFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss", Locale.getDefault())
 
     fun execute(raw: String): CommandResult {
         val command = raw.trim().lowercase(Locale.ROOT)
         if (command.isEmpty()) return CommandResult.Output("")
+        val first = command.takeWhile { !it.isWhitespace() }
+        if (first == "hypr" && packageCommands != null) {
+            return packageCommands.execute(command.split(Regex("\\s+")).drop(1))
+        }
         return when (command) {
             "help" -> CommandResult.Output(
                 listOf(
@@ -44,6 +45,7 @@ internal class CommandProcessor(
                     "date — текущие дата и время",
                     "droidfetch — ASCII-информация об устройстве",
                     "demo install — имитация потоковой установки (без shell)",
+                    "hypr help — менеджер пакетов",
                 ).joinToString("\n"),
             )
             "droidfetch" -> CommandResult.Output(droidfetch())

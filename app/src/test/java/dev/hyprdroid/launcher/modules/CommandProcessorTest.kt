@@ -115,6 +115,7 @@ class CommandProcessorTest {
                 }
                 // Pauses do not break an in-place progress run; only a new line does.
                 is CommandEvent.Pause -> Unit
+                is CommandEvent.Operation -> throw AssertionError("Demo must be a simulation")
             }
         }
         if (currentRun > 0) progressRuns += currentRun
@@ -152,6 +153,7 @@ class CommandProcessorTest {
                 is CommandEvent.Line -> event.text
                 is CommandEvent.Progress -> event.text
                 is CommandEvent.Pause -> null
+                is CommandEvent.Operation -> throw AssertionError("Demo must be a simulation")
             }
         }
         assertTrue(texts.isNotEmpty())
