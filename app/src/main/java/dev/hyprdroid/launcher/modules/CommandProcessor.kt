@@ -25,7 +25,9 @@ internal class CommandProcessor(
     private val now: () -> LocalDateTime = { LocalDateTime.now() },
     private val droidfetch: () -> String = { "DroidFetch unavailable" },
     private val packageCommands: PackageCommands? = null,
+    private val luaPluginCommands: LuaPluginCommands? = null,
 ) {
+    private val whitespace = Regex("\\s+")
     private val dateFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss", Locale.getDefault())
 
     fun execute(raw: String): CommandResult {
@@ -33,7 +35,10 @@ internal class CommandProcessor(
         if (command.isEmpty()) return CommandResult.Output("")
         val first = command.takeWhile { !it.isWhitespace() }
         if (first == "hypr" && packageCommands != null) {
-            return packageCommands.execute(command.split(Regex("\\s+")).drop(1))
+            return packageCommands.execute(command.split(whitespace).drop(1))
+        }
+        if (first == "lua" && luaPluginCommands != null) {
+            return luaPluginCommands.execute(command.split(whitespace).drop(1))
         }
         return when (command) {
             "help" -> CommandResult.Output(
@@ -46,6 +51,7 @@ internal class CommandProcessor(
                     "droidfetch — ASCII-информация об устройстве",
                     "demo install — имитация потоковой установки (без shell)",
                     "hypr help — менеджер пакетов",
+                    "lua help — встроенные Lua-модули",
                 ).joinToString("\n"),
             )
             "droidfetch" -> CommandResult.Output(droidfetch())

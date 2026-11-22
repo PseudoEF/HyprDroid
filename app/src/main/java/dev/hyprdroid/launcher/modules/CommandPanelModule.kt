@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -17,8 +18,11 @@ import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -50,6 +54,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import dev.hyprdroid.launcher.packages.AndroidPackages
+import dev.hyprdroid.launcher.plugins.AndroidLuaPlugins
+import dev.hyprdroid.launcher.plugins.PluginWindow
 import dev.hyprdroid.launcher.ui.Mocha
 import dev.hyprdroid.launcher.workspaceengine.WindowId
 import kotlinx.coroutines.Job
@@ -176,11 +182,16 @@ internal object CommandPanelModule : TileModule {
         val commandState = state as CommandPanelState
         val registry = LocalTileModuleRegistry.current
         val context = LocalContext.current.applicationContext
+        var pluginWindow by remember { mutableStateOf<PluginWindow?>(null) }
         val processor = remember(registry, context) {
             CommandProcessor(
                 modules = { registry?.modules?.map { ModuleSummary(it.id, it.title) }.orEmpty() },
                 droidfetch = { DroidFetchFormatter.format(DroidFetchSystem.read(context)) },
                 packageCommands = PackageCommands { AndroidPackages.manager(context) },
+                luaPluginCommands = LuaPluginCommands(
+                    runPlugin = { AndroidLuaPlugins.run(context, it) },
+                    showWindow = { pluginWindow = it },
+                ),
             )
         }
         val listState = rememberLazyListState()
@@ -339,6 +350,22 @@ internal object CommandPanelModule : TileModule {
                 placement = if (commandState.streaming) outputTarget else inputTarget,
                 tracking = commandState.streaming || trackingInput,
                 modifier = Modifier.matchParentSize(),
+            )
+        }
+
+        pluginWindow?.let { window ->
+            AlertDialog(
+                onDismissRequest = { pluginWindow = null },
+                title = { Text(window.title) },
+                text = {
+                    Text(
+                        window.text,
+                        Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState()),
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { pluginWindow = null }) { Text("Закрыть") }
+                },
             )
         }
     }
