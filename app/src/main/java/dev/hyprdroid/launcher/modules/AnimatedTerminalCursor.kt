@@ -1,25 +1,24 @@
 package dev.hyprdroid.launcher.modules
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.dp
 import dev.hyprdroid.launcher.ui.Mocha
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.ceil
 
 internal data class CursorTarget(
     val x: Float,
@@ -27,202 +26,159 @@ internal data class CursorTarget(
     val bottom: Float,
 )
 
-internal data class CursorTrail(
-    val left: Float,
-    val top: Float,
-    val width: Float,
-    val height: Float,
-)
-
-/** Pure geometry: bounding box between the previous and the current caret, stretched across rows. */
-internal fun cursorTrail(
-    from: CursorTarget,
-    to: CursorTarget,
-    minWidth: Float = 0f,
-): CursorTrail {
-    val left = minOf(from.x, to.x)
-    val right = maxOf(from.x, to.x) + maxOf(minWidth, 0f)
-    val top = minOf(from.top, to.top)
-    val bottom = maxOf(from.bottom, to.bottom)
-    // Identical carets have no trail; the caret block still keeps its own height.
-    val height = if (from == to) 0f else maxOf(bottom - top, 0f)
-    return CursorTrail(
-        left = left,
-        top = top,
-        width = maxOf(right - left, 0f),
-        height = height,
-    )
+/** Maps the text layout's caret to the viewport. Its origin already accounts for vertical scroll. */
+internal fun viewportCaret(
+    caret: Rect,
+    textOrigin: Offset,
+    horizontalScroll: Int = 0,
+): CursorTarget? {
+    val x = textOrigin.x + caret.left - horizontalScroll
+    val top = textOrigin.y + caret.top
+    val bottom = textOrigin.y + caret.bottom
+    return if (x.isFinite() && top.isFinite() && bottom.isFinite() && bottom > top) {
+        CursorTarget(x, top, bottom)
+    } else {
+        null
+    }
 }
+
+internal data class CursorPlacement(
+    val target: CursorTarget,
+    val row: Long? = null,
+    val rowOffsets: Map<Long, Int> = emptyMap(),
+    val inputScroll: Int? = null,
+) {
+    /** Keeps the spring and its past samples anchored to the same content during a scroll. */
+    fun displacementFrom(previous: CursorPlacement): Offset {
+        if (inputScroll != null && previous.inputScroll != null) {
+            return Offset((previous.inputScroll - inputScroll).toFloat(), 0f)
+        }
+        val row = previous.row ?: return Offset.Zero
+        val oldOffset = previous.rowOffsets[row] ?: return Offset.Zero
+        val newOffset = rowOffsets[row] ?: return Offset.Zero
+        return Offset(0f, (newOffset - oldOffset).toFloat())
+    }
+}
+
+private fun CursorTarget.translate(by: Offset) =
+    CursorTarget(x + by.x, top + by.y, bottom + by.y)
+
+internal data class CursorMotion(
+    val position: CursorTarget,
+    val velocity: Offset = Offset.Zero,
+) {
+    fun translate(by: Offset) = copy(position = position.translate(by))
+
+    /** Semi-implicit spring with bounded substeps to keep retargeting stable across frame rates. */
+    fun advance(target: CursorTarget, seconds: Float): CursorMotion {
+        val elapsed = seconds.coerceIn(0f, 0.05f)
+        val steps = ceil(elapsed / 0.008f).toInt().coerceAtLeast(1)
+        val dt = elapsed / steps
+        val goal = Offset(target.x, target.top)
+        var point = Offset(position.x, position.top)
+        var speed = velocity
+        repeat(steps) {
+            speed += ((goal - point) * 500f - speed * 32f) * dt
+            point += speed * dt
+        }
+        if ((goal - point).getDistance() < 0.15f && speed.getDistance() < 2f) {
+            return CursorMotion(target)
+        }
+        return CursorMotion(
+            CursorTarget(point.x, point.y, point.y + target.bottom - target.top),
+            speed,
+        )
+    }
+}
+
+private data class CursorScene(val placement: CursorPlacement?, val tracking: Boolean)
+
+private data class CursorGhost(val position: CursorTarget, val time: Long)
+private const val TRAIL_DURATION_NS = 180_000_000L
+private const val SAMPLE_INTERVAL_NS = 24_000_000L
 
 @Composable
 internal fun AnimatedTerminalCursor(
-    target: CursorTarget?,
+    placement: CursorPlacement?,
+    tracking: Boolean,
     modifier: Modifier = Modifier,
-    visible: Boolean = true,
 ) {
-    val cursorX = remember { Animatable(0f) }
-    val cursorTop = remember { Animatable(0f) }
-    val cursorBottom = remember { Animatable(0f) }
-    val trailAlpha = remember { Animatable(0f) }
-    val previousTarget = remember { mutableStateOf<CursorTarget?>(null) }
-    val lastTarget = remember { mutableStateOf<CursorTarget?>(null) }
+    val latestScene = rememberUpdatedState(CursorScene(placement, tracking))
+    var motion by remember { mutableStateOf<CursorMotion?>(null) }
+    var ghosts by remember { mutableStateOf(emptyList<CursorGhost>()) }
+    var frameTime by remember { mutableStateOf(0L) }
 
-    val blink = rememberInfiniteTransition(label = "terminal-cursor-blink")
-    val blinkAlpha by blink.animateFloat(
-        initialValue = 0.45f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = 620,
-                easing = FastOutSlowInEasing,
-            ),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "terminal-cursor-blink-alpha",
-    )
+    // The effect lasts as long as the Canvas. New goals are sampled by the active frame loop.
+    LaunchedEffect(Unit) {
+        var previousPlacement: CursorPlacement? = null
+        val durationScale = coroutineContext[MotionDurationScale]
+        snapshotFlow { latestScene.value }.collect {
+            var previousFrame: Long? = null
+            while (true) {
+                val scene = latestScene.value
+                if (!scene.tracking) {
+                    motion = null
+                    ghosts = emptyList()
+                    previousPlacement = null
+                    break
+                }
+                val next = scene.placement ?: break
+                val goal = next.target
+                val displacement = previousPlacement?.let(next::displacementFrom) ?: Offset.Zero
+                previousPlacement = next
+                val scale = durationScale?.scaleFactor ?: 1f
+                if (motion == null || scale == 0f) {
+                    motion = CursorMotion(goal)
+                    ghosts = emptyList()
+                    break
+                }
+                if (displacement != Offset.Zero) {
+                    motion = motion?.translate(displacement)
+                    ghosts = ghosts.map { it.copy(position = it.position.translate(displacement)) }
+                }
+                val current = checkNotNull(motion)
+                if (current.position == goal && current.velocity == Offset.Zero && ghosts.isEmpty()) break
 
-    LaunchedEffect(target) {
-        val safeTarget = target?.sanitized(
-            fallbackX = cursorX.value,
-            fallbackTop = cursorTop.value,
-            fallbackBottom = cursorBottom.value,
+                withFrameNanos { now ->
+                    val elapsed = previousFrame?.let { (now - it) / 1_000_000_000f / scale }
+                    if (elapsed != null) {
+                        motion = current.advance(goal, elapsed)
+                        val remaining = ghosts.dropWhile { now - it.time >= TRAIL_DURATION_NS }
+                        ghosts = if (current.position != motion?.position &&
+                            now - (remaining.lastOrNull()?.time ?: 0L) >= SAMPLE_INTERVAL_NS
+                        ) {
+                            remaining + CursorGhost(current.position, now)
+                        } else {
+                            remaining
+                        }
+                        frameTime = now
+                    }
+                    previousFrame = now
+                }
+            }
+        }
+    }
+
+    Canvas(modifier) {
+        val current = motion ?: return@Canvas
+        if (placement == null) return@Canvas
+        val width = 3.dp.toPx()
+        for (sample in ghosts) {
+            val alpha = 1f - (frameTime - sample.time).toFloat() / TRAIL_DURATION_NS
+            val point = sample.position
+            drawRoundRect(
+                color = Mocha.Mauve.copy(alpha = 0.30f * alpha * alpha),
+                topLeft = Offset(point.x - width / 2, point.top),
+                size = Size(width, point.bottom - point.top),
+            )
+        }
+        val point = current.position
+        val stretchX = (abs(current.velocity.x) * 0.008f).coerceAtMost(5.dp.toPx())
+        val stretchY = (abs(current.velocity.y) * 0.008f).coerceAtMost(5.dp.toPx())
+        drawRoundRect(
+            color = Mocha.Mauve,
+            topLeft = Offset(point.x - (width + stretchX) / 2, point.top - stretchY / 2),
+            size = Size(width + stretchX, point.bottom - point.top + stretchY),
         )
-        if (safeTarget == null) {
-            previousTarget.value = null
-            lastTarget.value = null
-            trailAlpha.snapTo(0f)
-            return@LaunchedEffect
-        }
-
-        val from = lastTarget.value
-        lastTarget.value = safeTarget
-        previousTarget.value = from ?: safeTarget
-
-        if (from == null) {
-            cursorX.snapTo(safeTarget.x)
-            cursorTop.snapTo(safeTarget.top)
-            cursorBottom.snapTo(safeTarget.bottom)
-            trailAlpha.snapTo(0f)
-            return@LaunchedEffect
-        }
-
-        trailAlpha.snapTo(1f)
-        coroutineScope {
-            launch {
-                cursorX.animateTo(
-                    targetValue = safeTarget.x,
-                    animationSpec = tween(
-                        durationMillis = 180,
-                        easing = FastOutSlowInEasing,
-                    ),
-                )
-            }
-            launch {
-                cursorTop.animateTo(
-                    targetValue = safeTarget.top,
-                    animationSpec = tween(
-                        durationMillis = 180,
-                        easing = FastOutSlowInEasing,
-                    ),
-                )
-            }
-            launch {
-                cursorBottom.animateTo(
-                    targetValue = safeTarget.bottom,
-                    animationSpec = tween(
-                        durationMillis = 180,
-                        easing = FastOutSlowInEasing,
-                    ),
-                )
-            }
-            launch {
-                trailAlpha.animateTo(
-                    targetValue = 0f,
-                    animationSpec = tween(
-                        durationMillis = 280,
-                        easing = FastOutSlowInEasing,
-                    ),
-                )
-            }
-        }
-    }
-
-    Canvas(modifier = modifier) {
-        if (target == null || !visible) return@Canvas
-
-        val canvasWidth = size.width
-        val canvasHeight = size.height
-        val rawTop = cursorTop.value.finiteOr(0f)
-        val rawBottom = cursorBottom.value.finiteOr(rawTop)
-        val currentTop = rawTop.coerceIn(0f, canvasHeight)
-        val currentBottom = rawBottom.coerceIn(currentTop, canvasHeight)
-        val currentX = cursorX.value.finiteOr(0f).coerceIn(0f, canvasWidth)
-        val blockWidth = 7.dp.toPx()
-
-        val previous = previousTarget.value
-        val trailAlphaValue = trailAlpha.value
-        if (previous != null && trailAlphaValue > 0.001f) {
-            val from = previous.clamped(
-                maxWidth = canvasWidth,
-                maxHeight = canvasHeight,
-            )
-            val trail = cursorTrail(
-                from = from,
-                to = CursorTarget(
-                    x = currentX,
-                    top = currentTop,
-                    bottom = currentBottom,
-                ),
-                minWidth = blockWidth,
-            )
-            if (trail.width > 0f && trail.height > 0f) {
-                drawRect(
-                    color = Mocha.Mauve.copy(alpha = 0.12f * trailAlphaValue),
-                    topLeft = Offset(trail.left, trail.top),
-                    size = Size(trail.width, trail.height),
-                )
-                drawRect(
-                    color = Mocha.Mauve.copy(alpha = 0.35f * trailAlphaValue),
-                    topLeft = Offset(trail.left, trail.top),
-                    size = Size(trail.width, trail.height),
-                )
-            }
-        }
-
-        val blockHeight = currentBottom - currentTop
-        if (blockHeight > 0f && blockWidth > 0f) {
-            drawRect(
-                color = Mocha.Mauve.copy(alpha = blinkAlpha),
-                topLeft = Offset(currentX, currentTop),
-                size = Size(blockWidth, blockHeight),
-            )
-        }
     }
 }
-
-private fun CursorTarget.sanitized(
-    fallbackX: Float,
-    fallbackTop: Float,
-    fallbackBottom: Float,
-): CursorTarget {
-    val safeX = x.finiteOr(fallbackX)
-    val safeTop = top.finiteOr(fallbackTop)
-    val safeBottom = bottom.finiteOr(fallbackBottom)
-    return CursorTarget(
-        x = safeX,
-        top = safeTop,
-        bottom = maxOf(safeBottom, safeTop),
-    )
-}
-
-private fun CursorTarget.clamped(maxWidth: Float, maxHeight: Float): CursorTarget {
-    val safeTop = top.coerceIn(0f, maxHeight)
-    val safeBottom = bottom.coerceIn(safeTop, maxHeight)
-    return CursorTarget(
-        x = x.coerceIn(0f, maxWidth),
-        top = safeTop,
-        bottom = safeBottom,
-    )
-}
-
-private fun Float.finiteOr(fallback: Float): Float = if (isFinite()) this else fallback

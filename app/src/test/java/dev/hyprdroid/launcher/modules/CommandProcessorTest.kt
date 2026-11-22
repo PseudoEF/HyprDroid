@@ -124,6 +124,20 @@ class CommandProcessorTest {
     }
 
     @Test
+    fun demoProgressCaretFollowsFilledCells() {
+        val progress = stream("demo install").filterIsInstance<CommandEvent.Progress>()
+        val advances = progress.map { event ->
+            val start = event.text.indexOf('[') + 1
+            val end = event.text.indexOf(']')
+            assertTrue(start in 1..end)
+            val filled = event.text.substring(start, end).takeWhile { it == '#' }.length
+            assertEquals(start + filled, event.cursorOffset)
+            filled
+        }
+        assertEquals(listOf(0, 2, 4, 6, 8, 10, 3, 6, 9, 10), advances)
+    }
+
+    @Test
     fun demoInstallTimingAndTextStaySafe() {
         val events = stream("demo install")
 

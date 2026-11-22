@@ -14,7 +14,7 @@ internal sealed interface CommandResult {
 
 internal sealed interface CommandEvent {
     data class Line(val text: String) : CommandEvent
-    data class Progress(val text: String) : CommandEvent
+    data class Progress(val text: String, val cursorOffset: Int = text.length) : CommandEvent
     data class Pause(val millis: Long) : CommandEvent
 }
 
@@ -83,29 +83,29 @@ internal class CommandProcessor(
         CommandEvent.Pause(90),
         CommandEvent.Line("Скачивание weather 1.2.0 (2.4 МБ)"),
         CommandEvent.Pause(100),
-        CommandEvent.Progress("Загрузка [----------]   0%"),
+        demoProgress("Загрузка", 0),
         CommandEvent.Pause(160),
-        CommandEvent.Progress("Загрузка [##--------]  20%"),
+        demoProgress("Загрузка", 20),
         CommandEvent.Pause(160),
-        CommandEvent.Progress("Загрузка [####------]  40%"),
+        demoProgress("Загрузка", 40),
         CommandEvent.Pause(160),
-        CommandEvent.Progress("Загрузка [######----]  60%"),
+        demoProgress("Загрузка", 60),
         CommandEvent.Pause(160),
-        CommandEvent.Progress("Загрузка [########--]  80%"),
+        demoProgress("Загрузка", 80),
         CommandEvent.Pause(160),
-        CommandEvent.Progress("Загрузка [##########] 100%"),
+        demoProgress("Загрузка", 100),
         CommandEvent.Pause(140),
         CommandEvent.Line("Контрольная сумма SHA-256 совпадает"),
         CommandEvent.Pause(180),
         CommandEvent.Line("Распаковка и проверка файлов…"),
         CommandEvent.Pause(90),
-        CommandEvent.Progress("Файлы [###-------]  30%"),
+        demoProgress("Файлы", 30),
         CommandEvent.Pause(120),
-        CommandEvent.Progress("Файлы [######----]  60%"),
+        demoProgress("Файлы", 60),
         CommandEvent.Pause(120),
-        CommandEvent.Progress("Файлы [#########-]  90%"),
+        demoProgress("Файлы", 90),
         CommandEvent.Pause(120),
-        CommandEvent.Progress("Файлы [##########] 100%"),
+        demoProgress("Файлы", 100),
         CommandEvent.Pause(100),
         CommandEvent.Line("Регистрация модуля weather…"),
         CommandEvent.Pause(140),
@@ -114,4 +114,11 @@ internal class CommandProcessor(
         CommandEvent.Line("Готово. Модуль доступен в списке модулей."),
         CommandEvent.Pause(120),
     )
+
+    private fun demoProgress(label: String, percent: Int): CommandEvent.Progress {
+        val filled = percent / 10
+        val bar = "#".repeat(filled) + "-".repeat(10 - filled)
+        val text = "$label [$bar] ${percent.toString().padStart(3)}%"
+        return CommandEvent.Progress(text, cursorOffset = label.length + 2 + filled)
+    }
 }

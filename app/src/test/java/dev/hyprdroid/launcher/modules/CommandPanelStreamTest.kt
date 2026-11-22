@@ -1,5 +1,6 @@
 package dev.hyprdroid.launcher.modules
 
+import androidx.compose.ui.text.TextRange
 import dev.hyprdroid.launcher.workspaceengine.WindowId
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -95,6 +96,42 @@ class CommandPanelStreamTest {
         assertEquals("0%", state.lines.last().text)
         assertEquals(CommandLineKind.OUTPUT, state.lines.last().kind)
         assertEquals(echo, state.lines[state.lines.size - 2])
+    }
+
+    @Test
+    fun progressPreservesRowIdentityAndCarriesCaretOffset() = runBlocking {
+        val state = panel()
+        val observed = mutableListOf<CommandLine>()
+        state.play(
+            listOf(
+                CommandEvent.Progress("[---]", 1),
+                CommandEvent.Pause(1),
+                CommandEvent.Progress("[##-]", 3),
+                CommandEvent.Pause(1),
+            ),
+        ) { observed += state.lines.last() }
+
+        assertEquals(listOf(1, 3), observed.map { it.cursorOffset })
+        assertEquals(observed.first().id, observed.last().id)
+    }
+
+    @Test
+    fun editingInsideInputKeepsRealSelection() {
+        val state = panel()
+        state.updateInput("abde")
+        state.inputField.edit {
+            selection = TextRange(2)
+            replace(2, 2, "c")
+        }
+        assertEquals("abcde", state.input)
+        assertEquals(TextRange(3), state.inputField.selection)
+
+        state.inputField.edit {
+            selection = TextRange(1, 4)
+            replace(selection.min, selection.max, "")
+        }
+        assertEquals("ae", state.input)
+        assertEquals(TextRange(1), state.inputField.selection)
     }
 
     @Test
