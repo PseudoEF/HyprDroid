@@ -38,6 +38,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true; buildConfig = true; aidl = true }
+    sourceSets["androidTest"].assets.srcDir("src/test/resources/external")
     testBuildType = if (testExperimental) "experimental" else "debug"
     buildTypes {
         create("experimental") {

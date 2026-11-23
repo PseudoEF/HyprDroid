@@ -59,7 +59,7 @@ jobs:
             adb shell pm path dev.hyprdroid.launcher.experimental &&
             sh scripts/ci-home.sh select &&
             adb shell am start -W -n dev.hyprdroid.launcher.experimental/dev.hyprdroid.launcher.MainActivity &&
-            ./gradlew :app:connectedExperimentalAndroidTest -PtestExperimental=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.external.ExternalLuaAndroidTest
+            ./gradlew :app:connectedExperimentalAndroidTest -PtestExperimental=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.external.ExternalLuaAndroidTest,dev.hyprdroid.launcher.external.ExternalTileLifecycleTest
       - uses: actions/upload-artifact@v4
         with:
           name: hyprdroid-experimental-apk

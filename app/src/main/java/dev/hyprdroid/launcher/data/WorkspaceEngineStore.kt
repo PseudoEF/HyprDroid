@@ -9,7 +9,11 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import dev.hyprdroid.launcher.plugins.TILE_STATE_LIMIT
+import dev.hyprdroid.launcher.plugins.isPluginText
+import dev.hyprdroid.launcher.workspaceengine.WindowId
 import dev.hyprdroid.launcher.workspaceengine.WorkspaceEngine
+import java.io.IOException
 import kotlinx.coroutines.flow.first
 
 private val Context.workspaceEngineStore by preferencesDataStore(
@@ -21,9 +25,52 @@ internal class WorkspaceEngineStore(private val store: DataStore<Preferences>) {
     constructor(context: Context) : this(context.applicationContext.workspaceEngineStore)
 
     suspend fun save(workspaceId: String, engine: WorkspaceEngine) {
+        val serialized = engine.serialize()
+        val remaining = engine.windowsById().keys.mapTo(hashSetOf()) { it.value }
         store.edit { preferences ->
-            preferences[stringPreferencesKey("engine/$workspaceId")] = engine.serialize()
+            val key = stringPreferencesKey("engine/$workspaceId")
+            val removed = preferences[key]?.let {
+                WorkspaceEngine().deserialize(it).windowsById().keys.map { id -> id.value }.toSet() - remaining
+            }.orEmpty()
+            if (removed.isNotEmpty()) {
+                preferences.asMap().keys.filter { key ->
+                    key.name.startsWith(TILE_STATE_PREFIX) && key.name.substringAfterLast('/') in removed
+                }.forEach { preferences.remove(stringPreferencesKey(it.name)) }
+            }
+            preferences[key] = serialized
         }
+    }
+
+    suspend fun tileState(slot: TileStateSlot): String = readState(store.data.first(), slot)
+
+    /** Checks ownership and commits the state in the same transaction as layout deletion. */
+    suspend fun saveTileState(slot: TileStateSlot, expected: String, updated: String) {
+        if (!validState(updated)) throw IOException("Lua Tile state exceeds its limits")
+        if (updated == expected) return
+        store.edit { preferences ->
+            val belongsToPackage = preferences.asMap().entries.any { (key, value) ->
+                key.name.startsWith("engine/") && value is String &&
+                    WorkspaceEngine().deserialize(value).windowsById()[slot.windowId]?.moduleId == slot.packageId
+            }
+            if (!belongsToPackage || readState(preferences, slot) != expected) {
+                throw IOException("Lua Tile state changed or its tile was removed")
+            }
+            val key = stringPreferencesKey(slot.preferenceKey)
+            if (updated.isEmpty()) {
+                preferences.remove(key)
+            } else {
+                if (preferences[key] == null && preferences.asMap().keys.count { it.name.startsWith(TILE_STATE_PREFIX) } >= MAX_TILE_STATES) {
+                    throw IOException("Lua Tile state storage is full")
+                }
+                preferences[key] = updated
+            }
+        }
+    }
+
+    private fun readState(preferences: Preferences, slot: TileStateSlot): String {
+        val value = preferences[stringPreferencesKey(slot.preferenceKey)].orEmpty()
+        if (!validState(value)) throw IOException("Invalid saved Lua Tile state")
+        return value
     }
 
     suspend fun isOpen(workspaceId: String): Boolean =
@@ -57,3 +104,19 @@ internal class WorkspaceEngineStore(private val store: DataStore<Preferences>) {
         return engines
     }
 }
+
+private const val TILE_STATE_PREFIX = "module-state/v1/"
+private const val MAX_TILE_STATES = 64
+private val stateIdentifier = Regex("[a-zA-Z0-9_.-]{1,80}")
+
+/** Core resolves this key itself. Lua and Binder never receive it. */
+internal data class TileStateSlot(val packageId: String, val schema: Int, val windowId: WindowId) {
+    init {
+        require(stateIdentifier.matches(packageId) && stateIdentifier.matches(windowId.value) && schema > 0)
+    }
+
+    val preferenceKey = "$TILE_STATE_PREFIX$packageId/$schema/${windowId.value}"
+}
+
+private fun validState(value: String) = value.isPluginText(TILE_STATE_LIMIT) &&
+    value.encodeToByteArray().size <= TILE_STATE_LIMIT

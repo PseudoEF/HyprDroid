@@ -1,5 +1,6 @@
 package dev.hyprdroid.launcher.modules
 
+import android.util.Log
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -19,6 +20,8 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.hyprdroid.launcher.BuildConfig
+import dev.hyprdroid.launcher.data.TileStateSlot
+import dev.hyprdroid.launcher.data.WorkspaceEngineStore
 import dev.hyprdroid.launcher.external.ExperimentalExternalLua
 import dev.hyprdroid.launcher.packages.AndroidPackages
 import dev.hyprdroid.launcher.packages.HELLO_TILE_ID
@@ -46,27 +49,44 @@ internal object ExternalHelloTileModule : TileModule {
         val manager = remember(context) { AndroidPackages.manager(context) }
         val generation by manager.helloTileGeneration.collectAsState()
         key(state, generation) {
-            ContentForGeneration(modifier, generation)
+            ContentForGeneration(state.windowId, modifier, generation)
         }
     }
 
     @Composable
-    private fun ContentForGeneration(modifier: Modifier, generation: Long) {
+    private fun ContentForGeneration(windowId: WindowId, modifier: Modifier, generation: Long) {
         val context = LocalContext.current.applicationContext
         val manager = remember(context) { AndroidPackages.manager(context) }
         val session = remember { TilePluginSession() }
-        DisposableEffect(session) { onDispose { session.stop() } }
+        val store = remember(context) { WorkspaceEngineStore(context) }
+        val slot = remember(windowId) { TileStateSlot(HELLO_TILE_ID, schema = 1, windowId = windowId) }
+        DisposableEffect(session) {
+            Log.d("HyprLuaTile", "UI session opened; generation=$generation")
+            onDispose {
+                Log.d("HyprLuaTile", "UI session closed; composition left or authorization changed")
+                session.stop()
+            }
+        }
         val scope = rememberCoroutineScope()
         suspend fun update(event: String? = null) = session.update(event) execute@{ request ->
             if (!BuildConfig.EXTERNAL_LUA) return@execute PluginResult.Failure("Экспериментальный Lua отключён")
             try {
-                val bytes = withContext(Dispatchers.IO) { manager.verifiedHelloTile() }
+                val (bytes, saved) = withContext(Dispatchers.IO) {
+                    manager.verifiedHelloTile() to store.tileState(slot)
+                }
                 if (manager.helloTileGeneration.value != generation) {
                     return@execute PluginResult.Failure("Доверенная запись Hello Tile изменилась")
                 }
-                val result = ExperimentalExternalLua.run(context, bytes, request)
-                if (manager.helloTileGeneration.value == generation) result
-                else PluginResult.Failure("Доверенная запись Hello Tile изменилась")
+                if (request.event == null) {
+                    Log.d("HyprLuaTile", "Rendering from Core state; initial mount or explicit retry")
+                }
+                val result = ExperimentalExternalLua.run(context, bytes, request.copy(state = saved))
+                if (manager.helloTileGeneration.value != generation) {
+                    return@execute PluginResult.Failure("Доверенная запись Hello Tile изменилась")
+                }
+                val updated = (result as? PluginResult.Success)?.tile?.state
+                if (updated != null && request.event != null) store.saveTileState(slot, saved, updated)
+                result
             } catch (error: IOException) {
                 PluginResult.Failure(error.message ?: "Пакет не подтверждён")
             }

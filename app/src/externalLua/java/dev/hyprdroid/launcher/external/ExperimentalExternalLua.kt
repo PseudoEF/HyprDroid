@@ -8,6 +8,8 @@ import android.os.Binder
 import android.os.IBinder
 import android.os.Process
 import android.os.SharedMemory
+import android.util.Log
+import java.util.concurrent.atomic.AtomicBoolean
 import dev.hyprdroid.launcher.BuildConfig
 import dev.hyprdroid.launcher.plugins.PluginResult
 import dev.hyprdroid.launcher.plugins.TileRequest
@@ -45,7 +47,10 @@ internal object ExperimentalExternalLua {
         val connected = CompletableDeferred<IExternalLua?>()
         val outcome = CompletableDeferred<PluginResult>()
         val died = CompletableDeferred<Unit>()
+        val closing = AtomicBoolean(false)
+        Log.d("HyprLuaTile", "Worker binding requested")
         val death = IBinder.DeathRecipient {
+            Log.d("HyprLuaTile", "Worker Binder died; disposalRequested=${closing.get()}")
             died.complete(Unit)
             outcome.complete(PluginResult.Failure("Изолированный Lua worker завершился"))
         }
@@ -119,6 +124,8 @@ internal object ExperimentalExternalLua {
         } catch (_: SecurityException) {
             PluginResult.Failure("Android отклонил запуск внешнего Lua")
         } finally {
+            closing.set(true)
+            Log.d("HyprLuaTile", "Worker binding closing")
             val port = endpoint
             withContext(NonCancellable) {
                 try {
@@ -133,6 +140,7 @@ internal object ExperimentalExternalLua {
                 }
                 if (bound && withTimeoutOrNull(2_000) { died.await(); true } != true) {
                     uncertainDeath = true
+                    Log.w("HyprLuaTile", "Worker death unconfirmed; new bindings blocked")
                 }
                 try {
                     port?.asBinder()?.unlinkToDeath(death, 0)
