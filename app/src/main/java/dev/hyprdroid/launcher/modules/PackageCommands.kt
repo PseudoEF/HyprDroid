@@ -62,13 +62,13 @@ internal class PackageCommands(private val manager: () -> HyprPackageManager) {
             add(CommandEvent.Operation {
                 withContext(Dispatchers.IO) {
                     try {
-                        manager().action()
+                        CommandOperationResult(manager().action())
                     } catch (error: PackageException) {
-                        listOf("Ошибка hypr: ${error.message}")
+                        CommandOperationResult(listOf("Ошибка hypr: ${error.message}"), failed = true)
                     } catch (_: IOException) {
-                        listOf("Ошибка hypr: не удалось прочитать или записать данные пакета.")
+                        CommandOperationResult(listOf("Ошибка hypr: не удалось прочитать или записать данные пакета."), failed = true)
                     } catch (_: SecurityException) {
-                        listOf("Ошибка hypr: Android отказал в доступе к хранилищу.")
+                        CommandOperationResult(listOf("Ошибка hypr: Android отказал в доступе к хранилищу."), failed = true)
                     }
                 }
             })
@@ -76,7 +76,7 @@ internal class PackageCommands(private val manager: () -> HyprPackageManager) {
         return CommandResult.Stream(events)
     }
 
-    private fun invalid() = CommandResult.Output("Неверные аргументы. Использование: hypr help")
+    private fun invalid() = CommandResult.Output("Неверные аргументы. Использование: hypr help", failed = true)
 
     private fun List<PackageManifest>.summary(empty: String = "Пакеты не найдены."): List<String> =
         if (isEmpty()) listOf(empty) else map { it.label() }

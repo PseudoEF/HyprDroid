@@ -7,7 +7,7 @@ import java.util.Locale
 internal data class ModuleSummary(val id: String, val title: String)
 
 internal sealed interface CommandResult {
-    data class Output(val text: String) : CommandResult
+    data class Output(val text: String, val failed: Boolean = false) : CommandResult
     object Clear : CommandResult
     data class Stream(val events: List<CommandEvent>) : CommandResult
 }
@@ -16,8 +16,10 @@ internal sealed interface CommandEvent {
     data class Line(val text: String) : CommandEvent
     data class Progress(val text: String, val cursorOffset: Int = text.length) : CommandEvent
     data class Pause(val millis: Long) : CommandEvent
-    data class Operation(val run: suspend () -> List<String>) : CommandEvent
+    data class Operation(val run: suspend () -> CommandOperationResult) : CommandEvent
 }
+
+internal data class CommandOperationResult(val lines: List<String>, val failed: Boolean = false)
 
 /** Routes built-in commands. Streaming operations run separately from command parsing. */
 internal class CommandProcessor(
@@ -26,6 +28,7 @@ internal class CommandProcessor(
     private val droidfetch: () -> String = { "DroidFetch unavailable" },
     private val packageCommands: PackageCommands? = null,
     private val luaPluginCommands: LuaPluginCommands? = null,
+    private val history: TerminalHistory? = null,
 ) {
     private val whitespace = Regex("\\s+")
     private val dateFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss", Locale.getDefault())
@@ -40,12 +43,32 @@ internal class CommandProcessor(
         if (first == "lua" && luaPluginCommands != null) {
             return luaPluginCommands.execute(command.split(whitespace).drop(1))
         }
+        if (first == "history" && history != null) {
+            val args = command.split(whitespace)
+            if (args != listOf("history") && args != listOf("history", "clear")) {
+                return CommandResult.Output("Использование: history [clear]", failed = true)
+            }
+            return CommandResult.Stream(listOf(CommandEvent.Operation {
+                try {
+                    if (args.size == 2) {
+                        history.clear()
+                        CommandOperationResult(listOf("История очищена."))
+                    } else {
+                        val entries = history.entries()
+                        CommandOperationResult(entries.ifEmpty { listOf("История пуста.") })
+                    }
+                } catch (_: java.io.IOException) {
+                    CommandOperationResult(listOf("Ошибка доступа к истории команд."), failed = true)
+                }
+            }))
+        }
         return when (command) {
             "help" -> CommandResult.Output(
                 listOf(
                     "Доступные команды:",
                     "help — эта справка",
                     "clear — очистить журнал",
+                    "history [clear] — показать или очистить историю команд",
                     "modules — список модулей",
                     "date — текущие дата и время",
                     "droidfetch — ASCII-информация об устройстве",
@@ -70,6 +93,7 @@ internal class CommandProcessor(
             )
             else -> CommandResult.Output(
                 "Неизвестная команда: ${raw.trim()}\nЭто не shell. Введите help для списка безопасных команд.",
+                failed = true,
             )
         }
     }

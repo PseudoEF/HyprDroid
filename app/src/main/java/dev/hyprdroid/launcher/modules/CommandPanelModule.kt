@@ -1,10 +1,14 @@
 package dev.hyprdroid.launcher.modules
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,9 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
-import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
-import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -25,7 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +42,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
@@ -58,118 +64,12 @@ import dev.hyprdroid.launcher.plugins.AndroidLuaPlugins
 import dev.hyprdroid.launcher.plugins.PluginWindow
 import dev.hyprdroid.launcher.ui.Mocha
 import dev.hyprdroid.launcher.workspaceengine.WindowId
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import java.io.IOException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
-internal enum class CommandLineKind { SYSTEM, INPUT, OUTPUT }
-
-internal data class CommandLine(
-    val text: String,
-    val kind: CommandLineKind,
-    val cursorOffset: Int = text.length,
-    val id: Long = 0,
-)
-
-internal class CommandPanelState(windowId: WindowId) : ModuleState(windowId) {
-    var lines by mutableStateOf(
-        listOf(CommandLine("HyprDroid · безопасные команды. Введите help.", CommandLineKind.SYSTEM)),
-    )
-        private set
-    val inputField = TextFieldState()
-    val input: String get() = inputField.text.toString()
-
-    /** True while a [CommandResult.Stream] is being played into [lines]. */
-    var streaming by mutableStateOf(false)
-        private set
-
-    private var playGeneration = 0
-    private var lineSequence = 0L
-
-    fun updateInput(value: String) {
-        inputField.setTextAndPlaceCursorAtEnd(value)
-    }
-
-    /**
-     * Applies the command. Immediate results are written to [lines] right away; for a streaming
-     * result the echoed input line is added and the pre-computed events are returned for the UI to
-     * play with [play]. Any asynchronous work happens during playback.
-     */
-    fun submit(processor: CommandProcessor): List<CommandEvent>? {
-        val raw = input.trim()
-        if (raw.isEmpty()) return null
-        inputField.clearText()
-        return when (val result = processor.execute(raw)) {
-            is CommandResult.Output -> {
-                val next = buildList {
-                    add(newLine("› $raw", CommandLineKind.INPUT))
-                    if (result.text.isNotEmpty()) add(newLine(result.text, CommandLineKind.OUTPUT))
-                }
-                lines = (lines + next).takeLast(MAX_LINES)
-                null
-            }
-            CommandResult.Clear -> {
-                lines = emptyList()
-                null
-            }
-            is CommandResult.Stream -> {
-                lines = (lines + newLine("› $raw", CommandLineKind.INPUT)).takeLast(MAX_LINES)
-                result.events
-            }
-        }
-    }
-
-    /**
-     * Plays stream events into the log. [pause] is injectable so unit tests can run without
-     * waiting; production uses the real delay.
-     */
-    suspend fun play(
-        events: List<CommandEvent>,
-        pause: suspend (Long) -> Unit = { delay(it) },
-    ) {
-        // A cancelled older stream must not clear the flag of a newer one.
-        val generation = ++playGeneration
-        streaming = true
-        try {
-            for (event in events) {
-                when (event) {
-                    is CommandEvent.Line -> appendOutput(event.text)
-                    is CommandEvent.Progress -> updateLastOutput(event)
-                    is CommandEvent.Pause -> pause(event.millis.coerceAtLeast(0))
-                    is CommandEvent.Operation -> event.run().forEach(::appendOutput)
-                }
-            }
-        } finally {
-            if (generation == playGeneration) streaming = false
-        }
-    }
-
-    private fun appendOutput(text: String) {
-        lines = (lines + newLine(text, CommandLineKind.OUTPUT)).takeLast(MAX_LINES)
-    }
-
-    /** Progress replaces the last row in place, including the caret's offset inside the bar. */
-    private fun updateLastOutput(event: CommandEvent.Progress) {
-        val last = lines.lastOrNull()
-        val caret = event.cursorOffset.coerceIn(0, event.text.length)
-        lines = if (last?.kind == CommandLineKind.OUTPUT) {
-            lines.dropLast(1) + last.copy(text = event.text, cursorOffset = caret)
-        } else {
-            (lines + newLine(event.text, CommandLineKind.OUTPUT, caret)).takeLast(MAX_LINES)
-        }
-    }
-
-    private fun newLine(text: String, kind: CommandLineKind, caret: Int = text.length) =
-        CommandLine(text, kind, caret, ++lineSequence)
-
-    private companion object {
-        const val MAX_LINES = 200
-    }
-}
-
 internal object CommandPanelModule : TileModule {
-    private const val INPUT_ROW = "terminal-input"
-
     override val id = "hyprdroid.command"
     override val title = "Команды"
     override val summary = "Безопасная командная панель"
@@ -182,11 +82,16 @@ internal object CommandPanelModule : TileModule {
         val commandState = state as CommandPanelState
         val registry = LocalTileModuleRegistry.current
         val context = LocalContext.current.applicationContext
+        val history = remember(context) { StoredTerminalHistory(context) }
+        val historyEntries by history.navigationCommands.collectAsState(initial = emptyList())
+        val navigation = remember { HistoryNavigation() }
+        val clipboard = LocalClipboardManager.current
         var pluginWindow by remember { mutableStateOf<PluginWindow?>(null) }
         val processor = remember(registry, context) {
             CommandProcessor(
                 modules = { registry?.modules?.map { ModuleSummary(it.id, it.title) }.orEmpty() },
                 droidfetch = { DroidFetchFormatter.format(DroidFetchSystem.read(context)) },
+                history = history,
                 packageCommands = PackageCommands { AndroidPackages.manager(context) },
                 luaPluginCommands = LuaPluginCommands(
                     runPlugin = { AndroidLuaPlugins.run(context, it) },
@@ -196,7 +101,19 @@ internal object CommandPanelModule : TileModule {
         }
         val listState = rememberLazyListState()
         val scope = rememberCoroutineScope()
-        var streamJob by remember { mutableStateOf<Job?>(null) }
+        var preview by remember { mutableStateOf<List<String>?>(null) }
+        var followOutput by remember { mutableStateOf(true) }
+        var suggestionsFor by remember { mutableStateOf("" to emptyList<String>()) }
+        val input = commandState.input
+        val suggestions = suggestionsFor.second.takeIf { suggestionsFor.first == input }.orEmpty()
+        val scrollConnection = remember {
+            object : NestedScrollConnection {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    if (source == NestedScrollSource.UserInput && available.y != 0f) followOutput = false
+                    return Offset.Zero
+                }
+            }
+        }
 
         val inputScroll = rememberScrollState()
         val rowPadding = with(LocalDensity.current) { 1.dp.roundToPx() }
@@ -208,19 +125,56 @@ internal object CommandPanelModule : TileModule {
         val selection = commandState.inputField.selection
         val lastLine = commandState.lines.lastOrNull()
 
-        DisposableEffect(Unit) {
-            onDispose { streamJob?.cancel() }
+        LaunchedEffect(input, commandState.running) {
+            val completion = TerminalCompletion(input)
+            suggestionsFor = input to withContext(Dispatchers.IO) {
+                val manager by lazy { AndroidPackages.manager(context) }
+                val catalog = try {
+                    if (completion.packageSource in setOf(CompletionPackages.CATALOG, CompletionPackages.BOTH)) {
+                        manager.available().map { it.id }
+                    } else emptyList()
+                } catch (_: IOException) {
+                    emptyList()
+                }
+                val installed = try {
+                    if (completion.packageSource in setOf(CompletionPackages.INSTALLED, CompletionPackages.BOTH)) {
+                        manager.installed().map { it.id }
+                    } else emptyList()
+                } catch (_: IOException) {
+                    emptyList()
+                }
+                completion.suggestions(catalog, installed)
+            }
         }
 
-        LaunchedEffect(lastLine, commandState.input) {
-            listState.animateScrollToItem(commandState.lines.size)
+        LaunchedEffect(lastLine, followOutput, suggestions.isNotEmpty()) {
+            if (followOutput) listState.scrollToItem(commandState.lines.size)
+        }
+        LaunchedEffect(input, commandState.running) {
+            val commands = parseTerminalInput(input)
+            if (!commandState.running && commands.size in 2..BATCH_LIMIT &&
+                commands.all { it.length <= COMMAND_LENGTH_LIMIT }
+            ) {
+                preview = commands
+            }
+        }
+
+        fun run(commands: List<String>) {
+            navigation.reset()
+            commandState.inputField.clearText()
+            scope.launch { commandState.runCommands(commands, processor::execute, history) }
         }
 
         val submitCommand: () -> Unit = {
-            streamJob?.cancel()
-            val events = commandState.submit(processor)
-            if (events != null) {
-                streamJob = scope.launch { commandState.play(events) }
+            if (!commandState.running) {
+                val commands = parseTerminalInput(commandState.input)
+                when {
+                    commands.size > BATCH_LIMIT -> commandState.inputError("Максимум $BATCH_LIMIT команд в пакете.")
+                    commands.any { it.length > COMMAND_LENGTH_LIMIT } ->
+                        commandState.inputError("Команда длиннее $COMMAND_LENGTH_LIMIT символов.")
+                    commands.size > 1 -> preview = commands
+                    commands.size == 1 -> run(commands)
+                }
             }
         }
 
@@ -248,8 +202,7 @@ internal object CommandPanelModule : TileModule {
             null
         }
         val trackingInput = inputFocused && LocalWindowInfo.current.isWindowFocused && selection.collapsed
-        val inputVisible = trackingInput && listState.layoutInfo.visibleItemsInfo.any { it.key == INPUT_ROW }
-        val inputTarget = if (inputVisible && inputOrigin.isSpecified && viewportOrigin.isSpecified) {
+        val inputTarget = if (trackingInput && inputOrigin.isSpecified && viewportOrigin.isSpecified) {
             val layout = inputLayout?.invoke()
             layout?.takeIf { selection.end <= it.layoutInput.text.length }?.let {
                 val scroll = inputScroll.value
@@ -260,96 +213,166 @@ internal object CommandPanelModule : TileModule {
             null
         }
 
-        Box(
+        Column(
             modifier.fillMaxSize()
-                .padding(horizontal = 6.dp)
-                .clipToBounds()
-                .onGloballyPositioned { viewportOrigin = it.positionInRoot() },
+                .padding(horizontal = 6.dp),
         ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize()
-                    .testTag("module-command-log-${state.windowId.value}"),
-            ) {
-                itemsIndexed(commandState.lines, key = { _, line -> line.id }) { index, line ->
-                    val isCursorLine = index == commandState.lines.lastIndex
-                    Text(
-                        text = line.text,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = when (line.kind) {
-                            CommandLineKind.SYSTEM -> Mocha.Subtext
-                            CommandLineKind.INPUT -> Mocha.Lavender
-                            CommandLineKind.OUTPUT -> Mocha.Text
-                        },
-                        onTextLayout = if (isCursorLine) {
-                            { layout -> logLayout = line.id to layout }
-                        } else {
-                            null
-                        },
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
-                    )
-                }
-                item(key = INPUT_ROW) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth()
-                            .padding(vertical = 3.dp)
-                            .background(Mocha.Mantle.copy(alpha = 0.7f), RoundedCornerShape(7.dp))
-                            .padding(horizontal = 6.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
+            Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize().nestedScroll(scrollConnection)
+                        .testTag("module-command-log-${state.windowId.value}"),
+                ) {
+                    itemsIndexed(commandState.lines, key = { _, line -> line.id }) { index, line ->
+                        val isCursorLine = index == commandState.lines.lastIndex
                         Text(
-                            "›",
+                            text = line.text,
                             style = MaterialTheme.typography.labelSmall,
                             fontFamily = FontFamily.Monospace,
-                            color = Mocha.Mauve,
-                            modifier = Modifier.padding(end = 4.dp),
+                            color = when (line.kind) {
+                                CommandLineKind.SYSTEM -> Mocha.Subtext
+                                CommandLineKind.INPUT -> Mocha.Lavender
+                                CommandLineKind.OUTPUT -> Mocha.Text
+                                CommandLineKind.ERROR -> Mocha.Red
+                            },
+                            onTextLayout = if (isCursorLine) {
+                                { layout -> logLayout = line.id to layout }
+                            } else {
+                                null
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
                         )
-                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                            BasicTextField(
-                                state = commandState.inputField,
-                                lineLimits = TextFieldLineLimits.SingleLine,
-                                scrollState = inputScroll,
-                                textStyle = MaterialTheme.typography.labelSmall.copy(
-                                    color = Mocha.Text,
-                                    fontFamily = FontFamily.Monospace,
-                                ),
-                                cursorBrush = SolidColor(
-                                    if (commandState.streaming || inputTarget == null) Mocha.Mauve
-                                    else Color.Transparent,
-                                ),
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                                onKeyboardAction = { submitCommand() },
-                                onTextLayout = { getResult -> inputLayout = getResult },
-                                modifier = Modifier.weight(1f)
-                                    .onFocusChanged { inputFocused = it.isFocused }
-                                    .onGloballyPositioned { inputOrigin = it.positionInRoot() }
-                                    .testTag("module-command-input-${state.windowId.value}"),
-                                decorator = { inner ->
-                                    Box(Modifier.fillMaxWidth()) {
-                                        if (commandState.input.isEmpty()) {
-                                            Text(
-                                                "help",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontFamily = FontFamily.Monospace,
-                                                color = Mocha.Subtext,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                        }
-                                        inner()
-                                    }
-                                },
-                            )
-                        }
+                    }
+                    item { Spacer(Modifier.height(1.dp)) }
+                }
+                AnimatedTerminalCursor(
+                    placement = outputTarget,
+                    tracking = commandState.streaming,
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
+
+            if (suggestions.isNotEmpty() && !commandState.running) {
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                    suggestions.forEach { suggestion ->
+                        TextButton(onClick = {
+                            navigation.reset()
+                            commandState.updateInput(suggestion)
+                        }) { Text(suggestion, maxLines = 1) }
                     }
                 }
             }
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (!followOutput) {
+                    TextButton(onClick = { followOutput = true }) { Text("К концу") }
+                }
+                if (commandState.remaining > 0) {
+                    TextButton(onClick = commandState::cancelRemaining) { Text("Отменить очередь") }
+                }
+                if (!commandState.running) {
+                    Row(Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
+                        TextButton(enabled = historyEntries.isNotEmpty(), onClick = {
+                            commandState.updateInput(navigation.previous(input, historyEntries))
+                        }) { Text("Ранее") }
+                        TextButton(onClick = {
+                            commandState.updateInput(navigation.next(input))
+                        }) { Text("Позже") }
+                        TextButton(onClick = {
+                            clipboard.getText()?.text?.let {
+                                navigation.reset()
+                                commandState.inputField.edit { replace(selection.min, selection.max, it) }
+                            }
+                        }) { Text("Вставить") }
+                    }
+                }
+            }
+            Box(Modifier.fillMaxWidth().clipToBounds()
+                .onGloballyPositioned { viewportOrigin = it.positionInRoot() },
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(vertical = 3.dp)
+                        .background(Mocha.Mantle.copy(alpha = 0.7f), RoundedCornerShape(7.dp))
+                        .padding(horizontal = 6.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "›",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = Mocha.Mauve,
+                        modifier = Modifier.padding(end = 4.dp),
+                    )
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        BasicTextField(
+                            state = commandState.inputField,
+                            lineLimits = TextFieldLineLimits.SingleLine,
+                            scrollState = inputScroll,
+                            textStyle = MaterialTheme.typography.labelSmall.copy(
+                                color = Mocha.Text,
+                                fontFamily = FontFamily.Monospace,
+                            ),
+                            cursorBrush = SolidColor(
+                                if (inputTarget == null) Mocha.Mauve
+                                else Color.Transparent,
+                            ),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                            onKeyboardAction = { submitCommand() },
+                            onTextLayout = { getResult -> inputLayout = getResult },
+                            modifier = Modifier.weight(1f)
+                                .onFocusChanged { inputFocused = it.isFocused }
+                                .onGloballyPositioned { inputOrigin = it.positionInRoot() }
+                                .testTag("module-command-input-${state.windowId.value}"),
+                            decorator = { inner ->
+                                Box(Modifier.fillMaxWidth()) {
+                                    if (commandState.input.isEmpty()) {
+                                        Text(
+                                            "help",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = Mocha.Subtext,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                    inner()
+                                }
+                            },
+                        )
+                    }
+                    TextButton(
+                        onClick = submitCommand,
+                        enabled = !commandState.running && input.isNotBlank(),
+                    ) { Text("Пуск") }
+                }
+                AnimatedTerminalCursor(
+                    placement = inputTarget,
+                    tracking = trackingInput,
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
+        }
 
-            AnimatedTerminalCursor(
-                placement = if (commandState.streaming) outputTarget else inputTarget,
-                tracking = commandState.streaming || trackingInput,
-                modifier = Modifier.matchParentSize(),
+        preview?.let { commands ->
+            AlertDialog(
+                onDismissRequest = { preview = null },
+                title = { Text("Выполнить ${commands.size} команд?") },
+                text = {
+                    Text(
+                        commands.joinToString("\n"),
+                        Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState()),
+                        fontFamily = FontFamily.Monospace,
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        preview = null
+                        run(commands)
+                    }) { Text("Выполнить") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { preview = null }) { Text("Отмена") }
+                },
             )
         }
 
