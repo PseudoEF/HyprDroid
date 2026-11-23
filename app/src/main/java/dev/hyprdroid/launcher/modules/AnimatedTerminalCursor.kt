@@ -42,6 +42,20 @@ internal fun viewportCaret(
     }
 }
 
+internal fun inlineCursorPlacement(
+    caret: Rect,
+    textOrigin: Offset,
+    viewportHeight: Int,
+    row: Long,
+    visibleRows: Map<Long, Int>,
+    inputScroll: Int? = null,
+): CursorPlacement? {
+    if (row !in visibleRows || viewportHeight <= 0) return null
+    val target = viewportCaret(caret, textOrigin, inputScroll ?: 0)
+        ?.takeIf { it.bottom > 0f && it.top < viewportHeight } ?: return null
+    return CursorPlacement(target, row, visibleRows, inputScroll)
+}
+
 internal data class CursorPlacement(
     val target: CursorTarget,
     val row: Long? = null,
@@ -50,13 +64,19 @@ internal data class CursorPlacement(
 ) {
     /** Keeps the spring and its past samples anchored to the same content during a scroll. */
     fun displacementFrom(previous: CursorPlacement): Offset {
-        if (inputScroll != null && previous.inputScroll != null) {
-            return Offset((previous.inputScroll - inputScroll).toFloat(), 0f)
-        }
-        val row = previous.row ?: return Offset.Zero
-        val oldOffset = previous.rowOffsets[row] ?: return Offset.Zero
-        val newOffset = rowOffsets[row] ?: return Offset.Zero
-        return Offset(0f, (newOffset - oldOffset).toFloat())
+        val x = if (inputScroll != null && previous.inputScroll != null) {
+            (previous.inputScroll - inputScroll).toFloat()
+        } else 0f
+        // Appending output moves the prompt relative to the text. Prefer a common log row
+        // when the previous target was the prompt, so only actual scroll shifts the trail.
+        val anchor = if (previous.inputScroll != null) {
+            previous.rowOffsets.keys.lastOrNull { it != previous.row && it in rowOffsets }
+                ?: previous.row.takeIf { inputScroll != null }
+        } else previous.row
+        val oldOffset = previous.rowOffsets[anchor]
+        val newOffset = rowOffsets[anchor]
+        val y = if (oldOffset != null && newOffset != null) (newOffset - oldOffset).toFloat() else 0f
+        return Offset(x, y)
     }
 }
 

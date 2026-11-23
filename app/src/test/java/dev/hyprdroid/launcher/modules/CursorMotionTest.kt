@@ -41,6 +41,36 @@ class CursorMotionTest {
     }
 
     @Test
+    fun inlinePromptCaretUsesTheSameViewportAsOutput() {
+        val caret = Rect(38f, 3f, 39f, 16f)
+        val visible = mapOf(7L to 30, 8L to 72)
+        val placement = inlineCursorPlacement(caret, Offset(12f, 75f), 100, 8L, visible, inputScroll = 21)
+        assertEquals(CursorTarget(29f, 78f, 91f), placement?.target)
+        assertNull(inlineCursorPlacement(caret, Offset(12f, 75f), 100, 8L, mapOf(7L to 30), 21))
+        assertNull(inlineCursorPlacement(caret, Offset(12f, -20f), 100, 8L, visible, 21))
+        assertNull(inlineCursorPlacement(caret, Offset(12f, 100f), 100, 8L, visible, 21))
+    }
+
+    @Test
+    fun inlinePromptScrollTranslatesTheTrailOnBothAxes() {
+        val caret = CursorTarget(20f, 80f, 90f)
+        val previous = CursorPlacement(caret, 8L, mapOf(7L to 60, 8L to 80), inputScroll = 10)
+        val next = CursorPlacement(caret, 8L, mapOf(7L to 47, 8L to 67), inputScroll = 26)
+        assertEquals(Offset(-16f, -13f), next.displacementFrom(previous))
+    }
+
+    @Test
+    fun promptMovementAfterOutputAppendDoesNotTranslateTheSpringByTheNewRowHeight() {
+        val caret = CursorTarget(20f, 80f, 90f)
+        val prompt = Long.MIN_VALUE
+        val previous = CursorPlacement(caret, prompt, mapOf(7L to 60, prompt to 80), inputScroll = 0)
+        val streamed = CursorPlacement(caret, 8L, mapOf(7L to 56, 8L to 76, prompt to 96))
+        assertEquals(Offset(0f, -4f), streamed.displacementFrom(previous))
+        val emptyLog = previous.copy(rowOffsets = mapOf(prompt to 80))
+        assertEquals(Offset.Zero, streamed.displacementFrom(emptyLog))
+    }
+
+    @Test
     fun springMovesOnBothAxesAndRetargetKeepsMomentum() {
         val firstGoal = CursorTarget(100f, 60f, 72f)
         val initial = CursorMotion(CursorTarget(0f, 0f, 12f))

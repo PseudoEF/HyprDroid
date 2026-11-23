@@ -1,21 +1,22 @@
 package dev.hyprdroid.launcher.modules
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
@@ -70,6 +71,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
 internal object CommandPanelModule : TileModule {
+    private const val PROMPT_ROW = Long.MIN_VALUE
+
     override val id = "hyprdroid.command"
     override val title = "Команды"
     override val summary = "Безопасная командная панель"
@@ -77,6 +80,7 @@ internal object CommandPanelModule : TileModule {
 
     override fun createState(windowId: WindowId): ModuleState = CommandPanelState(windowId)
 
+    @OptIn(ExperimentalFoundationApi::class)
     @Composable
     override fun Content(state: ModuleState, modifier: Modifier) {
         val commandState = state as CommandPanelState
@@ -120,6 +124,7 @@ internal object CommandPanelModule : TileModule {
         }
 
         val inputScroll = rememberScrollState()
+        val inputVisibility = remember { BringIntoViewRequester() }
         val rowPadding = with(LocalDensity.current) { 1.dp.roundToPx() }
         var viewportOrigin by remember { mutableStateOf(Offset.Unspecified) }
         var inputOrigin by remember { mutableStateOf(Offset.Unspecified) }
@@ -154,6 +159,9 @@ internal object CommandPanelModule : TileModule {
         LaunchedEffect(lastLine, followOutput, suggestions.isNotEmpty()) {
             if (followOutput) listState.scrollToItem(commandState.lines.size)
         }
+        LaunchedEffect(inputFocused, input, selection) {
+            if (inputFocused && !commandState.running) inputVisibility.bringIntoView()
+        }
         LaunchedEffect(input, commandState.running) {
             val commands = parseTerminalInput(input)
             if (!commandState.running && commands.size in 2..BATCH_LIMIT &&
@@ -182,46 +190,57 @@ internal object CommandPanelModule : TileModule {
             }
         }
 
+        val trackingInput = inputFocused && LocalWindowInfo.current.isWindowFocused && selection.collapsed
+        val listLayout = listState.layoutInfo
+        val rowOffsets = listLayout.visibleItemsInfo.mapNotNull { row ->
+            (row.key as? Long)?.let { it to row.offset }
+        }.toMap()
         val outputTarget = if (commandState.streaming && lastLine != null) {
-            val listLayout = listState.layoutInfo
             val layout = logLayout?.takeIf { it.first == lastLine.id }?.second
-            val item = listLayout.visibleItemsInfo.lastOrNull { it.key == lastLine.id }
-            if (layout != null && item != null && layout.layoutInput.text.text == lastLine.text) {
-                viewportCaret(
-                    layout.getCursorRect(lastLine.cursorOffset),
-                    Offset(0f, (item.offset + rowPadding).toFloat()),
-                )?.takeIf { it.bottom > 0 && it.top < listLayout.viewportSize.height }?.let { target ->
-                    CursorPlacement(
-                        target,
-                        row = lastLine.id,
-                        rowOffsets = listLayout.visibleItemsInfo.mapNotNull { row ->
-                            (row.key as? Long)?.let { it to row.offset }
-                        }.toMap(),
+            if (layout != null && layout.layoutInput.text.text == lastLine.text) {
+                val y = rowOffsets[lastLine.id]
+                y?.let {
+                    inlineCursorPlacement(
+                        layout.getCursorRect(lastLine.cursorOffset),
+                        Offset(0f, (it + rowPadding).toFloat()),
+                        listLayout.viewportSize.height,
+                        lastLine.id,
+                        rowOffsets,
                     )
                 }
-            } else {
-                null
-            }
-        } else {
-            null
-        }
-        val trackingInput = inputFocused && LocalWindowInfo.current.isWindowFocused && selection.collapsed
-        val inputTarget = if (trackingInput && inputOrigin.isSpecified && viewportOrigin.isSpecified) {
+            } else null
+        } else null
+        val inputTarget = if (trackingInput && PROMPT_ROW in rowOffsets &&
+            inputOrigin.isSpecified && viewportOrigin.isSpecified
+        ) {
             val layout = inputLayout?.invoke()
             layout?.takeIf { selection.end <= it.layoutInput.text.length }?.let {
-                val scroll = inputScroll.value
-                viewportCaret(it.getCursorRect(selection.end), inputOrigin - viewportOrigin, scroll)
-                    ?.let { target -> CursorPlacement(target, inputScroll = scroll) }
+                inlineCursorPlacement(
+                    it.getCursorRect(selection.end),
+                    inputOrigin - viewportOrigin,
+                    listLayout.viewportSize.height,
+                    PROMPT_ROW,
+                    rowOffsets,
+                    inputScroll.value,
+                )
             }
-        } else {
-            null
-        }
+        } else null
 
-        Column(
-            modifier.fillMaxSize()
-                .padding(horizontal = 6.dp),
-        ) {
-            Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+        Column(modifier.fillMaxSize().padding(horizontal = 6.dp)) {
+            if (!followOutput || commandState.remaining > 0) {
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                    if (!followOutput) {
+                        TextButton(onClick = { followOutput = true }) { Text("К концу") }
+                    }
+                    if (commandState.remaining > 0) {
+                        TextButton(onClick = commandState::cancelRemaining) { Text("Отменить очередь") }
+                    }
+                }
+            }
+            Box(
+                Modifier.weight(1f).fillMaxWidth().clipToBounds()
+                    .onGloballyPositioned { viewportOrigin = it.positionInRoot() },
+            ) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize().nestedScroll(scrollConnection)
@@ -247,111 +266,101 @@ internal object CommandPanelModule : TileModule {
                             modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
                         )
                     }
-                    item { Spacer(Modifier.height(1.dp)) }
-                }
-                AnimatedTerminalCursor(
-                    placement = outputTarget,
-                    tracking = commandState.streaming,
-                    modifier = Modifier.matchParentSize(),
-                )
-            }
-
-            if (suggestions.isNotEmpty() && !commandState.running) {
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-                    suggestions.forEach { suggestion ->
-                        TextButton(onClick = {
-                            navigation.reset()
-                            commandState.updateInput(suggestion)
-                        }) { Text(suggestion, maxLines = 1) }
-                    }
-                }
-            }
-            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (!followOutput) {
-                    TextButton(onClick = { followOutput = true }) { Text("К концу") }
-                }
-                if (commandState.remaining > 0) {
-                    TextButton(onClick = commandState::cancelRemaining) { Text("Отменить очередь") }
-                }
-                if (!commandState.running) {
-                    Row(Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
-                        TextButton(enabled = historyEntries.isNotEmpty(), onClick = {
-                            commandState.updateInput(navigation.previous(input, historyEntries))
-                        }) { Text("Ранее") }
-                        TextButton(onClick = {
-                            commandState.updateInput(navigation.next(input))
-                        }) { Text("Позже") }
-                        TextButton(onClick = {
-                            clipboard.getText()?.text?.let {
-                                navigation.reset()
-                                commandState.inputField.edit { replace(selection.min, selection.max, it) }
-                            }
-                        }) { Text("Вставить") }
-                    }
-                }
-            }
-            Box(Modifier.fillMaxWidth().clipToBounds()
-                .onGloballyPositioned { viewportOrigin = it.positionInRoot() },
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth()
-                        .padding(vertical = 3.dp)
-                        .background(Mocha.Mantle.copy(alpha = 0.7f), RoundedCornerShape(7.dp))
-                        .padding(horizontal = 6.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "›",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = Mocha.Mauve,
-                        modifier = Modifier.padding(end = 4.dp),
-                    )
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        BasicTextField(
-                            state = commandState.inputField,
-                            lineLimits = TextFieldLineLimits.SingleLine,
-                            scrollState = inputScroll,
-                            textStyle = MaterialTheme.typography.labelSmall.copy(
-                                color = Mocha.Text,
+                    item(key = PROMPT_ROW) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .testTag("module-command-prompt-${state.windowId.value}"),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "›",
+                                style = MaterialTheme.typography.labelSmall,
                                 fontFamily = FontFamily.Monospace,
-                            ),
-                            cursorBrush = SolidColor(
-                                if (inputTarget == null) Mocha.Mauve
-                                else Color.Transparent,
-                            ),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                            onKeyboardAction = { submitCommand() },
-                            onTextLayout = { getResult -> inputLayout = getResult },
-                            modifier = Modifier.weight(1f)
-                                .onFocusChanged { inputFocused = it.isFocused }
-                                .onGloballyPositioned { inputOrigin = it.positionInRoot() }
-                                .testTag("module-command-input-${state.windowId.value}"),
-                            decorator = { inner ->
-                                Box(Modifier.fillMaxWidth()) {
-                                    if (commandState.input.isEmpty()) {
-                                        Text(
-                                            "help",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontFamily = FontFamily.Monospace,
-                                            color = Mocha.Subtext,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
-                                    inner()
-                                }
-                            },
-                        )
+                                color = Mocha.Mauve,
+                                modifier = Modifier.padding(end = 4.dp),
+                            )
+                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                BasicTextField(
+                                    state = commandState.inputField,
+                                    lineLimits = TextFieldLineLimits.SingleLine,
+                                    scrollState = inputScroll,
+                                    textStyle = MaterialTheme.typography.labelSmall.copy(
+                                        color = Mocha.Text,
+                                        fontFamily = FontFamily.Monospace,
+                                    ),
+                                    cursorBrush = SolidColor(
+                                        if (commandState.streaming || inputTarget == null) Mocha.Mauve
+                                        else Color.Transparent,
+                                    ),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                    onKeyboardAction = { submitCommand() },
+                                    onTextLayout = { getResult -> inputLayout = getResult },
+                                    modifier = Modifier.weight(1f)
+                                        .bringIntoViewRequester(inputVisibility)
+                                        .onFocusChanged { inputFocused = it.isFocused }
+                                        .onGloballyPositioned { inputOrigin = it.positionInRoot() }
+                                        .testTag("module-command-input-${state.windowId.value}"),
+                                    decorator = { inner ->
+                                        Box(Modifier.fillMaxWidth()) {
+                                            if (commandState.input.isEmpty()) {
+                                                Text(
+                                                    "help",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontFamily = FontFamily.Monospace,
+                                                    color = Mocha.Subtext,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            }
+                                            inner()
+                                        }
+                                    },
+                                )
+                            }
+                            TextButton(
+                                onClick = submitCommand,
+                                enabled = !commandState.running && input.isNotBlank(),
+                                modifier = Modifier.height(36.dp),
+                                contentPadding = PaddingValues(horizontal = 6.dp),
+                            ) { Text("Пуск") }
+                        }
                     }
-                    TextButton(
-                        onClick = submitCommand,
-                        enabled = !commandState.running && input.isNotBlank(),
-                    ) { Text("Пуск") }
+                    if (suggestions.isNotEmpty() && !commandState.running) {
+                        item(key = "terminal-suggestions") {
+                            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                                .testTag("module-command-suggestions-${state.windowId.value}"),
+                            ) {
+                                suggestions.forEach { suggestion ->
+                                    TextButton(onClick = {
+                                        navigation.reset()
+                                        commandState.updateInput(suggestion)
+                                    }) { Text(suggestion, maxLines = 1) }
+                                }
+                            }
+                        }
+                    }
+                    if (!commandState.running) {
+                        item(key = "terminal-edit-actions") {
+                            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                                TextButton(enabled = historyEntries.isNotEmpty(), onClick = {
+                                    commandState.updateInput(navigation.previous(input, historyEntries))
+                                }) { Text("Ранее") }
+                                TextButton(onClick = {
+                                    commandState.updateInput(navigation.next(input))
+                                }) { Text("Позже") }
+                                TextButton(onClick = {
+                                    clipboard.getText()?.text?.let {
+                                        navigation.reset()
+                                        commandState.inputField.edit { replace(selection.min, selection.max, it) }
+                                    }
+                                }) { Text("Вставить") }
+                            }
+                        }
+                    }
                 }
                 AnimatedTerminalCursor(
-                    placement = inputTarget,
-                    tracking = trackingInput,
+                    placement = if (commandState.streaming) outputTarget else inputTarget,
+                    tracking = commandState.streaming || trackingInput,
                     modifier = Modifier.matchParentSize(),
                 )
             }
