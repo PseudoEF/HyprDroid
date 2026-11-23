@@ -8,8 +8,11 @@ internal object AndroidPackages {
     internal const val SAMPLE_KEY_ID = "bundled-sample-v1"
     internal const val SAMPLE_PUBLIC_KEY = "fd0745ace1a4be23d7f618f2921bca733d206771753832df17c5f080d57d69da"
 
-    // Set only after the owner approves the publisher key and bootstrap revision.
-    private val repositoryTrust: PackageRepositoryTrust? = null
+    private val repositoryTrust = PackageRepositoryTrust(
+        keyId = "github-v1",
+        publicKey = "6c8604bfb78dcadbd20554d47c686b04d3ea98f6339eaa3a4b54ef5f2839c093",
+        minimumRevision = 1,
+    )
 
     private var instance: HyprPackageManager? = null
 
@@ -18,7 +21,7 @@ internal object AndroidPackages {
         val root = app.noBackupFilesDir.resolve("hypr-packages")
         val bundled = BundledPackageCatalog { app.assets.open("$ASSET_DIRECTORY/catalog.json") }
         val keys = mapOf(SAMPLE_KEY_ID to SAMPLE_PUBLIC_KEY) +
-            repositoryTrust?.let { mapOf(it.keyId to it.publicKey) }.orEmpty()
+            mapOf(repositoryTrust.keyId to repositoryTrust.publicKey)
         HyprPackageManager(
             root = root,
             catalog = bundled,
