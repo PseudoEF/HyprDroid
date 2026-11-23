@@ -54,6 +54,17 @@ class ExternalLuaAndroidTest {
         assertTrue(ExperimentalExternalLua.run(app, bytes, TileRequest("foreign", "1")) is PluginResult.Failure)
     }
 
+    @Test
+    fun rejectsInvalidSourceAndPrivilegedLibraries() = runBlocking {
+        for (script in listOf("local =", "return io.open('blocked')", "return os.execute('blocked')",
+            "return require('blocked')", "return luajava.bindClass('blocked')"
+        )) {
+            assertTrue(evaluate(script) is PluginResult.Failure)
+        }
+        val reset = ExperimentalExternalLua.run(app, sample, TileRequest("reset", "9"))
+        assertEquals("0", (reset as PluginResult.Success).tile?.state)
+    }
+
     private suspend fun evaluate(source: String) =
         ExperimentalExternalLua.run(app, source.encodeToByteArray(), TileRequest())
 }

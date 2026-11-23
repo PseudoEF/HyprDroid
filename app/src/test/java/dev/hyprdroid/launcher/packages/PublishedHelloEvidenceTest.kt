@@ -44,10 +44,21 @@ class PublishedHelloEvidenceTest {
         val installed = registry.read().getValue(HELLO_TILE_ID)
         assertTrue(installed.hasSignedEvidence)
         val directory = root.resolve("objects").resolve(installed.directory)
-        assertArrayEquals(verifier.verifiedEntrypoint(entry, archive.inputStream()), manager.verifiedHelloTile())
+        val expected = verifier.verifiedEntrypoint(entry, archive.inputStream())
+        val snapshot = manager.verifiedHelloTile()
+        assertArrayEquals(expected, snapshot)
+        val proof = directory.resolve("catalog-proof.json")
+        proof.writeText("{}")
+        assertThrows(PackageException::class.java) { manager.verifiedHelloTile() }
+        proof.writeBytes(catalog)
+        val storedArchive = directory.resolve("archive.hyp")
+        storedArchive.appendBytes(byteArrayOf(0))
+        assertThrows(PackageException::class.java) { manager.verifiedHelloTile() }
+        storedArchive.writeBytes(archive)
 
         directory.resolve("content/main.lua").appendText("\n-- changed")
         assertThrows(PackageException::class.java) { manager.verifiedHelloTile() }
+        assertArrayEquals(expected, snapshot)
         val generation = manager.helloTileGeneration.value
         manager.remove(HELLO_TILE_ID)
         assertTrue(manager.helloTileGeneration.value > generation)
