@@ -43,6 +43,7 @@ android {
             initWith(getByName("debug"))
             applicationIdSuffix = ".experimental"
             matchingFallbacks += "debug"
+            ndk.abiFilters += listOf("arm64-v8a", "x86_64")
             buildConfigField("boolean", "DISTRIBUTION", "false")
             buildConfigField("boolean", "EXTERNAL_LUA", "true")
         }

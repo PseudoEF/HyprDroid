@@ -38,6 +38,10 @@ jobs:
           grep -F "'arm64-v8a'" experimental-badging.txt
           grep -F "sdkVersion:'29'" experimental-badging.txt
           "$tools/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk | grep -F "package: name='dev.hyprdroid.launcher'"
+          "$tools/aapt" dump xmltree "$apk" AndroidManifest.xml > experimental-manifest.txt
+          grep -F 'dev.hyprdroid.launcher.experimental.androidx-startup' experimental-manifest.txt
+          grep -F 'dev.hyprdroid.launcher.experimental.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION' experimental-manifest.txt
+          if grep -F 'android.intent.category.HOME' experimental-manifest.txt; then exit 1; fi
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 4 "$apk"
       - name: Enable emulator hardware acceleration
         run: sudo chmod 666 /dev/kvm
