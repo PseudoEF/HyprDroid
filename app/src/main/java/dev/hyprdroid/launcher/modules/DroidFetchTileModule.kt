@@ -94,7 +94,7 @@ internal object DroidFetchTileModule : TileModule {
 }
 
 @Composable
-private fun RenderTile(node: TileNode, modifier: Modifier, enabled: Boolean, onEvent: (String) -> Unit) {
+internal fun RenderTile(node: TileNode, modifier: Modifier, enabled: Boolean, onEvent: (String) -> Unit) {
     when (node) {
         is TileNode.Text -> Text(
             node.text, modifier, color = Mocha.Text,

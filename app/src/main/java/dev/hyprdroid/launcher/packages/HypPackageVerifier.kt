@@ -1,31 +1,36 @@
 package dev.hyprdroid.launcher.packages
 
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.zip.CRC32
 import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
 import org.bouncycastle.math.ec.rfc8032.Ed25519
 
 internal class HypPackageVerifier(pinnedKeys: Map<String, String>) {
     private val keys = pinnedKeys.mapValues { (_, key) -> Ed25519PublicKeyParameters(key.decodeHex(32), 0) }
 
-    fun prepare(entry: CatalogPackage, artifact: InputStream, stage: File): PackageManifest {
+    private fun authenticate(entry: CatalogPackage, artifact: InputStream): ByteArray {
         val key = keys[entry.keyId] ?: throw PackageException("Издатель пакета отсутствует в списке доверенных")
         val expectedDigest = entry.sha256.decodeHex(32)
         val signature = entry.signature.decodeHex(64)
-        // Read the exact archive into a bounded buffer once. The same bytes are authenticated and unpacked.
         val bytes = readPackageBytes(artifact, MAX_ARCHIVE_BYTES)
         val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
         if (!MessageDigest.isEqual(digest, expectedDigest)) throw PackageException("SHA-256 пакета не совпадает")
         if (!key.verify(Ed25519.Algorithm.Ed25519, null, bytes, 0, bytes.size, signature, 0)) {
             throw PackageException("Подпись Ed25519 пакета недействительна")
         }
+        return bytes
+    }
 
+    fun prepare(entry: CatalogPackage, artifact: InputStream, stage: File, retainArchive: Boolean = false): PackageManifest {
+        val bytes = authenticate(entry, artifact)
         val archive = stage.resolve("archive.hyp")
-        archive.writeBytes(bytes)
+        archive.outputStream().use { it.write(bytes); if (retainArchive) it.fd.sync() }
         val content = stage.resolve("content")
         checkDirectoryCreated(content)
         ZipFile(archive).use { unpack(it, content) }
@@ -37,8 +42,25 @@ internal class HypPackageVerifier(pinnedKeys: Map<String, String>) {
         }
         if (manifest != entry.manifest) throw PackageException("Манифест отличается от записи каталога")
         if (!content.resolve(manifest.entry).isFile) throw PackageException("Отсутствует точка входа")
-        if (!archive.delete()) throw PackageException("Не удалось завершить подготовку пакета")
+        if (!retainArchive && !archive.delete()) throw PackageException("Не удалось завершить подготовку пакета")
         return manifest
+    }
+
+    /** Derives the entrypoint from the exact authenticated archive, never from a stored hash. */
+    fun verifiedEntrypoint(entry: CatalogPackage, archive: InputStream): ByteArray {
+        val bytes = authenticate(entry, archive)
+        ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
+            while (true) {
+                val file = zip.nextEntry ?: break
+                // Executable v1 packages have one entrypoint and the root manifest.
+                if (file.name == entry.manifest.entry && !file.isDirectory) {
+                    return readPackageBytes(zip, MAX_MANIFEST_BYTES)
+                }
+                if (file.name != "manifest.json") throw PackageException("Неподдерживаемое содержимое пакета Lua")
+                readPackageBytes(zip, MAX_MANIFEST_BYTES)
+            }
+        }
+        throw PackageException("Нет подтверждённой точки входа")
     }
 
     private fun unpack(archive: ZipFile, content: File) {

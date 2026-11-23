@@ -6,7 +6,11 @@ import java.nio.file.StandardCopyOption
 import org.json.JSONArray
 import org.json.JSONObject
 
-internal data class InstalledPackage(val manifest: PackageManifest, val directory: String)
+internal data class InstalledPackage(
+    val manifest: PackageManifest,
+    val directory: String,
+    val hasSignedEvidence: Boolean = false,
+)
 
 internal interface PackageRegistry {
     fun read(): Map<String, InstalledPackage>
@@ -37,7 +41,11 @@ internal class FilePackageRegistry(private val root: File) : PackageRegistry {
                     if (!content.resolve(manifest.entry).isFile || !content.resolve("manifest.json").isFile) {
                         throw PackageException("Отсутствуют файлы установленного пакета ${manifest.id}")
                     }
-                    put(manifest.id, InstalledPackage(manifest, directory))
+                    val evidence = if (record.has("signedEvidence")) {
+                        if (record.get("signedEvidence") != 1) throw PackageException("Неизвестная схема доказательства")
+                        true
+                    } else false
+                    put(manifest.id, InstalledPackage(manifest, directory, evidence))
                 }
             }
         }
@@ -46,7 +54,9 @@ internal class FilePackageRegistry(private val root: File) : PackageRegistry {
     override fun publish(packages: Map<String, InstalledPackage>) {
         checkDirectoryCreated(root)
         val records = packages.toSortedMap().values.map {
-            JSONObject().put("manifest", it.manifest.encode()).put("directory", it.directory)
+            JSONObject().put("manifest", it.manifest.encode()).put("directory", it.directory).apply {
+                if (it.hasSignedEvidence) put("signedEvidence", 1)
+            }
         }
         val bytes = JSONObject()
             .put("schemaVersion", 1)

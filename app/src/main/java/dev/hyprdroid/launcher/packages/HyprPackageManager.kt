@@ -2,7 +2,11 @@ package dev.hyprdroid.launcher.packages
 
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.security.MessageDigest
 import java.util.Locale
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /** The application keeps one manager per private registry. Terminal tiles share this instance. */
 internal class HyprPackageManager(
@@ -15,6 +19,8 @@ internal class HyprPackageManager(
 ) {
     private val lock = Any()
     private val objects = root.resolve("objects")
+    private val helloGeneration = MutableStateFlow(0L)
+    val helloTileGeneration = helloGeneration.asStateFlow()
 
     val catalogDescription: String get() = if (repository == null) catalog.description
         else "${catalog.description} · ${repository.description} (проверенный кэш)"
@@ -23,7 +29,8 @@ internal class HyprPackageManager(
         listOfNotNull(repository?.status())
 
     fun refreshRepository(): Int = synchronized(lock) {
-        repository?.refresh() ?: throw PackageException("Сетевой репозиторий не настроен")
+        val repo = repository ?: throw PackageException("Сетевой репозиторий не настроен")
+        repo.refresh().also { helloGeneration.value++ }
     }
 
     private fun catalogEntries(): List<CatalogPackage> {
@@ -76,13 +83,41 @@ internal class HyprPackageManager(
         if (actual != expected) throw PackageException("Содержимое установленного DroidFetch изменено")
     }
 
+    /** Returns the exact checked bytes. Runtime must not reopen an installed path. */
+    fun verifiedHelloTile(): ByteArray = synchronized(lock) {
+        val installed = registry.read()[HELLO_TILE_ID] ?: throw PackageException("Установите hello-tile")
+        if (!installed.hasSignedEvidence) throw PackageException("Повторите hypr install hello-tile для проверки источника")
+        val repo = repository ?: throw PackageException("Сетевой репозиторий не настроен")
+        val directory = objects.resolve(installed.directory)
+        val proof = readCheckedFile(directory.resolve("catalog-proof.json"), 128 * 1024)
+        val entry = repo.verifyEvidence(installed.manifest, proof)
+        requirePublishedHello(entry)
+        val expected = Files.newInputStream(directory.resolve("archive.hyp").toPath(), LinkOption.NOFOLLOW_LINKS).use {
+            verifier.verifiedEntrypoint(entry, it)
+        }
+        val installedBytes = readCheckedFile(directory.resolve("content").resolve(entry.manifest.entry), 16 * 1024)
+        val sha = MessageDigest.getInstance("SHA-256")
+        if (installedBytes.isEmpty() || !MessageDigest.isEqual(sha.digest(expected), sha.digest(installedBytes))) {
+            throw PackageException("Точка входа установленного пакета изменена")
+        }
+        installedBytes
+    }
+
+    private fun readCheckedFile(file: File, limit: Int): ByteArray =
+        Files.newInputStream(file.toPath(), LinkOption.NOFOLLOW_LINKS).use { readPackageBytes(it, limit) }
+
     fun install(name: String): List<PackageManifest> = synchronized(lock) {
         val current = registry.read()
         val entries = catalogEntries().associateBy { it.manifest.id }
         val id = resolveName(name, entries.keys)
         val requested = entries.getValue(id)
-        if (current[id]?.manifest?.version?.let { it >= requested.manifest.version } == true) {
-            return@synchronized emptyList()
+        val installed = current[id]
+        if (installed != null && installed.manifest.version >= requested.manifest.version) {
+            if (id != HELLO_TILE_ID || installed.hasSignedEvidence || installed.manifest != requested.manifest || requested.downloadUrl == null) {
+                return@synchronized emptyList()
+            }
+            // Only this published identity can re-download over a legacy equal-version installation.
+            requirePublishedHello(requested)
         }
         apply(current, plan(listOf(requested), current, entries))
     }
@@ -106,6 +141,7 @@ internal class HyprPackageManager(
         }
         val next = current - id
         registry.publish(next)
+        if (id == HELLO_TILE_ID) helloGeneration.value++
         prune(next)
         removed.manifest
     }
@@ -173,12 +209,17 @@ internal class HyprPackageManager(
                 staged.add(stage)
                 val source = if (entry.downloadUrl == null) artifactSource
                     else repository ?: throw PackageException("Сетевой репозиторий не настроен")
-                val manifest = source.open(entry).use { verifier.prepare(entry, it, stage) }
-                next[manifest.id] = InstalledPackage(manifest, stage.name)
+                val proof = if (entry.downloadUrl == null) null else repository?.signedEvidence(entry)
+                val manifest = source.open(entry).use { verifier.prepare(entry, it, stage, proof != null) }
+                proof?.let { evidence ->
+                    stage.resolve("catalog-proof.json").outputStream().use { it.write(evidence); it.fd.sync() }
+                }
+                next[manifest.id] = InstalledPackage(manifest, stage.name, proof != null)
                 manifest
             }
             registry.publish(next)
             published = true
+            if (next[HELLO_TILE_ID] != current[HELLO_TILE_ID]) helloGeneration.value++
             prune(next)
             return updates
         } finally {
@@ -212,6 +253,18 @@ internal fun deletePackageStaging(file: File) {
 
 internal const val DROIDFETCH_SAMPLE_ID = "hyprdroid.droidfetch-sample"
 
+
+internal const val HELLO_TILE_ID = "hello-tile"
+
+private fun requirePublishedHello(entry: CatalogPackage) {
+    val manifest = entry.manifest
+    if (entry.keyId != "github-v1" ||
+        entry.sha256 != "6b3eebbae549dea3cc6c2cf6ebafe327ca62ce4fbdf06feac184536ff25ff438" ||
+        manifest.id != HELLO_TILE_ID || manifest.version.toString() != "1.0.0" ||
+        manifest.apiVersion != 1 || manifest.runtime != "lua" || manifest.entry != "main.lua" ||
+        manifest.permissions != setOf("ui.tile") || manifest.dependencies.isNotEmpty()
+    ) throw PackageException("Эта версия Hello Tile не допущена к экспериментальному запуску")
+}
 
 private fun resolveName(name: String, ids: Set<String>): String {
     validatePackageId(name)

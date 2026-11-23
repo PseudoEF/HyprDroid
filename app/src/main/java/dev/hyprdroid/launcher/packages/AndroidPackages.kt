@@ -8,7 +8,7 @@ internal object AndroidPackages {
     internal const val SAMPLE_KEY_ID = "bundled-sample-v1"
     internal const val SAMPLE_PUBLIC_KEY = "fd0745ace1a4be23d7f618f2921bca733d206771753832df17c5f080d57d69da"
 
-    private val repositoryTrust = PackageRepositoryTrust(
+    internal val repositoryTrust = PackageRepositoryTrust(
         keyId = "github-v1",
         publicKey = "6c8604bfb78dcadbd20554d47c686b04d3ea98f6339eaa3a4b54ef5f2839c093",
         minimumRevision = 1,

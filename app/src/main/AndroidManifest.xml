@@ -22,6 +22,7 @@
         </intent>
     </queries>
     <application android:allowBackup="false" android:label="HyprDroid" android:theme="@style/Theme.HyprDroid" android:supportsRtl="true">
+        <service android:name=".external.ExternalLuaService" android:enabled="${externalLuaEnabled}" android:exported="false" android:isolatedProcess="true" />
         <service android:name=".plugins.LuaPluginService" android:exported="false" android:isolatedProcess="true" />
         <service android:name=".power.PowerDialogService" android:label="@string/power_service_label" android:exported="true" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>

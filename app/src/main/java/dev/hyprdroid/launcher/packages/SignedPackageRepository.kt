@@ -79,6 +79,27 @@ internal class SignedPackageRepository(
         download.read(checkNotNull(entry.downloadUrl), ARCHIVE_LIMIT).inputStream()
     }
 
+    @Synchronized
+    fun signedEvidence(entry: CatalogPackage): ByteArray {
+        val snapshot = load() ?: throw PackageException("Нет проверенного сетевого каталога")
+        val record = snapshot.records[entry.manifest.id]
+        if (record?.active != true || record.entry != entry) {
+            throw PackageException("Пакет не разрешён текущим каталогом")
+        }
+        return snapshot.envelope.copyOf()
+    }
+
+    @Synchronized
+    fun verifyEvidence(manifest: PackageManifest, bytes: ByteArray): CatalogPackage {
+        val proof = decode(bytes)
+        val record = proof.records[manifest.id]
+        val latest = load()?.records?.get(manifest.id)
+        if (record?.active != true || record.entry.manifest != manifest ||
+            latest?.active != true || latest.entry != record.entry
+        ) throw PackageException("Установленная версия не подтверждена действующим каталогом")
+        return record.entry
+    }
+
     private fun load(): Snapshot? {
         if (trust == null || !cache.exists()) return null
         return cached ?: decode(cache.inputStream().use { readPackageBytes(it, ENVELOPE_LIMIT) })
@@ -134,7 +155,7 @@ internal class SignedPackageRepository(
             }
             records[manifest.id] = Record(CatalogPackage(manifest, digest, artifactSignature, pinned.keyId, url), active)
         }
-        Snapshot(revision, payload, records)
+        Snapshot(revision, payload, records, bytes.copyOf())
     }
 
     private fun JSONObject.requireFields(vararg fields: String) {
@@ -142,7 +163,7 @@ internal class SignedPackageRepository(
     }
 
     private data class Record(val entry: CatalogPackage, val active: Boolean)
-    private data class Snapshot(val revision: Int, val payload: ByteArray, val records: Map<String, Record>)
+    private data class Snapshot(val revision: Int, val payload: ByteArray, val records: Map<String, Record>, val envelope: ByteArray)
 
     companion object {
         const val REPOSITORY = "PseudoEF/HyprDroid-Packages"

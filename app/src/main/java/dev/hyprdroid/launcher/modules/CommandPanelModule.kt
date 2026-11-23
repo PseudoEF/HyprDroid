@@ -98,7 +98,9 @@ internal object CommandPanelModule : TileModule {
                 droidfetch = { DroidFetchFormatter.format(DroidFetchSystem.read(context)) },
                 history = history,
                 tileCommands = tilePort?.let { port ->
-                    TileCommands(port) { AndroidPackages.manager(context).requireDroidFetchTileSample() }
+                    TileCommands(port, authorizeExternal = { AndroidPackages.manager(context).verifiedHelloTile() }) {
+                        AndroidPackages.manager(context).requireDroidFetchTileSample()
+                    }
                 },
                 packageCommands = PackageCommands { AndroidPackages.manager(context) },
                 luaPluginCommands = LuaPluginCommands(

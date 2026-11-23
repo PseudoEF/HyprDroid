@@ -1,0 +1,45 @@
+name: External Lua experimental Android
+on:
+  push:
+    branches: [feature/safe-external-lua-runtime]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;34.0.0 ndk;28.2.13676358 cmake;3.22.1'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build test-only APKs
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest -PexperimentalExternalLua=true
+      - name: Enable emulator hardware acceleration
+        run: sudo chmod 666 /dev/kvm
+      - name: Run native worker and Binder tests on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: ./gradlew :app:connectedDebugAndroidTest -PexperimentalExternalLua=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.external.ExternalLuaAndroidTest
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: external-lua-nondistributable-test-apk
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/reports/androidTests/connected/
+          if-no-files-found: warn

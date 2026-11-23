@@ -5,6 +5,8 @@ plugins {
 }
 val distribution = providers.environmentVariable("HYPRDROID_DISTRIBUTION").orNull == "true"
 // Local builds stay ahead of v0.6 (8); distributed codes must be allocated by CI.
+val externalLua = providers.gradleProperty("experimentalExternalLua").orNull == "true"
+require(!externalLua || !distribution) { "The external Lua experiment cannot be distributed by the release pipeline" }
 val buildCode = requireNotNull(providers.gradleProperty("buildVersionCode").orElse("17").get().toLongOrNull()) { "Invalid versionCode" }
 require(buildCode in 1..2_100_000_000L) { "buildVersionCode must be within Android's supported range" }
 val buildName = providers.gradleProperty("buildVersionName").orElse("0.9.0").get()
@@ -30,9 +32,23 @@ android {
         buildConfigField("String", "BUILD_COMMIT", "\"$buildCommit\"")
         buildConfigField("String", "BUILD_RUN_ID", "\"$buildRun\"")
         buildConfigField("boolean", "DISTRIBUTION", distribution.toString())
+        buildConfigField("boolean", "EXTERNAL_LUA", externalLua.toString())
+        manifestPlaceholders["externalLuaEnabled"] = externalLua.toString()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-    buildFeatures { compose = true; buildConfig = true }
+    buildFeatures { compose = true; buildConfig = true; aidl = externalLua }
+    if (externalLua) {
+        ndkVersion = "28.2.13676358"
+        defaultConfig.ndk.abiFilters += listOf("arm64-v8a", "x86_64")
+        externalNativeBuild.cmake {
+            path = file("src/externalLua/native/CMakeLists.txt")
+            version = "3.22.1"
+        }
+        sourceSets["main"].java.srcDir("src/externalLua/java")
+        sourceSets["main"].aidl.srcDir("src/externalLua/aidl")
+    } else {
+        sourceSets["main"].java.srcDir("src/noExternalLua/java")
+    }
     if (distribution) {
         signingConfigs.getByName("debug") {
             storeFile = file(requireNotNull(System.getenv("HYPRDROID_KEYSTORE_FILE")) { "Persistent signing key is required" })

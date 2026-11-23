@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import dev.hyprdroid.launcher.modules.LocalTileCommandPort
 import dev.hyprdroid.launcher.modules.TileCommandPort
 import dev.hyprdroid.launcher.packages.DROIDFETCH_SAMPLE_ID
+import dev.hyprdroid.launcher.packages.HELLO_TILE_ID
 import dev.hyprdroid.launcher.data.LauncherApp
 import dev.hyprdroid.launcher.modules.BuiltInModules
 import dev.hyprdroid.launcher.modules.LocalModuleEnvironment
@@ -70,6 +71,7 @@ internal fun TilingSurface(
     onAddWindow: (LayoutArea, Float) -> Unit = { _, _ -> },
     onAddWindowAt: (WindowId, LayoutArea, Float) -> Unit = { _, _, _ -> },
     onAddPluginTile: ((LayoutArea, Float) -> WindowId?)? = null,
+    onAddExternalTile: ((LayoutArea, Float) -> WindowId?)? = null,
     onRemovePluginTile: ((WindowId) -> Boolean)? = null,
     onLayoutArea: (LayoutArea) -> Unit = {},
     onResizeSplit: (SplitId, Float) -> Unit = { _, _ -> },
@@ -88,6 +90,7 @@ internal fun TilingSurface(
         val currentArea by rememberUpdatedState(area)
         val currentDensity by rememberUpdatedState(density.density)
         val addPlugin by rememberUpdatedState(onAddPluginTile)
+        val addExternal by rememberUpdatedState(onAddExternalTile)
         val removePlugin by rememberUpdatedState(onRemovePluginTile)
         val port = remember(onAddPluginTile != null && onRemovePluginTile != null) {
             if (onAddPluginTile == null || onRemovePluginTile == null) null
@@ -98,6 +101,11 @@ internal fun TilingSurface(
                         .filter { it.moduleId == DROIDFETCH_SAMPLE_ID }.map { it.windowId }
                 },
                 remove = { removePlugin?.invoke(it) == true },
+                addExternal = { addExternal?.invoke(currentArea, currentDensity) },
+                externalTiles = {
+                    currentEngine.windowsById().values
+                        .filter { it.moduleId == HELLO_TILE_ID }.map { it.windowId }
+                },
             )
         }
         val previewEngine = remember(engine) { mutableStateOf<WorkspaceEngine?>(null) }

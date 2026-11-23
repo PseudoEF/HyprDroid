@@ -24,7 +24,7 @@ class TileCommandsTest {
             authorize = { if (!authorized) throw PackageException("Сначала установите образец") },
         )
 
-        val wrong = commands.execute(listOf("add", "hello-tile")) as CommandResult.Output
+        val wrong = commands.execute(listOf("add", "community-tile")) as CommandResult.Output
         assertTrue(wrong.failed)
 
         val request = commands.execute(listOf("add", DROIDFETCH_SAMPLE_ID)) as CommandResult.Stream
