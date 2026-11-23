@@ -59,7 +59,8 @@ class ExternalTileLifecycleTest {
             click("Increment")
             awaitCount(1)
             scenario.moveToState(Lifecycle.State.CREATED)
-            scenario.moveToState(Lifecycle.State.RESUMED)
+        }
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             awaitCount(1)
             scenario.recreate()
             awaitCount(1)
