@@ -113,6 +113,7 @@ internal object ExperimentalExternalLua {
         val endpoint = AtomicReference<IExternalLua?>()
         val connection = object : ServiceConnection {
             override fun onServiceConnected(name: ComponentName, service: IBinder) {
+                if (closing.get()) return
                 try {
                     service.linkToDeath(death, 0)
                     val port = IExternalLua.Stub.asInterface(service)
@@ -134,10 +135,9 @@ internal object ExperimentalExternalLua {
                 connected.complete(null)
             }
         }
-        var bound = false
         val result = try {
             if (!authorized()) return PluginResult.Failure("Доверие к модулю отозвано")
-            bound = app.bindIsolatedService(
+            val bound = app.bindIsolatedService(
                 Intent(app, ExternalLuaService::class.java), Context.BIND_AUTO_CREATE,
                 "ext_${uuid.toString().replace('-', '_')}", app.mainExecutor, connection,
             )
@@ -173,7 +173,9 @@ internal object ExperimentalExternalLua {
                 } catch (_: IllegalArgumentException) {
                     // The system may have rejected the bind before registering it.
                 }
-                if (bound && withTimeoutOrNull(2_000) { died.await(); true } != true) {
+                // No Lua can start before the callback publishes a Binder. Revoking a
+                // pending bind must not block all future verified sessions.
+                if (port != null && withTimeoutOrNull(2_000) { died.await(); true } != true) {
                     uncertainDeath = true
                     Log.w("HyprLuaTile", "Worker death unconfirmed; new bindings blocked")
                 }
