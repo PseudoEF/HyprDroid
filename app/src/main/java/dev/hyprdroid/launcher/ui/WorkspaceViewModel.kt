@@ -357,6 +357,11 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
         tryCloseTilingWindow(workspaceId, windowId)
     }
 
+    internal fun tryCloseExternalTilingWindow(workspaceId: Int, windowId: WindowId): Boolean {
+        val id = engines[workspaceId]?.windowsById()?.get(windowId)?.moduleId ?: return false
+        return dev.hyprdroid.launcher.packages.allowsExternalTile(id) && tryCloseTilingWindow(workspaceId, windowId, id)
+    }
+
     internal fun tryCloseTilingWindow(workspaceId: Int, windowId: WindowId, expectedModule: String? = null): Boolean {
         val engine = engines[workspaceId] ?: return false
         if (expectedModule != null && engine.windowsById()[windowId]?.moduleId != expectedModule) return false

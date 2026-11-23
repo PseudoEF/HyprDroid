@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "packages": [
+    {
+      "manifest": {
+        "id": "clock-tile",
+        "version": "1.0.0",
+        "apiVersion": 2,
+        "runtime": "lua",
+        "entry": "main.lua",
+        "permissions": [
+          "ui.tile",
+          "state.local",
+          "system.time"
+        ],
+        "dependencies": {}
+      },
+      "sha256": "b79f614321d29e1fc1f9f4590aba68db4c5d237edf8ea0264c8f1f23b2839962",
+      "keyId": "v2-local-fixture",
+      "signature": "7ebe40a8cccd03ac3aa3c3190f48510cf7ae4b10a8c59045807d88b4b8f96f1e50f2ad53662dec71ea77ccf04165b623afca75e6253bcfbbb77c9185994e6c06"
+    },
+    {
+      "manifest": {
+        "id": "battery-tile",
+        "version": "1.0.0",
+        "apiVersion": 2,
+        "runtime": "lua",
+        "entry": "main.lua",
+        "permissions": [
+          "ui.tile",
+          "system.battery"
+        ],
+        "dependencies": {}
+      },
+      "sha256": "2b611ffa2ce602cf46a3a89452994c4fa19fbc4efbfef5eb5b550b4f13e56258",
+      "keyId": "v2-local-fixture",
+      "signature": "0adda955449f20034dd8f1e9b5fa931a7c78750a2bb1dced115be63e2737f1133e9d15c350d2a41027238a46faddb419536c297e26d1be232f3443269f98330c"
+    }
+  ]
+}

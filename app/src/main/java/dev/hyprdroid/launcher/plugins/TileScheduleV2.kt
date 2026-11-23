@@ -28,6 +28,8 @@ internal class TileScheduleV2 {
         return if (active) TileSignal.Resume else null
     }
 
+    fun delayUntilNext(nowMs: Long): Long? = deadlines.values.minOrNull()?.let { (it - nowMs).coerceAtLeast(1) }
+
     fun poll(nowMs: Long): List<TileSignal.Timer> {
         if (!active) return emptyList()
         val due = timers.filter { nowMs >= deadlines.getValue(it.id) }

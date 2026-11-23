@@ -34,7 +34,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.hyprdroid.launcher.BuildConfig
 import dev.hyprdroid.launcher.packages.DROIDFETCH_SAMPLE_ID
-import dev.hyprdroid.launcher.packages.HELLO_TILE_ID
+import dev.hyprdroid.launcher.packages.allowsExternalTile
+import dev.hyprdroid.launcher.modules.LocalExternalTileVisible
+import androidx.compose.runtime.CompositionLocalProvider
 import dev.hyprdroid.launcher.model.WORKSPACE_COUNT
 import dev.hyprdroid.launcher.model.WorkspaceAppearance
 import dev.hyprdroid.launcher.model.WorkspaceItem
@@ -96,13 +98,13 @@ internal fun WorkspaceScreen(model: WorkspaceViewModel, requestedScreen: String?
                 addPluginTile = { workspaceId, area, density ->
                     model.tryAddTilingWindow(workspaceId, area, density, null, DROIDFETCH_SAMPLE_ID)
                 },
-                addExternalTile = { workspaceId, area, density ->
-                    if (BuildConfig.EXTERNAL_LUA) model.tryAddTilingWindow(workspaceId, area, density, null, HELLO_TILE_ID)
+                addExternalTile = { workspaceId, area, density, id ->
+                    if (allowsExternalTile(id)) model.tryAddTilingWindow(workspaceId, area, density, null, id)
                     else null
                 },
                 removePluginTile = { workspaceId, id ->
                     model.tryCloseTilingWindow(workspaceId, id, DROIDFETCH_SAMPLE_ID) ||
-                        BuildConfig.EXTERNAL_LUA && model.tryCloseTilingWindow(workspaceId, id, HELLO_TILE_ID)
+                        model.tryCloseExternalTilingWindow(workspaceId, id)
                 },
                 reflowTiling = { workspaceId, area -> model.reflowTiling(workspaceId, area) },
                 closeTilingWindow = { workspaceId, windowId -> model.closeTilingWindow(workspaceId, windowId) },
@@ -144,7 +146,7 @@ internal data class ShellActions(
     val closeTilingSurface: (Int) -> Unit,
     internal val addTilingWindow: (Int, LayoutArea, Float, WindowId?) -> Unit,
     internal val addPluginTile: (Int, LayoutArea, Float) -> WindowId?,
-    internal val addExternalTile: (Int, LayoutArea, Float) -> WindowId?,
+    internal val addExternalTile: (Int, LayoutArea, Float, String) -> WindowId?,
     internal val removePluginTile: (Int, WindowId) -> Boolean,
     internal val reflowTiling: (Int, LayoutArea) -> Unit,
     internal val closeTilingWindow: (Int, WindowId) -> Unit,
@@ -328,7 +330,7 @@ internal fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdro
                 Box(Modifier.fillMaxSize().testTag("clean-workspace-$page")
                     .homeBlankGestures(!overlayOpen, true, openPresentation, openDrawer, openControl, revealDock))
                 val pageTiling = state.tiling.sessionFor(page)
-                if (pageTiling != null) {
+                if (pageTiling != null) CompositionLocalProvider(LocalExternalTileVisible provides (page == pager.settledPage)) {
                     TilingSurface(
                         engine = pageTiling.engine,
                         modifier = Modifier.fillMaxSize(),
@@ -345,7 +347,7 @@ internal fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdro
                             actions.addTilingWindow(page, area, density, id)
                         },
                         onAddPluginTile = { area, density -> actions.addPluginTile(page, area, density) },
-                        onAddExternalTile = { area, density -> actions.addExternalTile(page, area, density) },
+                        onAddExternalTile = { area, density, id -> actions.addExternalTile(page, area, density, id) },
                         onRemovePluginTile = { id -> actions.removePluginTile(page, id) },
                         onLayoutArea = { area -> actions.reflowTiling(page, area) },
                         onResizeSplit = { splitId, ratio -> actions.resizeTilingSplit(page, splitId, ratio) },

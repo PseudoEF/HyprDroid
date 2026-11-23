@@ -15,6 +15,8 @@ import java.util.concurrent.atomic.AtomicReference
 import dev.hyprdroid.launcher.BuildConfig
 import dev.hyprdroid.launcher.plugins.PluginResult
 import dev.hyprdroid.launcher.plugins.TileRequest
+import dev.hyprdroid.launcher.plugins.TileExecutionV2
+import dev.hyprdroid.launcher.plugins.TileFrameV2
 import java.util.UUID
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -42,37 +44,58 @@ internal object ExperimentalExternalLua {
         request: TileRequest,
         authorized: () -> Boolean = { true },
     ): PluginResult {
+        val event = when (request.event) {
+            null -> 0
+            "increment" -> 1
+            "reset" -> 2
+            else -> return PluginResult.Failure("Недопустимое событие Lua")
+        }
+        val state = request.state.encodeToByteArray()
+        if (state.size > 512) return PluginResult.Failure("Превышен размер Lua-запроса")
+        return execute<PluginResult>(context, source, state, event, null, authorized, { PluginResult.Failure(it) }, ::decodeFrame)
+    }
+
+    suspend fun runV2(
+        context: Context,
+        source: ByteArray,
+        request: TileExecutionV2,
+        authorized: () -> Boolean = { true },
+    ): TileFrameV2? {
+        val wire = encodeRequestV2(request)
+        return execute<TileFrameV2?>(context, source, wire.context, 0, wire, authorized, { null }) {
+            decodeFrameV2(it, wire.capabilities)
+        }
+    }
+
+    private suspend fun <T> execute(
+        context: Context, source: ByteArray, state: ByteArray, event: Int, v2: WireRequestV2?,
+        authorized: () -> Boolean, failure: (String) -> T, decode: (ByteArray) -> T,
+    ): T {
         var acquired = false
         try {
             if (withTimeoutOrNull(5_000) { workers.acquire(); acquired = true; true } != true) {
-                return PluginResult.Failure("Внешний Lua занят")
+                return failure("Внешний Lua занят")
             }
             if (!BuildConfig.EXTERNAL_LUA || uncertainDeath || excessiveFailures() || !authorized()) {
-                return PluginResult.Failure("Внешний Lua недоступен")
+                return failure("Внешний Lua недоступен")
             }
-            val event = when (request.event) {
-                null -> 0
-                "increment" -> 1
-                "reset" -> 2
-                else -> return PluginResult.Failure("Недопустимое событие Lua")
+            if (source.size !in 1..TILE_SOURCE_LIMIT) return failure("Превышен размер Lua-запроса")
+            return withContext(Dispatchers.IO) {
+                bind(context.applicationContext, source, state, event, v2, authorized, failure, decode)
             }
-            val state = request.state.encodeToByteArray()
-            if (source.size !in 1..16384 || state.size > 512) {
-                return PluginResult.Failure("Превышен размер Lua-запроса")
-            }
-            return withContext(Dispatchers.IO) { bind(context.applicationContext, source, state, event, authorized) }
         } finally {
             if (acquired) workers.release()
         }
     }
 
-    private suspend fun bind(
-        app: Context, source: ByteArray, state: ByteArray, event: Int, authorized: () -> Boolean,
-    ): PluginResult {
+    private suspend fun <T> bind(
+        app: Context, source: ByteArray, state: ByteArray, event: Int, v2: WireRequestV2?,
+        authorized: () -> Boolean, failure: (String) -> T, decode: (ByteArray) -> T,
+    ): T {
         val uuid = UUID.randomUUID()
         val id = uuid.mostSignificantBits.takeUnless { it == 0L } ?: 1L
         val connected = CompletableDeferred<IExternalLua?>()
-        val outcome = CompletableDeferred<PluginResult>()
+        val outcome = CompletableDeferred<T>()
         val died = CompletableDeferred<Unit>()
         val closing = AtomicBoolean(false)
         val replyClaimed = AtomicBoolean(false)
@@ -81,7 +104,7 @@ internal object ExperimentalExternalLua {
             Log.d("HyprLuaTile", "Worker Binder died; disposalRequested=${closing.get()}")
             if (!closing.get()) excessiveFailures(record = true)
             died.complete(Unit)
-            outcome.complete(PluginResult.Failure("Изолированный Lua worker завершился"))
+            outcome.complete(failure("Изолированный Lua worker завершился"))
         }
         val receiver = object : IExternalLuaReply.Stub() {
             private fun valid(session: Long, number: Int) =
@@ -95,15 +118,15 @@ internal object ExperimentalExternalLua {
                     return
                 }
                 val result = try {
-                    requireNotNull(frame).use { decodeFrame(checkedBytes(it, 16385)) }
+                    requireNotNull(frame).use { decode(checkedBytes(it, TILE_FRAME_LIMIT)) }
                 } catch (_: Exception) {
-                    PluginResult.Failure("Некорректный кадр внешнего Lua")
+                    failure("Некорректный кадр внешнего Lua")
                 }
                 outcome.complete(result)
             }
 
             override fun error(session: Long, number: Int, code: Int) {
-                if (valid(session, number)) outcome.complete(PluginResult.Failure(when (code) {
+                if (valid(session, number)) outcome.complete(failure(when (code) {
                     1 -> "Исчерпана память Lua VM"
                     2 -> "Lua завершился с ошибкой или превысил квоту"
                     else -> "Недопустимый Lua-запрос"
@@ -125,7 +148,7 @@ internal object ExperimentalExternalLua {
                 }
             }
             override fun onServiceDisconnected(name: ComponentName) {
-                outcome.complete(PluginResult.Failure("Связь с Lua worker потеряна"))
+                outcome.complete(failure("Связь с Lua worker потеряна"))
             }
             override fun onBindingDied(name: ComponentName) {
                 connected.complete(null)
@@ -136,28 +159,31 @@ internal object ExperimentalExternalLua {
             }
         }
         val result = try {
-            if (!authorized()) return PluginResult.Failure("Доверие к модулю отозвано")
+            if (!authorized()) return failure("Доверие к модулю отозвано")
             val bound = app.bindIsolatedService(
                 Intent(app, ExternalLuaService::class.java), Context.BIND_AUTO_CREATE,
                 "ext_${uuid.toString().replace('-', '_')}", app.mainExecutor, connection,
             )
-            if (!bound) return PluginResult.Failure("Android не запустил внешний Lua worker")
+            if (!bound) return failure("Android не запустил внешний Lua worker")
             withTimeoutOrNull(5_000) {
-                val port = connected.await() ?: return@withTimeoutOrNull PluginResult.Failure("Lua worker недоступен")
-                if (!authorized()) return@withTimeoutOrNull PluginResult.Failure("Доверие к модулю отозвано")
+                val port = connected.await() ?: return@withTimeoutOrNull failure("Lua worker недоступен")
+                if (!authorized()) return@withTimeoutOrNull failure("Доверие к модулю отозвано")
                 sealedBytes(source).use { entry ->
-                    sealedBytes(state).use { saved -> port.createSession(id, 1, entry, saved, receiver) }
+                    sealedBytes(state).use { saved ->
+                        if (v2 == null) port.createSession(id, 1, entry, saved, receiver)
+                        else port.createSessionV2(id, TILE_WIRE_V2, v2.capabilities, v2.event, entry, saved, receiver)
+                    }
                 }
-                if (!authorized()) return@withTimeoutOrNull PluginResult.Failure("Доверие к модулю отозвано")
+                if (!authorized()) return@withTimeoutOrNull failure("Доверие к модулю отозвано")
                 port.dispatchEvent(id, 1, event)
                 outcome.await()
-            } ?: PluginResult.Failure("Внешний Lua не ответил вовремя")
+            } ?: failure("Внешний Lua не ответил вовремя")
         } catch (_: android.os.RemoteException) {
-            PluginResult.Failure("Ошибка Binder внешнего Lua")
+            failure("Ошибка Binder внешнего Lua")
         } catch (_: android.system.ErrnoException) {
-            PluginResult.Failure("Ошибка памяти IPC внешнего Lua")
+            failure("Ошибка памяти IPC внешнего Lua")
         } catch (_: SecurityException) {
-            PluginResult.Failure("Android отклонил запуск внешнего Lua")
+            failure("Android отклонил запуск внешнего Lua")
         } finally {
             closing.set(true)
             Log.d("HyprLuaTile", "Worker binding closing")
@@ -186,6 +212,6 @@ internal object ExperimentalExternalLua {
                 }
             }
         }
-        return if (uncertainDeath) PluginResult.Failure("Остановка Lua worker не подтверждена") else result
+        return if (uncertainDeath) failure("Остановка Lua worker не подтверждена") else result
     }
 }

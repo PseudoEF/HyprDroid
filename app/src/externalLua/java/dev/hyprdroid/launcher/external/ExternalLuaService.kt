@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 internal object NativeLua {
     init { System.loadLibrary("hypr_external") }
+    external fun runV2(source: ByteArray, context: ByteArray, event: Int, capabilities: Int): ByteArray?
     external fun run(source: ByteArray, state: ByteArray, event: Int): ByteArray?
 }
 
@@ -30,6 +31,8 @@ class ExternalLuaService : Service() {
         val source: ByteArray,
         val state: ByteArray,
         val reply: IExternalLuaReply,
+        val capabilities: Int = 0,
+        val eventV2: Int? = null,
     )
 
     private fun authorized() = Binder.getCallingUid() == applicationInfo.uid &&
@@ -61,6 +64,31 @@ class ExternalLuaService : Service() {
         }
 
         @Synchronized
+        override fun createSessionV2(
+            id: Long, wireVersion: Int, capabilities: Int, eventKind: Int,
+            source: SharedMemory?, context: SharedMemory?, reply: IExternalLuaReply?,
+        ) {
+            try {
+                if (!authorized() || source == null || context == null || reply == null ||
+                    wireVersion != TILE_WIRE_V2 || capabilities !in 0..7 || eventKind !in 0..5 ||
+                    !gate.create(id, 2, expectedApi = 2)
+                ) return
+                val script = checkedBytes(source, TILE_SOURCE_LIMIT)
+                val payload = checkedBytes(context, TILE_CONTEXT_V2_LIMIT)
+                require(script.isNotEmpty() && script[0] != 0x1b.toByte() && 0.toByte() !in script)
+                reply.asBinder().linkToDeath({ terminate() }, 0)
+                request = Request(script, payload, reply, capabilities, eventKind)
+            } catch (_: OutOfMemoryError) {
+                terminate()
+            } catch (_: Exception) {
+                terminate()
+            } finally {
+                source?.close()
+                context?.close()
+            }
+        }
+
+        @Synchronized
         override fun dispatchEvent(id: Long, number: Int, event: Int) {
             if (!authorized()) return
             val current = request ?: return
@@ -75,7 +103,9 @@ class ExternalLuaService : Service() {
             }, 0, 25, TimeUnit.MILLISECONDS)
             worker.execute {
                 try {
-                    val frame = NativeLua.run(current.source, current.state, event)
+                    val frame = if (current.eventV2 != null) {
+                        NativeLua.runV2(current.source, current.state, current.eventV2, current.capabilities)
+                    } else NativeLua.run(current.source, current.state, event)
                     if (frame == null || frame.isEmpty() || frame[0] != 0.toByte()) {
                         current.reply.error(id, number, if (frame?.firstOrNull() == 1.toByte()) 1 else 2)
                     } else {

@@ -1,6 +1,7 @@
 package dev.hyprdroid.launcher.packages
 
 import android.content.Context
+import dev.hyprdroid.launcher.BuildConfig
 
 /** Repository trust is supplied by the APK. The installation sample uses its separate key. */
 internal object AndroidPackages {
@@ -20,17 +21,34 @@ internal object AndroidPackages {
     fun manager(context: Context): HyprPackageManager = instance ?: context.applicationContext.let { app ->
         val root = app.noBackupFilesDir.resolve("hypr-packages")
         val bundled = BundledPackageCatalog { app.assets.open("$ASSET_DIRECTORY/catalog.json") }
+        val fixtures = if (BuildConfig.V2_FIXTURE_LUA) BundledPackageCatalog {
+            app.assets.open("hypr-packages-v2/catalog.json")
+        }.packages() else emptyList()
+        val fixtureKey = if (fixtures.isNotEmpty()) mapOf(
+            V2_FIXTURE_KEY to "3867f800ab1be7fc442ee894ef3029a4e13c831bce4bf1f71338dd8cdb8e1b0f",
+        ) else emptyMap()
         val keys = mapOf(SAMPLE_KEY_ID to SAMPLE_PUBLIC_KEY) +
-            mapOf(repositoryTrust.keyId to repositoryTrust.publicKey)
+            mapOf(repositoryTrust.keyId to repositoryTrust.publicKey) + fixtureKey
         HyprPackageManager(
             root = root,
             catalog = bundled,
-            artifactSource = PackageArtifactSource { app.assets.open("$ASSET_DIRECTORY/${it.filename}") },
+            artifactSource = PackageArtifactSource {
+                val directory = if (it.keyId == V2_FIXTURE_KEY) "hypr-packages-v2" else ASSET_DIRECTORY
+                app.assets.open("$directory/${it.filename}")
+            },
             verifier = HypPackageVerifier(keys),
             repository = SignedPackageRepository(
                 repositoryTrust, root.resolve("github-catalog-v1.json"), GitHubPackageDownload,
-                bundled.packages().map { it.manifest.id }.toSet(),
+                (bundled.packages() + fixtures).map { it.manifest.id }.toSet(),
             ),
+            v2Fixtures = fixtures,
         ).also { instance = it }
     }
 }
+
+
+internal const val V2_FIXTURE_KEY = "v2-local-fixture"
+internal val v2FixtureIds = setOf("clock-tile", "battery-tile")
+
+internal fun allowsExternalTile(id: String): Boolean =
+    BuildConfig.EXTERNAL_LUA && (id == HELLO_TILE_ID || BuildConfig.V2_FIXTURE_LUA && id in v2FixtureIds)

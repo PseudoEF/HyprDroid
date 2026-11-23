@@ -24,7 +24,7 @@ jobs:
           packages: 'platform-tools platforms;android-35 build-tools;34.0.0 build-tools;35.0.0 ndk;28.2.13676358 cmake;3.22.1'
       - uses: gradle/actions/setup-gradle@v4
       - name: Build test-only APKs
-        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:testExperimentalUnitTest :app:assembleExperimental :app:assembleExperimentalAndroidTest -PtestExperimental=true
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:testExperimentalUnitTest :app:assembleExperimental :app:assembleExperimentalAndroidTest -PtestExperimental=true -Pv2FixtureLua=true
       - name: Verify APK identity, signature and native alignment
         run: |
           set -eu
@@ -59,7 +59,7 @@ jobs:
             adb shell pm path dev.hyprdroid.launcher.experimental &&
             sh scripts/ci-home.sh select &&
             adb shell am start -W -n dev.hyprdroid.launcher.experimental/dev.hyprdroid.launcher.MainActivity &&
-            ./gradlew :app:connectedExperimentalAndroidTest -PtestExperimental=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.external.ExternalLuaAndroidTest,dev.hyprdroid.launcher.external.ExternalTileLifecycleTest,dev.hyprdroid.launcher.external.ExternalLuaProtocolTest
+            ./gradlew :app:connectedExperimentalAndroidTest -PtestExperimental=true -Pv2FixtureLua=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.external.ExternalLuaAndroidTest,dev.hyprdroid.launcher.external.ExternalTileLifecycleTest,dev.hyprdroid.launcher.external.ExternalLuaProtocolTest,dev.hyprdroid.launcher.external.ExternalV2WorkerTest
       - uses: actions/upload-artifact@v4
         with:
           name: hyprdroid-experimental-apk

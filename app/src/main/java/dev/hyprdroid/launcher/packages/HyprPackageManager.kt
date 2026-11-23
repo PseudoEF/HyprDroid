@@ -16,6 +16,7 @@ internal class HyprPackageManager(
     private val verifier: HypPackageVerifier,
     private val registry: PackageRegistry = FilePackageRegistry(root),
     private val repository: SignedPackageRepository? = null,
+    private val v2Fixtures: List<CatalogPackage> = emptyList(),
 ) {
     private val lock = Any()
     private val objects = root.resolve("objects")
@@ -41,7 +42,7 @@ internal class HyprPackageManager(
             // A broken network cache must not make the bundled catalogue unusable.
             emptyList()
         }
-        return bundled + remote
+        return bundled + remote + v2Fixtures
     }
 
     fun available(query: String = ""): List<PackageManifest> {
@@ -103,6 +104,26 @@ internal class HyprPackageManager(
         installedBytes
     }
 
+    /** Fixed fixtures in the signed test APK pin the manifest, publisher, signature and digest. */
+    fun verifiedV2Fixture(id: String): Pair<PackageManifest, ByteArray> = synchronized(lock) {
+        val entry = v2Fixtures.singleOrNull { it.manifest.id == id && it.keyId == V2_FIXTURE_KEY }
+            ?: throw PackageException("Пакет v2 не допущен")
+        val local = registry.read()[id] ?: throw PackageException("Установите $id")
+        val manifest = entry.manifest
+        if (!local.hasSignedEvidence || local.manifest != manifest || manifest.apiVersion != 2 ||
+            "ui.tile" !in manifest.permissions || manifest.entry != "main.lua"
+        ) throw PackageException("Пакет v2 не прошёл проверку установки")
+        val directory = objects.resolve(local.directory)
+        val expected = Files.newInputStream(directory.resolve("archive.hyp").toPath(), LinkOption.NOFOLLOW_LINKS).use {
+            verifier.verifiedEntrypoint(entry, it)
+        }
+        val source = readCheckedFile(directory.resolve("content").resolve(manifest.entry), 16 * 1024)
+        if (source.isEmpty() || !MessageDigest.isEqual(source, expected)) {
+            throw PackageException("Точка входа установленного пакета изменена")
+        }
+        manifest to source
+    }
+
     private fun readCheckedFile(file: File, limit: Int): ByteArray =
         Files.newInputStream(file.toPath(), LinkOption.NOFOLLOW_LINKS).use { readPackageBytes(it, limit) }
 
@@ -141,7 +162,7 @@ internal class HyprPackageManager(
         }
         val next = current - id
         registry.publish(next)
-        if (id == HELLO_TILE_ID) helloGeneration.value++
+        if (id == HELLO_TILE_ID || v2Fixtures.any { it.manifest.id == id }) helloGeneration.value++
         prune(next)
         removed.manifest
     }
@@ -214,16 +235,19 @@ internal class HyprPackageManager(
                 val source = if (entry.downloadUrl == null) artifactSource
                     else repository ?: throw PackageException("Сетевой репозиторий не настроен")
                 val proof = if (entry.downloadUrl == null) null else repository?.signedEvidence(entry)
-                val manifest = source.open(entry).use { verifier.prepare(entry, it, stage, proof != null) }
+                val retain = proof != null || entry in v2Fixtures
+                val manifest = source.open(entry).use { verifier.prepare(entry, it, stage, retain) }
                 proof?.let { evidence ->
                     stage.resolve("catalog-proof.json").outputStream().use { it.write(evidence); it.fd.sync() }
                 }
-                next[manifest.id] = InstalledPackage(manifest, stage.name, proof != null)
+                next[manifest.id] = InstalledPackage(manifest, stage.name, retain)
                 manifest
             }
             registry.publish(next)
             published = true
-            if (next[HELLO_TILE_ID] != current[HELLO_TILE_ID]) helloGeneration.value++
+            if (next[HELLO_TILE_ID] != current[HELLO_TILE_ID] ||
+                v2Fixtures.any { next[it.manifest.id] != current[it.manifest.id] }
+            ) helloGeneration.value++
             prune(next)
             return updates
         } finally {

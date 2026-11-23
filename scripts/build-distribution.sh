@@ -13,6 +13,9 @@ HYPRDROID_BUILD_COMMIT="$baseline_commit" python3 scripts/verify-apk.py "$RUNNER
 set --
 if [ "${HYPRDROID_TEST_EXTERNAL_LUA:-false}" = true ]; then
   set -- -PexternalLuaOnMain=true
+  if [ "${HYPRDROID_TEST_V2_FIXTURES:-false}" = true ]; then
+    set -- "$@" -Pv2FixtureLua=true
+  fi
 fi
 ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest -PbuildVersionCode="$CODE_B" -PbuildVersionName=0.9.0 "$@" --no-daemon --stacktrace
 cp app/build/outputs/apk/debug/app-debug.apk "$destination/HyprDroid-0.9.0-$CODE_B.apk"

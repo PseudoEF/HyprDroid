@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.dp
 import dev.hyprdroid.launcher.modules.LocalTileCommandPort
 import dev.hyprdroid.launcher.modules.TileCommandPort
 import dev.hyprdroid.launcher.packages.DROIDFETCH_SAMPLE_ID
-import dev.hyprdroid.launcher.packages.HELLO_TILE_ID
+import dev.hyprdroid.launcher.packages.allowsExternalTile
 import dev.hyprdroid.launcher.data.LauncherApp
 import dev.hyprdroid.launcher.modules.BuiltInModules
 import dev.hyprdroid.launcher.modules.LocalModuleEnvironment
@@ -71,7 +71,7 @@ internal fun TilingSurface(
     onAddWindow: (LayoutArea, Float) -> Unit = { _, _ -> },
     onAddWindowAt: (WindowId, LayoutArea, Float) -> Unit = { _, _, _ -> },
     onAddPluginTile: ((LayoutArea, Float) -> WindowId?)? = null,
-    onAddExternalTile: ((LayoutArea, Float) -> WindowId?)? = null,
+    onAddExternalTile: ((LayoutArea, Float, String) -> WindowId?)? = null,
     onRemovePluginTile: ((WindowId) -> Boolean)? = null,
     onLayoutArea: (LayoutArea) -> Unit = {},
     onResizeSplit: (SplitId, Float) -> Unit = { _, _ -> },
@@ -101,10 +101,10 @@ internal fun TilingSurface(
                         .filter { it.moduleId == DROIDFETCH_SAMPLE_ID }.map { it.windowId }
                 },
                 remove = { removePlugin?.invoke(it) == true },
-                addExternal = { addExternal?.invoke(currentArea, currentDensity) },
+                addExternal = { id -> addExternal?.invoke(currentArea, currentDensity, id) },
                 externalTiles = {
                     currentEngine.windowsById().values
-                        .filter { it.moduleId == HELLO_TILE_ID }.map { it.windowId }
+                        .filter { allowsExternalTile(it.moduleId) }.map { it.windowId to it.moduleId }
                 },
             )
         }

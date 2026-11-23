@@ -47,6 +47,11 @@ if [ "${HYPRDROID_TEST_EXTERNAL_LUA:-false}" = true ]; then
   cat "$report/external-lua.txt"
   grep -q 'OK (7 tests)' "$report/external-lua.txt"
 fi
+if [ "${HYPRDROID_TEST_V2_FIXTURES:-false}" = true ]; then
+  adb shell am instrument -w -r -e class dev.hyprdroid.launcher.external.ExternalV2WorkerTest     "$package.test/androidx.test.runner.AndroidJUnitRunner" > "$report/external-lua-v2.txt"
+  cat "$report/external-lua-v2.txt"
+  grep -q 'OK (2 tests)' "$report/external-lua-v2.txt"
+fi
 sh scripts/ci-home.sh select > "$report/home-registration.txt"
 cat "$report/home-registration.txt"
 echo "Update v0.9.0 (10095) -> v0.9.0 ($CODE_B) succeeded; UID, firstInstallTime and DataStore preserved" | tee "$report/result.txt"

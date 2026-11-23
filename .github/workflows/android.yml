@@ -49,6 +49,7 @@ jobs:
     env:
       HYPRDROID_DISTRIBUTION: 'true'
       HYPRDROID_BUILD_COMMIT: ${{ github.sha }}
+      HYPRDROID_TEST_V2_FIXTURES: ${{ (inputs.external_lua && github.ref == 'refs/heads/feature/plugin-api-v2') && 'true' || 'false' }}
       HYPRDROID_TEST_EXTERNAL_LUA: ${{ inputs.external_lua && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v4

@@ -13,7 +13,11 @@ internal object BuiltInModules {
                 CommandPanelModule,
                 DroidFetchModule,
                 DroidFetchTileModule,
-            ) + listOfNotNull(ExternalHelloTileModule.takeIf { BuildConfig.EXTERNAL_LUA }),
+            ) + listOfNotNull(ExternalHelloTileModule.takeIf { BuildConfig.EXTERNAL_LUA }) +
+                if (BuildConfig.V2_FIXTURE_LUA) listOf(
+                    ExternalV2TileModule("clock-tile", "Clock Tile"),
+                    ExternalV2TileModule("battery-tile", "Battery Tile"),
+                ) else emptyList(),
         )
     }
 }

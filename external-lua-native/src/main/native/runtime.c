@@ -3,6 +3,7 @@
 #include <lua.h>
 #include <lauxlib.h>
 #include <limits.h>
+#include <math.h>
 #include <signal.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -35,6 +36,10 @@ typedef struct {
     const char *state;
     size_t state_len;
     int event;
+    int api;
+    int capabilities;
+    unsigned timer_count;
+    struct { char id[33]; lua_Integer ms; } timers[2];
 } Runtime;
 
 static size_t align_size(size_t value) {
@@ -139,8 +144,29 @@ static void node(lua_State *L, int table, unsigned depth) {
         const char *value = lua_tolstring(L, -1, &n);
         token(L, value, n);
         lua_pop(L, 1);
+    } else if (r->api == 2 && !strcmp(kind, "divider")) {
+        /* Divider has no payload. */
+    } else if (r->api == 2 && !strcmp(kind, "icon")) {
+        const char *name = field(L, table, "glyph", &n);
+        token(L, name, n);
+        lua_pop(L, 1);
+    } else if (r->api == 2 && (!strcmp(kind, "switch") || !strcmp(kind, "textInput"))) {
+        const char *id = field(L, table, "id", &n);
+        token(L, id, n);
+        lua_pop(L, 1);
+        if (!strcmp(kind, "switch")) {
+            lua_pushliteral(L, "value");
+            lua_rawget(L, table);
+            if (!lua_isboolean(L, -1)) luaL_error(L, "boolean required");
+            int value = lua_toboolean(L, -1);
+            token(L, value ? "true" : "false", value ? 4 : 5);
+        } else {
+            const char *value = field(L, table, "value", &n);
+            token(L, value, n);
+        }
+        lua_pop(L, 1);
     } else if (!strcmp(kind, "row") || !strcmp(kind, "column") || !strcmp(kind, "card") ||
-               !strcmp(kind, "scrollableColumn")) {
+               !strcmp(kind, "scrollableColumn") || (r->api == 2 && !strcmp(kind, "list"))) {
         lua_pushliteral(L, "children");
         lua_rawget(L, table);
         if (!lua_istable(L, -1)) luaL_error(L, "children required");
@@ -163,7 +189,7 @@ static void node(lua_State *L, int table, unsigned depth) {
 
 static int render(lua_State *L) {
     Runtime *r = runtime(L);
-    r->used = 0;
+    r->used = r->api == 2 ? 2 : 0;
     r->nodes = 0;
     node(L, 1, 1);
     return 0;
@@ -245,6 +271,8 @@ static int execute(lua_State *L) {
     return 0;
 }
 
+#include "runtime_v2.inc"
+
 static int deadline(timer_t *timer) {
     struct sigevent event = {.sigev_notify = SIGEV_SIGNAL, .sigev_signo = SIGKILL};
     struct itimerspec limit = {.it_value = {.tv_sec = 1}};
@@ -254,16 +282,13 @@ static int deadline(timer_t *timer) {
     return 0;
 }
 
-JNIEXPORT jbyteArray JNICALL
-Java_dev_hyprdroid_launcher_external_NativeLua_run(JNIEnv *env, jobject self, jbyteArray input,
-                                                    jbyteArray state, jint event) {
-    (void)self;
+static jbyteArray run(JNIEnv *env, jbyteArray input, jbyteArray state, jint event, int api, int capabilities) {
     jsize n = (*env)->GetArrayLength(env, input), state_len = (*env)->GetArrayLength(env, state);
-    if (n <= 0 || n > (jsize) SOURCE_LIMIT || state_len > 512 || event < 0 || event > 2) return NULL;
+    if (n <= 0 || n > (jsize) SOURCE_LIMIT || state_len > (api == 2 ? 2048 : 512) || event < 0 || event > (api == 2 ? 5 : 2) || capabilities < 0 || capabilities > 7) return NULL;
     timer_t timer;
     if (!deadline(&timer)) return NULL;
     unsigned char source[SOURCE_LIMIT];
-    char saved[512];
+    char saved[2048];
     (*env)->GetByteArrayRegion(env, input, 0, n, (jbyte *)source);
     (*env)->GetByteArrayRegion(env, state, 0, state_len, (jbyte *)saved);
     jbyteArray result = NULL;
@@ -276,7 +301,7 @@ Java_dev_hyprdroid_launcher_external_NativeLua_run(JNIEnv *env, jobject self, jb
             for (;;) pause();
         }
         Runtime r = {.source = source, .source_len = (size_t)n, .state = saved,
-                     .state_len = (size_t)state_len, .event = event, .cpu_started = cpu_time()};
+                     .state_len = (size_t)state_len, .event = event, .api = api, .capabilities = capabilities, .cpu_started = cpu_time()};
         r.first = malloc(ARENA);
         int status = LUA_ERRMEM;
         if (r.first) {
@@ -284,7 +309,7 @@ Java_dev_hyprdroid_launcher_external_NativeLua_run(JNIEnv *env, jobject self, jb
             lua_State *L = lua_newstate(arena_alloc, &r);
             if (L) {
                 lua_sethook(L, hook, LUA_MASKCOUNT, 250);
-                lua_pushcfunction(L, execute);
+                lua_pushcfunction(L, api == 2 ? execute_v2 : execute);
                 status = lua_pcall(L, 0, 0, 0);
                 lua_close(L);
             }
@@ -300,4 +325,18 @@ Java_dev_hyprdroid_launcher_external_NativeLua_run(JNIEnv *env, jobject self, jb
     }
     if (timer_delete(timer)) raise(SIGKILL);
     return result;
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_dev_hyprdroid_launcher_external_NativeLua_run(JNIEnv *env, jobject self, jbyteArray input,
+                                                    jbyteArray state, jint event) {
+    (void)self;
+    return run(env, input, state, event, 1, 0);
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_dev_hyprdroid_launcher_external_NativeLua_runV2(JNIEnv *env, jobject self, jbyteArray input,
+                                                      jbyteArray context, jint event, jint capabilities) {
+    (void)self;
+    return run(env, input, context, event, 2, capabilities);
 }

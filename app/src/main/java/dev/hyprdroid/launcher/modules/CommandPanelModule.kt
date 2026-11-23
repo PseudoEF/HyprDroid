@@ -98,7 +98,11 @@ internal object CommandPanelModule : TileModule {
                 droidfetch = { DroidFetchFormatter.format(DroidFetchSystem.read(context)) },
                 history = history,
                 tileCommands = tilePort?.let { port ->
-                    TileCommands(port, authorizeExternal = { AndroidPackages.manager(context).verifiedHelloTile() }) {
+                    TileCommands(port, authorizeExternal = { id ->
+                        val manager = AndroidPackages.manager(context)
+                        if (id == dev.hyprdroid.launcher.packages.HELLO_TILE_ID) manager.verifiedHelloTile()
+                        else manager.verifiedV2Fixture(id)
+                    }) {
                         AndroidPackages.manager(context).requireDroidFetchTileSample()
                     }
                 },
