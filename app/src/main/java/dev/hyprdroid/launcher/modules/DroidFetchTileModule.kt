@@ -1,5 +1,13 @@
 package dev.hyprdroid.launcher.modules
 
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.ui.text.input.ImeAction
+import dev.hyprdroid.launcher.plugins.TileInteraction
+import dev.hyprdroid.launcher.plugins.validTileInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -95,23 +103,45 @@ internal object DroidFetchTileModule : TileModule {
 
 @Composable
 internal fun RenderTile(node: TileNode, modifier: Modifier, enabled: Boolean, onEvent: (String) -> Unit) {
+    RenderTileTree(node, modifier, enabled) { if (it is TileInteraction.Click) onEvent(it.id) }
+}
+
+@Composable
+internal fun RenderTileTree(node: TileNode, modifier: Modifier, enabled: Boolean, onEvent: (TileInteraction) -> Unit) {
     when (node) {
         is TileNode.Text -> Text(
             node.text, modifier, color = Mocha.Text,
             style = MaterialTheme.typography.bodySmall, maxLines = 6, overflow = TextOverflow.Ellipsis,
         )
-        is TileNode.Button -> Button(onClick = { onEvent(node.id) }, enabled = enabled, modifier = modifier) {
+        is TileNode.Button -> Button(onClick = { onEvent(TileInteraction.Click(node.id)) }, enabled = enabled, modifier = modifier) {
             Text(node.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         is TileNode.Progress -> LinearProgressIndicator(progress = { node.fraction }, modifier = modifier.fillMaxWidth())
         is TileNode.Spacer -> Spacer(modifier.height(node.size.dp))
+        TileNode.Divider -> HorizontalDivider(modifier)
+        is TileNode.Switch -> Switch(node.value, { onEvent(TileInteraction.Toggle(node.id, it)) }, modifier, enabled)
+        is TileNode.TextInput -> OutlinedTextField(
+            value = node.value,
+            onValueChange = { if (validTileInput(it)) onEvent(TileInteraction.Change(node.id, it)) },
+            modifier = modifier,
+            enabled = enabled,
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { onEvent(TileInteraction.Submit(node.id, node.value)) }),
+        )
+        is TileNode.Icon -> Text(when (node.glyph.name) {
+            "CLOCK" -> "◷"
+            "BATTERY" -> "▰"
+            "REFRESH" -> "↻"
+            else -> "ⓘ"
+        }, modifier, color = Mocha.Text)
         is TileNode.Group -> {
             val children: @Composable () -> Unit = {
-                node.children.forEach { RenderTile(it, Modifier.fillMaxWidth(), enabled, onEvent) }
+                node.children.forEach { RenderTileTree(it, Modifier.fillMaxWidth(), enabled, onEvent) }
             }
             when (node.element) {
                 TileElement.ROW -> Row(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    node.children.forEach { RenderTile(it, Modifier.weight(1f), enabled, onEvent) }
+                    node.children.forEach { RenderTileTree(it, Modifier.weight(1f), enabled, onEvent) }
                 }
                 TileElement.CARD -> Card(modifier) {
                     Column(Modifier.padding(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { children() }

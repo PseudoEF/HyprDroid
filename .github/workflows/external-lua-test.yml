@@ -1,7 +1,7 @@
 name: External Lua experimental Android
 on:
   push:
-    branches: [feature/safe-external-lua-runtime, feature/lua-runtime-hardening]
+    branches: [feature/safe-external-lua-runtime, feature/lua-runtime-hardening, feature/plugin-api-v2]
   workflow_dispatch:
 
 permissions:

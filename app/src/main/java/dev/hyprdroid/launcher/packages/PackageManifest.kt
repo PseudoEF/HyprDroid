@@ -58,12 +58,18 @@ internal data class PackageManifest(
         private val fields = setOf("id", "version", "apiVersion", "runtime", "entry", "permissions", "dependencies")
         private val permissionsV1 = setOf("terminal.print", "system.device", "system.battery", "ui.window", "ui.tile")
 
+        private val permissionsV2 = setOf("ui.tile", "state.local", "system.battery", "system.time")
+
         fun decode(json: JSONObject): PackageManifest {
             if (json.keys().asSequence().toSet() != fields) throw PackageException("Некорректные поля манифеста")
             val id = validatePackageId(json.requiredString("id"))
             val version = PackageVersion.parse(json.requiredString("version"))
             val api = json.get("apiVersion") as? Int
-            if (api != 1) throw PackageException("Неподдерживаемая версия Plugin API")
+            val allowedPermissions = when (api) {
+                1 -> permissionsV1
+                2 -> permissionsV2
+                else -> throw PackageException("Неподдерживаемая версия Plugin API")
+            }
             val runtime = json.requiredString("runtime")
             if (runtime != "lua") throw PackageException("Неподдерживаемый runtime")
             val entry = json.requiredString("entry")
@@ -71,11 +77,13 @@ internal data class PackageManifest(
             if (!entry.endsWith(".lua")) throw PackageException("Точка входа должна быть файлом Lua")
 
             val permissions = json.getJSONArray("permissions")
-            if (permissions.length() > permissionsV1.size) throw PackageException("Слишком много разрешений")
+            if (permissions.length() > allowedPermissions.size) throw PackageException("Слишком много разрешений")
             val grants = (0 until permissions.length()).map { permissions.get(it) as? String }.toSet()
-            if (grants.size != permissions.length() || grants.any { it !in permissionsV1 }) {
+            if (grants.size != permissions.length() || grants.any { it !in allowedPermissions }) {
                 throw PackageException("Неизвестные или повторяющиеся разрешения")
             }
+
+            if (api == 2 && "ui.tile" !in grants) throw PackageException("Plugin API v2 требует ui.tile")
 
             val dependencies = json.getJSONObject("dependencies")
             if (dependencies.length() > 16) throw PackageException("Слишком много зависимостей")
