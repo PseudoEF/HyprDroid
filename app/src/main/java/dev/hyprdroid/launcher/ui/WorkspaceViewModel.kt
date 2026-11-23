@@ -361,7 +361,7 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
         val engine = engines[workspaceId] ?: return false
         if (expectedModule != null && engine.windowsById()[windowId]?.moduleId != expectedModule) return false
         if (!engine.removeWindow(windowId)) return false
-        save { engineStore.save(workspaceId.toString(), engine) }
+        save { engineStore.save(workspaceId.toString(), engine, removedTile = windowId) }
         if (engine.root == null) hideTilingSession(workspaceId)
         else publishTiling(workspaceId, engine)
         return true

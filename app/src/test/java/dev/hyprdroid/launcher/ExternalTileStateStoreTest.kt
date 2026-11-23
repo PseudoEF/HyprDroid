@@ -41,7 +41,7 @@ class ExternalTileStateStoreTest {
             assertEquals("2", second.tileState(two))
             assertEquals("", second.tileState(one.copy(schema = 2)))
             assertEquals("", second.tileState(one.copy(packageId = "other")))
-            second.save("0", WorkspaceEngine())
+            second.save("0", WorkspaceEngine(), removedTile = one.windowId)
             assertEquals("", second.tileState(one))
             assertEquals("2", second.tileState(two))
             assertThrows(IOException::class.java) { runBlocking { second.saveTileState(one, "", "late") } }

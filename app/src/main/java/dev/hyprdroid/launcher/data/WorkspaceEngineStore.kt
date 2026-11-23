@@ -24,20 +24,16 @@ private val Context.workspaceEngineStore by preferencesDataStore(
 internal class WorkspaceEngineStore(private val store: DataStore<Preferences>) {
     constructor(context: Context) : this(context.applicationContext.workspaceEngineStore)
 
-    suspend fun save(workspaceId: String, engine: WorkspaceEngine) {
+    suspend fun save(workspaceId: String, engine: WorkspaceEngine, removedTile: WindowId? = null) {
         val serialized = engine.serialize()
-        val remaining = engine.windowsById().keys.mapTo(hashSetOf()) { it.value }
+        require(removedTile == null || removedTile !in engine.windowsById())
         store.edit { preferences ->
-            val key = stringPreferencesKey("engine/$workspaceId")
-            val removed = preferences[key]?.let {
-                WorkspaceEngine().deserialize(it).windowsById().keys.map { id -> id.value }.toSet() - remaining
-            }.orEmpty()
-            if (removed.isNotEmpty()) {
+            if (removedTile != null) {
                 preferences.asMap().keys.filter { key ->
-                    key.name.startsWith(TILE_STATE_PREFIX) && key.name.substringAfterLast('/') in removed
+                    key.name.startsWith(TILE_STATE_PREFIX) && key.name.substringAfterLast('/') == removedTile.value
                 }.forEach { preferences.remove(stringPreferencesKey(it.name)) }
             }
-            preferences[key] = serialized
+            preferences[stringPreferencesKey("engine/$workspaceId")] = serialized
         }
     }
 
