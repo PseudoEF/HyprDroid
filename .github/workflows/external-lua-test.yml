@@ -21,10 +21,24 @@ jobs:
           java-version: '17'
       - uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools platforms;android-35 build-tools;34.0.0 ndk;28.2.13676358 cmake;3.22.1'
+          packages: 'platform-tools platforms;android-35 build-tools;34.0.0 build-tools;35.0.0 ndk;28.2.13676358 cmake;3.22.1'
       - uses: gradle/actions/setup-gradle@v4
       - name: Build test-only APKs
-        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest -PexperimentalExternalLua=true
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:testExperimentalUnitTest :app:assembleExperimental :app:assembleExperimentalAndroidTest -PtestExperimental=true
+      - name: Verify APK identity, signature and native alignment
+        run: |
+          set -eu
+          apk=app/build/outputs/apk/experimental/app-experimental.apk
+          tools="$ANDROID_HOME/build-tools/34.0.0"
+          "$tools/apksigner" verify --verbose --print-certs "$apk"
+          "$tools/aapt" dump badging "$apk" > experimental-badging.txt
+          grep -F "package: name='dev.hyprdroid.launcher.experimental'" experimental-badging.txt
+          grep -F "application-label:'HyprDroid Experimental'" experimental-badging.txt
+          grep -F "launchable-activity: name='dev.hyprdroid.launcher.MainActivity'" experimental-badging.txt
+          grep -F "'arm64-v8a'" experimental-badging.txt
+          grep -F "sdkVersion:'29'" experimental-badging.txt
+          "$tools/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk | grep -F "package: name='dev.hyprdroid.launcher'"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 4 "$apk"
       - name: Enable emulator hardware acceleration
         run: sudo chmod 666 /dev/kvm
       - name: Run native worker and Binder tests on Android
@@ -34,12 +48,21 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest -PexperimentalExternalLua=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.external.ExternalLuaAndroidTest
+          script: |
+            adb install app/build/outputs/apk/debug/app-debug.apk &&
+            adb install app/build/outputs/apk/experimental/app-experimental.apk &&
+            adb shell pm path dev.hyprdroid.launcher &&
+            adb shell pm path dev.hyprdroid.launcher.experimental &&
+            adb shell am start -W -n dev.hyprdroid.launcher.experimental/dev.hyprdroid.launcher.MainActivity &&
+            ./gradlew :app:connectedExperimentalAndroidTest -PtestExperimental=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.external.ExternalLuaAndroidTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hyprdroid-experimental-apk
+          path: app/build/outputs/apk/experimental/app-experimental.apk
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: external-lua-nondistributable-test-apk
-          path: |
-            app/build/outputs/apk/debug/app-debug.apk
-            app/build/reports/androidTests/connected/
+          name: hyprdroid-experimental-test-report
+          path: app/build/reports/androidTests/connected/
           if-no-files-found: warn

@@ -1,5 +1,7 @@
 package dev.hyprdroid.launcher.external
 
+import android.content.ComponentName
+import android.content.pm.ServiceInfo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.hyprdroid.launcher.BuildConfig
@@ -8,6 +10,8 @@ import dev.hyprdroid.launcher.plugins.TileRequest
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Before
@@ -23,6 +27,18 @@ class ExternalLuaAndroidTest {
     @Before
     fun optInOnly() {
         assumeTrue(BuildConfig.EXTERNAL_LUA)
+    }
+
+    @Test
+    fun experimentalAppUsesPrivateWorkerAndItsOwnPackageStorage() {
+        assertEquals("dev.hyprdroid.launcher.experimental", app.packageName)
+        assertEquals("HyprDroid Experimental", app.applicationInfo.loadLabel(app.packageManager).toString())
+        assertTrue(app.noBackupFilesDir.parentFile?.name == app.packageName)
+        assertNotNull(app.packageManager.getLaunchIntentForPackage(app.packageName))
+        val component = ComponentName(app.packageName, "dev.hyprdroid.launcher.external.ExternalLuaService")
+        val service = app.packageManager.getServiceInfo(component, 0)
+        assertFalse(service.exported)
+        assertTrue(service.flags and ServiceInfo.FLAG_ISOLATED_PROCESS != 0)
     }
 
     @Test

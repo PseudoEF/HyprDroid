@@ -5,8 +5,9 @@ plugins {
 }
 val distribution = providers.environmentVariable("HYPRDROID_DISTRIBUTION").orNull == "true"
 // Local builds stay ahead of v0.6 (8); distributed codes must be allocated by CI.
-val externalLua = providers.gradleProperty("experimentalExternalLua").orNull == "true"
-require(!externalLua || !distribution) { "The external Lua experiment cannot be distributed by the release pipeline" }
+val testExperimental = providers.gradleProperty("testExperimental").orNull == "true"
+val coreApplicationId = "dev.hyprdroid.launcher"
+val experimentalApplicationId = "$coreApplicationId.experimental"
 val buildCode = requireNotNull(providers.gradleProperty("buildVersionCode").orElse("17").get().toLongOrNull()) { "Invalid versionCode" }
 require(buildCode in 1..2_100_000_000L) { "buildVersionCode must be within Android's supported range" }
 val buildName = providers.gradleProperty("buildVersionName").orElse("0.9.0").get()
@@ -24,7 +25,7 @@ android {
     namespace = "dev.hyprdroid.launcher"
     compileSdk = 35
     defaultConfig {
-        applicationId = "dev.hyprdroid.launcher"
+        applicationId = coreApplicationId
         minSdk = 29
         targetSdk = 35
         versionCode = buildCode.toInt()
@@ -32,23 +33,23 @@ android {
         buildConfigField("String", "BUILD_COMMIT", "\"$buildCommit\"")
         buildConfigField("String", "BUILD_RUN_ID", "\"$buildRun\"")
         buildConfigField("boolean", "DISTRIBUTION", distribution.toString())
-        buildConfigField("boolean", "EXTERNAL_LUA", externalLua.toString())
-        manifestPlaceholders["externalLuaEnabled"] = externalLua.toString()
+        buildConfigField("boolean", "EXTERNAL_LUA", "false")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-    buildFeatures { compose = true; buildConfig = true; aidl = externalLua }
-    if (externalLua) {
-        ndkVersion = "28.2.13676358"
-        defaultConfig.ndk.abiFilters += listOf("arm64-v8a", "x86_64")
-        externalNativeBuild.cmake {
-            path = file("src/externalLua/native/CMakeLists.txt")
-            version = "3.22.1"
+    buildFeatures { compose = true; buildConfig = true; aidl = true }
+    testBuildType = if (testExperimental) "experimental" else "debug"
+    buildTypes {
+        create("experimental") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".experimental"
+            matchingFallbacks += "debug"
+            buildConfigField("boolean", "DISTRIBUTION", "false")
+            buildConfigField("boolean", "EXTERNAL_LUA", "true")
         }
-        sourceSets["main"].java.srcDir("src/externalLua/java")
-        sourceSets["main"].aidl.srcDir("src/externalLua/aidl")
-    } else {
-        sourceSets["main"].java.srcDir("src/noExternalLua/java")
     }
+    sourceSets["experimental"].java.srcDir("src/externalLua/java")
+    sourceSets["experimental"].aidl.srcDir("src/externalLua/aidl")
+    listOf("debug", "release").forEach { sourceSets[it].java.srcDir("src/noExternalLua/java") }
     if (distribution) {
         signingConfigs.getByName("debug") {
             storeFile = file(requireNotNull(System.getenv("HYPRDROID_KEYSTORE_FILE")) { "Persistent signing key is required" })
@@ -59,26 +60,41 @@ android {
             keyPassword = storePassword
         }
     }
-    sourceSets["main"].assets.srcDir(layout.buildDirectory.dir("generated/buildInfoAssets"))
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
 }
-val generateBuildIdentity = tasks.register("generateBuildIdentity") {
-    val output = layout.buildDirectory.file("generated/buildInfoAssets/build-info.json")
-    inputs.properties(mapOf("versionCode" to buildCode, "versionName" to buildName, "commit" to buildCommit, "runId" to buildRun, "distribution" to distribution))
-    outputs.file(output)
-    doLast {
-        output.get().asFile.apply {
+abstract class GenerateBuildIdentity : DefaultTask() {
+    @get:Input abstract val identity: Property<String>
+    @get:OutputDirectory abstract val output: DirectoryProperty
+
+    @TaskAction fun generate() {
+        output.file("build-info.json").get().asFile.apply {
             parentFile.mkdirs()
-            writeText("""{"applicationId":"dev.hyprdroid.launcher","versionCode":$buildCode,"versionName":"$buildName","commit":"$buildCommit","runId":"$buildRun","distribution":$distribution}""")
+            writeText(identity.get())
         }
     }
 }
-tasks.named("preBuild").configure { dependsOn(generateBuildIdentity) }
+
+androidComponents {
+    beforeVariants(selector().withBuildType("experimental")) { variant ->
+        variant.enable = !distribution
+    }
+    onVariants { variant ->
+        val experimental = variant.buildType == "experimental"
+        val id = if (experimental) experimentalApplicationId else coreApplicationId
+        val variantName = variant.name.replaceFirstChar { it.uppercaseChar() }
+        val task = tasks.register<GenerateBuildIdentity>("generate${variantName}BuildIdentity") {
+            output.set(layout.buildDirectory.dir("generated/buildInfoAssets/${variant.name}"))
+            identity.set("""{"applicationId":"$id","versionCode":$buildCode,"versionName":"$buildName","commit":"$buildCommit","runId":"$buildRun","distribution":${distribution && !experimental}}""")
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(task, GenerateBuildIdentity::output)
+    }
+}
 dependencies {
+    add("experimentalImplementation", project(":external-lua-native"))
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)
     implementation("androidx.activity:activity-compose:1.9.3")
