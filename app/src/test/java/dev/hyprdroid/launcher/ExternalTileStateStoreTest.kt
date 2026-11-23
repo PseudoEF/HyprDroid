@@ -3,6 +3,7 @@ package dev.hyprdroid.launcher
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import dev.hyprdroid.launcher.data.TileStateSlot
 import dev.hyprdroid.launcher.data.WorkspaceEngineStore
+import dev.hyprdroid.launcher.plugins.TileStateValue
 import dev.hyprdroid.launcher.workspaceengine.WindowId
 import dev.hyprdroid.launcher.workspaceengine.WorkspaceEngine
 import dev.hyprdroid.launcher.workspaceengine.WorkspaceWindow
@@ -62,6 +63,27 @@ class ExternalTileStateStoreTest {
             assertThrows(IOException::class.java) { runBlocking { store.saveTileState(slot, "3", "я".repeat(257)) } }
             assertThrows(IOException::class.java) { runBlocking { store.saveTileState(slot.copy(packageId = "other"), "", "5") } }
             assertEquals("3", store.tileState(slot))
+        } finally {
+            job.cancelAndJoin()
+        }
+    }
+
+    @Test
+    fun v2StateUsesItsOwnSlotAndExplicitResetLeavesV1Intact(): Unit = runBlocking {
+        val job = SupervisorJob()
+        try {
+            val store = open(folder.newFolder().resolve("engine.preferences_pb"), job)
+            val legacy = TileStateSlot("hello-tile", 1, WindowId("one"))
+            val v2 = legacy.copy(schema = 2)
+            val state = mapOf("enabled" to TileStateValue.Flag(true))
+            store.save("0", engine(legacy))
+            store.saveTileState(legacy, "", "9")
+            assertEquals(emptyMap<String, TileStateValue>(), store.loadTileStateV2(v2))
+            store.saveTileStateV2(v2, emptyMap(), state) { true }
+            assertEquals(state, store.loadTileStateV2(v2))
+            store.clearTileStateV2(v2)
+            assertEquals(emptyMap<String, TileStateValue>(), store.loadTileStateV2(v2))
+            assertEquals("9", store.tileState(legacy))
         } finally {
             job.cancelAndJoin()
         }

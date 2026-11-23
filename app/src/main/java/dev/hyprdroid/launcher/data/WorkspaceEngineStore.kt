@@ -10,6 +10,8 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.hyprdroid.launcher.plugins.TILE_STATE_LIMIT
+import dev.hyprdroid.launcher.plugins.TileStateV2
+import dev.hyprdroid.launcher.plugins.TileStateValue
 import dev.hyprdroid.launcher.plugins.isPluginText
 import dev.hyprdroid.launcher.workspaceengine.WindowId
 import dev.hyprdroid.launcher.workspaceengine.WorkspaceEngine
@@ -38,6 +40,29 @@ internal class WorkspaceEngineStore(private val store: DataStore<Preferences>) {
     }
 
     suspend fun tileState(slot: TileStateSlot): String = readState(store.data.first(), slot)
+
+    suspend fun loadTileStateV2(slot: TileStateSlot): Map<String, TileStateValue> {
+        require(slot.schema == 2)
+        return TileStateV2.decode(tileState(slot))
+    }
+
+    /** Uses the existing owner check and compare-and-set transaction, with a separate schema slot. */
+    suspend fun saveTileStateV2(
+        slot: TileStateSlot,
+        expected: Map<String, TileStateValue>,
+        updated: Map<String, TileStateValue>,
+        authorized: () -> Boolean,
+    ) {
+        require(slot.schema == 2)
+        fun serialize(values: Map<String, TileStateValue>) = if (values.isEmpty()) "" else TileStateV2.encode(values)
+        saveTileState(slot, serialize(expected), serialize(updated), authorized)
+    }
+
+    /** Core-only reset. The caller supplies the tile slot after explicit user consent. */
+    suspend fun clearTileStateV2(slot: TileStateSlot) {
+        require(slot.schema == 2)
+        store.edit { it.remove(stringPreferencesKey(slot.preferenceKey)) }
+    }
 
     /** Checks ownership and commits the state in the same transaction as layout deletion. */
     suspend fun saveTileState(slot: TileStateSlot, expected: String, updated: String, authorized: () -> Boolean = { true }) {
