@@ -31,7 +31,7 @@ class PublishedHelloEvidenceTest {
         repo.refresh()
         val entry = repo.packages().single { it.manifest.id == HELLO_TILE_ID }
         val verifier = HypPackageVerifier(mapOf(trust.keyId to trust.publicKey))
-        val legacy = root.resolve("objects/pkg-legacy").apply { mkdirs() }
+        val legacy = root.resolve("objects/pkg-123456").apply { mkdirs() }
         verifier.prepare(entry, archive.inputStream(), legacy)
         registry.publish(mapOf(HELLO_TILE_ID to InstalledPackage(entry.manifest, legacy.name)))
         val manager = HyprPackageManager(root, object : PackageCatalog {
