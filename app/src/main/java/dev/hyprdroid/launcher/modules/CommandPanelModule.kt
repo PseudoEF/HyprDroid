@@ -81,17 +81,21 @@ internal object CommandPanelModule : TileModule {
     override fun Content(state: ModuleState, modifier: Modifier) {
         val commandState = state as CommandPanelState
         val registry = LocalTileModuleRegistry.current
+        val tilePort = LocalTileCommandPort.current
         val context = LocalContext.current.applicationContext
         val history = remember(context) { StoredTerminalHistory(context) }
         val historyEntries by history.navigationCommands.collectAsState(initial = emptyList())
         val navigation = remember { HistoryNavigation() }
         val clipboard = LocalClipboardManager.current
         var pluginWindow by remember { mutableStateOf<PluginWindow?>(null) }
-        val processor = remember(registry, context) {
+        val processor = remember(registry, context, tilePort) {
             CommandProcessor(
                 modules = { registry?.modules?.map { ModuleSummary(it.id, it.title) }.orEmpty() },
                 droidfetch = { DroidFetchFormatter.format(DroidFetchSystem.read(context)) },
                 history = history,
+                tileCommands = tilePort?.let { port ->
+                    TileCommands(port) { AndroidPackages.manager(context).requireDroidFetchTileSample() }
+                },
                 packageCommands = PackageCommands { AndroidPackages.manager(context) },
                 luaPluginCommands = LuaPluginCommands(
                     runPlugin = { AndroidLuaPlugins.run(context, it) },

@@ -32,7 +32,7 @@ class LuaPluginService : Service() {
         received = true
 
         val data = message.data
-        val plugin = BuiltInLuaPlugin.find(data.getString(LuaPluginIpc.ID).orEmpty())
+        val plugin = BuiltInLuaPlugin.findRuntime(data.getString(LuaPluginIpc.ID).orEmpty())
         if (plugin == null) {
             send(reply, PluginResult.Failure("Lua-модуль не входит в доверенный список"))
             return true
@@ -44,9 +44,16 @@ class LuaPluginService : Service() {
             return true
         }
 
+        val tile = try {
+            LuaPluginIpc.readTileRequest(data, plugin)
+        } catch (_: RuntimeException) {
+            send(reply, PluginResult.Failure("Некорректное событие тайла"))
+            return true
+        }
+
         worker.execute {
             val result = try {
-                TrustedLuaRuntime().run(readAsset(plugin), plugin.permissions, inputs)
+                TrustedLuaRuntime().run(readAsset(plugin), plugin.permissions, inputs, tile)
             } catch (_: IOException) {
                 PluginResult.Failure("Не удалось прочитать встроенный Lua-модуль")
             } catch (_: RuntimeException) {

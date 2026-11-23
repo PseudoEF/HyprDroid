@@ -9,8 +9,12 @@ internal object LuaPluginIpc {
     const val RESULT = 2
     const val ID = "id"
 
-    fun request(plugin: BuiltInLuaPlugin, inputs: PluginInputs) = Bundle().apply {
+    fun request(plugin: BuiltInLuaPlugin, inputs: PluginInputs, tile: TileRequest?) = Bundle().apply {
         putString(ID, plugin.commandId)
+        tile?.let {
+            putString("tileState", it.state)
+            putString("tileEvent", it.event)
+        }
         inputs.device?.let {
             putString("manufacturer", it.manufacturer)
             putString("model", it.model)
@@ -25,6 +29,17 @@ internal object LuaPluginIpc {
                 null -> -1
             }
             putInt("charging", charging)
+        }
+    }
+
+    fun readTileRequest(data: Bundle, plugin: BuiltInLuaPlugin): TileRequest? {
+        val state = data.getString("tileState")
+        val event = data.getString("tileEvent")
+        require(plugin.isTile == (state != null))
+        require(event == null || (plugin.isTile && tileEventId.matches(event)))
+        return state?.let {
+            require(it.isPluginText(TILE_STATE_LIMIT))
+            TileRequest(event, it)
         }
     }
 
@@ -61,6 +76,10 @@ internal object LuaPluginIpc {
             is PluginResult.Failure -> putString("error", result.message)
             is PluginResult.Success -> {
                 putStringArrayList("output", ArrayList(result.output))
+                result.tile?.let {
+                    putString("tileState", it.state)
+                    it.root?.let { root -> putStringArrayList("tileTree", TileUiCodec.encode(root)) }
+                }
                 result.window?.let {
                     putString("title", it.title)
                     putString("text", it.text)
@@ -90,7 +109,14 @@ internal object LuaPluginIpc {
             } else {
                 null
             }
-            PluginResult.Success(output.toList(), window)
+            val tileState = data.getString("tileState")
+            val tree = data.getStringArrayList("tileTree")
+            require(plugin.isTile == (tileState != null) && (tree == null || plugin.isTile))
+            val tile = tileState?.let {
+                require(it.isPluginText(TILE_STATE_LIMIT))
+                TileResult(tree?.let(TileUiCodec::decode), it)
+            }
+            PluginResult.Success(output.toList(), window, tile)
         }
     } catch (_: RuntimeException) {
         PluginResult.Failure("Некорректный ответ процесса Lua")

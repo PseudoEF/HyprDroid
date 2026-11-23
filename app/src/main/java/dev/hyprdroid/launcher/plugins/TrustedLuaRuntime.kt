@@ -16,7 +16,7 @@ import org.luaj.vm2.lib.VarArgFunction
 
 /** Runs trusted UTF-8 source. The Android caller only provides scripts baked into the APK. */
 internal class TrustedLuaRuntime(private val nanoTime: () -> Long = System::nanoTime) {
-    fun run(source: ByteArray, permissions: Set<PluginPermission>, inputs: PluginInputs): PluginResult {
+    fun run(source: ByteArray, permissions: Set<PluginPermission>, inputs: PluginInputs, tile: TileRequest? = null): PluginResult {
         if (source.isEmpty() || source.size > PluginLimits.SOURCE_BYTES) {
             return PluginResult.Failure("Недопустимый размер скрипта Lua")
         }
@@ -29,7 +29,17 @@ internal class TrustedLuaRuntime(private val nanoTime: () -> Long = System::nano
             return PluginResult.Failure("Скрипт Lua должен быть в UTF-8")
         }
 
-        val effects = PluginEffects(permissions, inputs)
+        if (tile != null && PluginPermission.UI_TILE !in permissions) {
+            return PluginResult.Failure("Доступ запрещён: ui.tile")
+        }
+        if (tile != null && (!tile.state.isPluginText(TILE_STATE_LIMIT) ||
+                tile.event?.let { !tileEventId.matches(it) } == true)
+        ) {
+            return PluginResult.Failure("Некорректное событие тайла")
+        }
+        val allowed = if (tile == null) permissions - PluginPermission.UI_TILE
+            else permissions - PluginPermission.UI_WINDOW - PluginPermission.TERMINAL_PRINT
+        val effects = PluginEffects(allowed, inputs, tile)
         return try {
             val globals = Globals()
             LuaC.install(globals)
@@ -37,12 +47,15 @@ internal class TrustedLuaRuntime(private val nanoTime: () -> Long = System::nano
             globals.debuglib = ExecutionBudget(nanoTime)
             globals.set("hypr", effects.api())
             globals.load(script.reader(), "@trusted-plugin.lua").call()
+            effects.dispatchTileEvent()
             effects.result()
         } catch (error: LuaError) {
             PluginResult.Failure(
                 error.message.orEmpty().lineSequence().firstOrNull().orEmpty()
                     .filterNot(Char::isISOControl).take(PluginLimits.ERROR_TEXT).ifBlank { "Ошибка Lua" },
             )
+        } catch (_: IllegalArgumentException) {
+            PluginResult.Failure("Некорректные аргументы Tile Plugin API")
         } catch (_: StackOverflowError) {
             PluginResult.Failure("Превышен предел стека Lua")
         }
@@ -77,12 +90,22 @@ internal class TrustedLuaRuntime(private val nanoTime: () -> Long = System::nano
 private class PluginEffects(
     private val permissions: Set<PluginPermission>,
     private val inputs: PluginInputs,
+    private val tile: TileRequest?,
 ) {
     private val output = mutableListOf<String>()
     private var outputSize = 0
     private var remainingCalls = PluginLimits.API_CALLS
     private var nextWindow = 0
     private var window: PluginWindow? = null
+    private var root: TileNode? = null
+    private var tileState = tile?.state.orEmpty()
+    private val callbacks = mutableMapOf<String, LuaFunction>()
+
+    fun dispatchTileEvent() {
+        val event = tile?.event ?: return
+        val callback = callbacks[event] ?: throw LuaError("Обработчик события тайла отсутствует")
+        callback.call()
+    }
 
     fun api(): LuaTable = LuaTable().apply {
         set("terminal", LuaTable().apply {
@@ -115,6 +138,23 @@ private class PluginEffects(
             }
         })
         set("ui", LuaTable().apply {
+            if (tile != null) {
+                expose("render", PluginPermission.UI_TILE, 1) { args ->
+                    root = TileUiCodec.fromLua(args.arg(1))
+                    LuaValue.NIL
+                }
+                expose("on", PluginPermission.UI_TILE, 2) { args ->
+                    val id = TileUiCodec.luaString(args.arg(1), 32)
+                    require(tileEventId.matches(id) && id !in callbacks && callbacks.size < 32)
+                    callbacks[id] = args.arg(2).checkfunction()
+                    LuaValue.NIL
+                }
+                expose("getState", PluginPermission.UI_TILE, 0) { LuaValue.valueOf(tileState) }
+                expose("setState", PluginPermission.UI_TILE, 1) { args ->
+                    tileState = TileUiCodec.luaString(args.arg(1), TILE_STATE_LIMIT)
+                    LuaValue.NIL
+                }
+            }
             expose("createWindow", PluginPermission.UI_WINDOW, 1) { args ->
                 if (window != null) throw LuaError("Одновременно разрешено одно окно Lua")
                 window = PluginWindow(args.arg(1).boundedText(PluginLimits.WINDOW_TITLE), "")
@@ -133,7 +173,7 @@ private class PluginEffects(
         })
     }
 
-    fun result() = PluginResult.Success(output.toList(), window)
+    fun result() = PluginResult.Success(output.toList(), window, tile?.let { TileResult(root, tileState) })
 
     private fun LuaTable.expose(
         name: String,

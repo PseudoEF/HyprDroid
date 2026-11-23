@@ -5,6 +5,7 @@ internal enum class PluginPermission(val apiName: String) {
     SYSTEM_DEVICE("system.device"),
     SYSTEM_BATTERY("system.battery"),
     UI_WINDOW("ui.window"),
+    UI_TILE("ui.tile"),
 }
 
 /** The APK is the only executable source. IDs are never interpreted as paths. */
@@ -22,10 +23,18 @@ internal enum class BuiltInLuaPlugin(
             PluginPermission.SYSTEM_BATTERY,
             PluginPermission.UI_WINDOW,
         ),
+    ),
+    DROIDFETCH_TILE(
+        "internal-droidfetch-tile",
+        "trusted-lua/droidfetch-tile.lua",
+        setOf(PluginPermission.SYSTEM_DEVICE, PluginPermission.SYSTEM_BATTERY, PluginPermission.UI_TILE),
     );
 
+    val isTile: Boolean get() = PluginPermission.UI_TILE in permissions
+
     companion object {
-        fun find(id: String) = entries.firstOrNull { it.commandId == id }
+        fun find(id: String) = findRuntime(id)?.takeUnless { it.isTile }
+        fun findRuntime(id: String) = entries.firstOrNull { it.commandId == id }
     }
 }
 
@@ -35,7 +44,7 @@ internal data class PluginInputs(val device: PluginDevice? = null, val battery: 
 internal data class PluginWindow(val title: String, val text: String)
 
 internal sealed interface PluginResult {
-    data class Success(val output: List<String>, val window: PluginWindow?) : PluginResult
+    data class Success(val output: List<String>, val window: PluginWindow?, val tile: TileResult? = null) : PluginResult
     data class Failure(val message: String) : PluginResult
 }
 

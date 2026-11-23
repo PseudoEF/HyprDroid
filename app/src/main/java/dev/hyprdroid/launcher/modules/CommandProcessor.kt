@@ -29,6 +29,7 @@ internal class CommandProcessor(
     private val packageCommands: PackageCommands? = null,
     private val luaPluginCommands: LuaPluginCommands? = null,
     private val history: TerminalHistory? = null,
+    private val tileCommands: TileCommands? = null,
 ) {
     private val whitespace = Regex("\\s+")
     private val dateFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss", Locale.getDefault())
@@ -38,7 +39,12 @@ internal class CommandProcessor(
         if (command.isEmpty()) return CommandResult.Output("")
         val first = command.takeWhile { !it.isWhitespace() }
         if (first == "hypr" && packageCommands != null) {
-            return packageCommands.execute(command.split(whitespace).drop(1))
+            val args = command.split(whitespace).drop(1)
+            if (args.firstOrNull() == "tile") {
+                return tileCommands?.execute(args.drop(1))
+                    ?: CommandResult.Output("Команды тайлов доступны внутри рабочего пространства.", failed = true)
+            }
+            return packageCommands.execute(args)
         }
         if (first == "lua" && luaPluginCommands != null) {
             return luaPluginCommands.execute(command.split(whitespace).drop(1))

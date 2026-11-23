@@ -25,11 +25,12 @@ internal object AndroidLuaPlugins {
     private const val IPC_TIMEOUT_MS = 5_000L
     private val executionLock = Mutex()
 
-    suspend fun run(context: Context, plugin: BuiltInLuaPlugin): PluginResult = executionLock.withLock {
+    suspend fun run(context: Context, plugin: BuiltInLuaPlugin, tile: TileRequest? = null): PluginResult = executionLock.withLock {
+        if (plugin.isTile != (tile != null)) return@withLock PluginResult.Failure("Нет разрешения на этот режим Lua")
         val app = context.applicationContext
         val inputs = withContext(Dispatchers.IO) { readInputs(app, plugin.permissions) }
         withContext(Dispatchers.Main.immediate) {
-            withTimeoutOrNull(IPC_TIMEOUT_MS) { runIsolated(app, plugin, inputs) }
+            withTimeoutOrNull(IPC_TIMEOUT_MS) { runIsolated(app, plugin, inputs, tile) }
                 ?: PluginResult.Failure("Изолированный процесс Lua не ответил вовремя")
         }
     }
@@ -38,6 +39,7 @@ internal object AndroidLuaPlugins {
         app: Context,
         plugin: BuiltInLuaPlugin,
         inputs: PluginInputs,
+        tile: TileRequest?,
     ): PluginResult {
         val result = CompletableDeferred<PluginResult>()
         val receiver = Messenger(Handler(Looper.getMainLooper()) { message ->
@@ -55,7 +57,7 @@ internal object AndroidLuaPlugins {
                 if (result.isCompleted) return
                 val request = Message.obtain(null, LuaPluginIpc.RUN, LuaPluginIpc.VERSION, 0)
                 request.replyTo = receiver
-                request.data = LuaPluginIpc.request(plugin, inputs)
+                request.data = LuaPluginIpc.request(plugin, inputs, tile)
                 try {
                     Messenger(binder).send(request)
                 } catch (_: RemoteException) {

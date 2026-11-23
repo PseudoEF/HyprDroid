@@ -313,23 +313,35 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
         densityScale: Float,
         targetWindowId: WindowId? = null,
     ) = viewModelScope.launch {
+        tryAddTilingWindow(workspaceId, area, densityScale, targetWindowId, TILING_UNASSIGNED_MODULE_ID)
+    }
+
+    internal fun tryAddTilingWindow(
+        workspaceId: Int,
+        area: LayoutArea,
+        densityScale: Float,
+        targetWindowId: WindowId?,
+        moduleId: String,
+    ): WindowId? {
         try {
-            val engine = engines.getOrPut(workspaceId) { WorkspaceEngine() }
+            val engine = engines[workspaceId] ?: return null
             val target = targetWindowId
                 ?: engine.focusedWindowId
                 ?: engine.leaves().firstOrNull()
-                ?: return@launch
-            if (target !in engine.leaves()) return@launch
+                ?: return null
+            if (target !in engine.leaves()) return null
             val newWindowId = WindowId(UUID.randomUUID().toString())
             val splitId = SplitId(UUID.randomUUID().toString())
             val mins = engine.windowsById().mapValues { (_, window) -> tilingWindowMin(window, densityScale) }
-            val window = WorkspaceWindow(newWindowId, TILING_UNASSIGNED_MODULE_ID, 0, 0)
-            if (!engine.addWindowAdaptive(target, splitId, window, area, mins)) return@launch
+            val window = WorkspaceWindow(newWindowId, moduleId, 0, 0)
+            if (!engine.addWindowAdaptive(target, splitId, window, area, mins)) return null
             engine.focusWindow(newWindowId)
             save { engineStore.save(workspaceId.toString(), engine) }
             publishTiling(workspaceId, engine)
+            return newWindowId
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: IOException) { showMessage("Не удалось добавить окно. Проверьте место в памяти.") }
+        return null
     }
 
     /** Rebuilds the adaptive split topology when the workspace area or its orientation changes. */
@@ -342,14 +354,17 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
 
     /** Removes one internal window; the surface closes itself when the tree becomes empty. */
     internal fun closeTilingWindow(workspaceId: Int, windowId: WindowId) = viewModelScope.launch {
-        try {
-            val engine = engines[workspaceId] ?: return@launch
-            if (!engine.removeWindow(windowId)) return@launch
-            save { engineStore.save(workspaceId.toString(), engine) }
-            if (engine.root == null) hideTilingSession(workspaceId)
-            else publishTiling(workspaceId, engine)
-        } catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: IOException) { showMessage("Не удалось закрыть окно. Проверьте место в памяти.") }
+        tryCloseTilingWindow(workspaceId, windowId)
+    }
+
+    internal fun tryCloseTilingWindow(workspaceId: Int, windowId: WindowId, expectedModule: String? = null): Boolean {
+        val engine = engines[workspaceId] ?: return false
+        if (expectedModule != null && engine.windowsById()[windowId]?.moduleId != expectedModule) return false
+        if (!engine.removeWindow(windowId)) return false
+        save { engineStore.save(workspaceId.toString(), engine) }
+        if (engine.root == null) hideTilingSession(workspaceId)
+        else publishTiling(workspaceId, engine)
+        return true
     }
 
     internal fun focusTilingWindow(workspaceId: Int, windowId: WindowId) {

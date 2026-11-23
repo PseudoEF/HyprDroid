@@ -10,6 +10,7 @@ internal object BuiltInModules {
                 AppLauncherModule,
                 CommandPanelModule,
                 DroidFetchModule,
+                DroidFetchTileModule,
             ),
         )
     }

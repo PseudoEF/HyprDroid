@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -35,6 +36,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import dev.hyprdroid.launcher.modules.LocalTileCommandPort
+import dev.hyprdroid.launcher.modules.TileCommandPort
+import dev.hyprdroid.launcher.packages.DROIDFETCH_SAMPLE_ID
 import dev.hyprdroid.launcher.data.LauncherApp
 import dev.hyprdroid.launcher.modules.BuiltInModules
 import dev.hyprdroid.launcher.modules.LocalModuleEnvironment
@@ -65,6 +69,8 @@ internal fun TilingSurface(
     onCloseWindow: (WindowId) -> Unit = {},
     onAddWindow: (LayoutArea, Float) -> Unit = { _, _ -> },
     onAddWindowAt: (WindowId, LayoutArea, Float) -> Unit = { _, _, _ -> },
+    onAddPluginTile: ((LayoutArea, Float) -> WindowId?)? = null,
+    onRemovePluginTile: ((WindowId) -> Boolean)? = null,
     onLayoutArea: (LayoutArea) -> Unit = {},
     onResizeSplit: (SplitId, Float) -> Unit = { _, _ -> },
 ) {
@@ -78,6 +84,22 @@ internal fun TilingSurface(
             heightPx = with(density) { maxHeight.roundToPx().toInt() },
         )
         LaunchedEffect(area.widthPx, area.heightPx) { onLayoutArea(area) }
+        val currentEngine by rememberUpdatedState(engine)
+        val currentArea by rememberUpdatedState(area)
+        val currentDensity by rememberUpdatedState(density.density)
+        val addPlugin by rememberUpdatedState(onAddPluginTile)
+        val removePlugin by rememberUpdatedState(onRemovePluginTile)
+        val port = remember(onAddPluginTile != null && onRemovePluginTile != null) {
+            if (onAddPluginTile == null || onRemovePluginTile == null) null
+            else TileCommandPort(
+                add = { addPlugin?.invoke(currentArea, currentDensity) },
+                list = {
+                    currentEngine.windowsById().values
+                        .filter { it.moduleId == DROIDFETCH_SAMPLE_ID }.map { it.windowId }
+                },
+                remove = { removePlugin?.invoke(it) == true },
+            )
+        }
         val previewEngine = remember(engine) { mutableStateOf<WorkspaceEngine?>(null) }
         val displayEngine = previewEngine.value ?: engine
         val mins: Map<WindowId, WindowMin> = remember(displayEngine, area) {
@@ -256,45 +278,48 @@ internal fun TilingSurface(
                 CompositionLocalProvider(
                     LocalModuleEnvironment provides environment,
                     LocalTileModuleRegistry provides registry,
+                    LocalTileCommandPort provides port,
                 ) {
-                placed.forEach { placedWindow ->
-                    val isFocused = placedWindow.windowId == focusedId
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(if (isFocused) Mocha.Surface else Mocha.Mantle, RoundedCornerShape(12.dp))
-                            .border(BorderStroke(1.dp, if (isFocused) Mocha.Mauve else Mocha.Outline.copy(alpha = .5f)), RoundedCornerShape(12.dp))
-                            .testTag("tiling-window-${placedWindow.windowId.value}")
-                            .clickable { onFocusWindow(placedWindow.windowId) },
-                    ) {
-                        ModuleHost(
-                            windowId = placedWindow.windowId,
-                            moduleId = displayEngine.windowsById()[placedWindow.windowId]?.moduleId.orEmpty(),
-                            registry = registry,
-                            onSelectModule = { moduleId -> onSelectModule(placedWindow.windowId, moduleId) },
-                            modifier = Modifier.fillMaxSize(),
-                            headerActions = {
-                                if (isFocused) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(24.dp)
-                                            .clip(CircleShape)
-                                            .clickable { onCloseWindow(placedWindow.windowId) }
-                                            .testTag("tiling-close-window-${placedWindow.windowId.value}"),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Close,
-                                            contentDescription = "Закрыть окно",
-                                            tint = Mocha.Red,
-                                            modifier = Modifier.size(14.dp),
-                                        )
-                                    }
-                                }
-                            },
-                        )
+                    placed.forEach { placedWindow ->
+                        key(placedWindow.windowId) {
+                            val isFocused = placedWindow.windowId == focusedId
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(if (isFocused) Mocha.Surface else Mocha.Mantle, RoundedCornerShape(12.dp))
+                                    .border(BorderStroke(1.dp, if (isFocused) Mocha.Mauve else Mocha.Outline.copy(alpha = .5f)), RoundedCornerShape(12.dp))
+                                    .testTag("tiling-window-${placedWindow.windowId.value}")
+                                    .clickable { onFocusWindow(placedWindow.windowId) },
+                            ) {
+                                ModuleHost(
+                                    windowId = placedWindow.windowId,
+                                    moduleId = displayEngine.windowsById()[placedWindow.windowId]?.moduleId.orEmpty(),
+                                    registry = registry,
+                                    onSelectModule = { moduleId -> onSelectModule(placedWindow.windowId, moduleId) },
+                                    modifier = Modifier.fillMaxSize(),
+                                    headerActions = {
+                                        if (isFocused) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(24.dp)
+                                                    .clip(CircleShape)
+                                                    .clickable { onCloseWindow(placedWindow.windowId) }
+                                                    .testTag("tiling-close-window-${placedWindow.windowId.value}"),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Close,
+                                                    contentDescription = "Закрыть окно",
+                                                    tint = Mocha.Red,
+                                                    modifier = Modifier.size(14.dp),
+                                                )
+                                            }
+                                        }
+                                    },
+                                )
+                            }
+                        }
                     }
-                }
                 }
             },
             modifier = Modifier.fillMaxSize(),

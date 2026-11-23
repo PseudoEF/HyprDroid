@@ -94,6 +94,9 @@ internal class PackageCommands(private val manager: () -> HyprPackageManager) {
             "hypr install <module>",
             "hypr remove <module>",
             "hypr update",
+            "hypr tile add <module>",
+            "hypr tile list",
+            "hypr tile remove <tile-id>",
         ).joinToString("\n")
     }
 }

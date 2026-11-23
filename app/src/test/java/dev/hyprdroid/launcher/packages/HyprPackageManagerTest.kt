@@ -54,7 +54,9 @@ class HyprPackageManagerTest {
 
         assertEquals("hyprdroid.droidfetch-sample", manifest.id)
         assertTrue(first.installed().isEmpty())
+        assertThrows(PackageException::class.java) { first.requireDroidFetchTileSample() }
         assertEquals(listOf(manifest), first.install(manifest.id))
+        first.requireDroidFetchTileSample()
         assertTrue(first.install(manifest.id).isEmpty())
         val record = FilePackageRegistry(root).read().getValue(manifest.id)
         assertTrue(root.resolve("objects/${record.directory}/content/${manifest.entry}").isFile)
@@ -62,7 +64,11 @@ class HyprPackageManagerTest {
         val reopened = HyprPackageManager(root, catalog, source, pinnedVerifier)
         assertEquals(PackageDetails(manifest, manifest), reopened.info(manifest.id))
         assertEquals(listOf(manifest), reopened.installed())
+        reopened.requireDroidFetchTileSample()
+        root.resolve("objects/${record.directory}/content/${manifest.entry}").appendText("-- altered")
+        assertThrows(PackageException::class.java) { reopened.requireDroidFetchTileSample() }
         assertEquals(manifest, reopened.remove(manifest.id))
+        assertThrows(PackageException::class.java) { reopened.requireDroidFetchTileSample() }
         assertTrue(first.installed().isEmpty())
         assertTrue(root.resolve("objects").listFiles().orEmpty().isEmpty())
     }

@@ -20,4 +20,28 @@ class LuaPluginServiceTest {
         assertTrue(success.output.single().contains("DroidFetch · Lua"))
         assertEquals("DroidFetch · Lua", success.window?.title)
     }
+
+    @Test
+    fun tileTreeAndRefreshCrossIsolatedBinder() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val first = AndroidLuaPlugins.run(context, BuiltInLuaPlugin.DROIDFETCH_TILE, TileRequest())
+        assertTrue("Expected tile frame, got $first", first is PluginResult.Success)
+        val tile = checkNotNull((first as PluginResult.Success).tile)
+        assertTrue(tile.root?.containsButton("refresh") == true)
+
+        val refreshed = AndroidLuaPlugins.run(
+            context, BuiltInLuaPlugin.DROIDFETCH_TILE, TileRequest("refresh", tile.state),
+        )
+        assertTrue((refreshed as? PluginResult.Success)?.tile?.root?.containsButton("refresh") == true)
+    }
+
+    @Test
+    fun hostRejectsMalformedOrUnauthorizedTileFrames() {
+        val bundle = LuaPluginIpc.response(
+            PluginResult.Success(emptyList(), null, TileResult(TileNode.Text("Tile"), "")),
+        )
+        assertTrue(LuaPluginIpc.readResult(bundle, BuiltInLuaPlugin.DROIDFETCH) is PluginResult.Failure)
+        bundle.putStringArrayList("tileTree", arrayListOf("progress", "NaN"))
+        assertTrue(LuaPluginIpc.readResult(bundle, BuiltInLuaPlugin.DROIDFETCH_TILE) is PluginResult.Failure)
+    }
 }

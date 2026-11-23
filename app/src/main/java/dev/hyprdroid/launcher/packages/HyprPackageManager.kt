@@ -34,6 +34,29 @@ internal class HyprPackageManager(
         return PackageDetails(available, installed)
     }
 
+    /** Authorizes the built-in tile adapter using the exact signed installation sample. */
+    fun requireDroidFetchTileSample(): Unit = synchronized(lock) {
+        val installed = registry.read()[DROIDFETCH_SAMPLE_ID]
+            ?: throw PackageException("Сначала установите $DROIDFETCH_SAMPLE_ID")
+        if (!installed.manifest.permissions.containsAll(setOf("system.device", "system.battery"))) {
+            throw PackageException("DroidFetch требует разрешения на сведения об устройстве и батарее")
+        }
+        val entry = catalog.packages().singleOrNull {
+            it.manifest.id == DROIDFETCH_SAMPLE_ID &&
+                it.keyId == AndroidPackages.SAMPLE_KEY_ID &&
+                it.sha256 == "999caaac63dd7a2489a7aaa8e86541764b89f57dae7a13b9e716ca84cfa15446"
+        }
+        if (entry == null || installed.manifest != entry.manifest) {
+            throw PackageException("Установленная версия DroidFetch не входит в доверенный список")
+        }
+        val script = objects.resolve(installed.directory).resolve("content").resolve(installed.manifest.entry)
+        val bytes = script.inputStream().use { readPackageBytes(it, 16 * 1024) }
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
+        val expected = "bc121413681fa2e03657f1d5cbe1feb1d6801bfe310845b84cd2f0955d5a3b70"
+        val actual = digest.joinToString("") { "%02x".format(it) }
+        if (actual != expected) throw PackageException("Содержимое установленного DroidFetch изменено")
+    }
+
     fun install(id: String): List<PackageManifest> = synchronized(lock) {
         validatePackageId(id)
         val current = registry.read()
@@ -165,3 +188,5 @@ internal fun deletePackageStaging(file: File) {
         // Best effort after rollback or publication.
     }
 }
+
+internal const val DROIDFETCH_SAMPLE_ID = "hyprdroid.droidfetch-sample"

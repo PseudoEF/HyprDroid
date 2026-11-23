@@ -18,7 +18,7 @@ internal abstract class ModuleState(val windowId: WindowId) {
 
 /**
  * Static description of one internal HyprDroid module together with its Compose entry point.
- * Built-in modules are registered in code; there is no archive, script or dynamic code loading.
+ * Modules are registered in code. An approved adapter may display declarative content from an APK asset.
  */
 internal interface TileModule {
     val id: String
