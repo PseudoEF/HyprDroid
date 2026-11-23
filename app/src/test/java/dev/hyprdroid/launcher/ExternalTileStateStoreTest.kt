@@ -22,7 +22,7 @@ class ExternalTileStateStoreTest {
     @get:Rule val folder = TemporaryFolder()
 
     @Test
-    fun savedValuesSurviveDataStoreRestartAndCloseRemovesOnlyItsOwnSlot() = runBlocking {
+    fun savedValuesSurviveDataStoreRestartAndCloseRemovesOnlyItsOwnSlot(): Unit = runBlocking {
         val file = folder.newFolder().resolve("workspace_engine.preferences_pb")
         val one = TileStateSlot("hello-tile", 1, WindowId("one"))
         val two = TileStateSlot("hello-tile", 1, WindowId("two"))
@@ -51,7 +51,7 @@ class ExternalTileStateStoreTest {
     }
 
     @Test
-    fun rejectsStaleSnapshotsForeignOwnersAndOversizeUtf8() = runBlocking {
+    fun rejectsStaleSnapshotsForeignOwnersAndOversizeUtf8(): Unit = runBlocking {
         val job = SupervisorJob()
         try {
             val store = open(folder.newFolder().resolve("engine.preferences_pb"), job)
