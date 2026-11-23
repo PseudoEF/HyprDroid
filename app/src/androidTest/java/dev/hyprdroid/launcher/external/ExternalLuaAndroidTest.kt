@@ -30,9 +30,10 @@ class ExternalLuaAndroidTest {
     }
 
     @Test
-    fun experimentalAppUsesPrivateWorkerAndItsOwnPackageStorage() {
-        assertEquals("dev.hyprdroid.launcher.experimental", app.packageName)
-        assertEquals("HyprDroid Experimental", app.applicationInfo.loadLabel(app.packageManager).toString())
+    fun enabledAppUsesPrivateWorkerAndItsOwnPackageStorage() {
+        assertEquals(BuildConfig.APPLICATION_ID, app.packageName)
+        val expectedLabel = if (app.packageName.endsWith(".experimental")) "HyprDroid Experimental" else "HyprDroid"
+        assertEquals(expectedLabel, app.applicationInfo.loadLabel(app.packageManager).toString())
         assertTrue(app.noBackupFilesDir.parentFile?.name == app.packageName)
         assertNotNull(app.packageManager.getLaunchIntentForPackage(app.packageName))
         val component = ComponentName(app.packageName, "dev.hyprdroid.launcher.external.ExternalLuaService")

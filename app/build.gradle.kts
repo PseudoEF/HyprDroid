@@ -5,6 +5,7 @@ plugins {
 }
 val distribution = providers.environmentVariable("HYPRDROID_DISTRIBUTION").orNull == "true"
 // Local builds stay ahead of v0.6 (8); distributed codes must be allocated by CI.
+val externalLuaOnMain = providers.gradleProperty("externalLuaOnMain").orNull == "true"
 val testExperimental = providers.gradleProperty("testExperimental").orNull == "true"
 val coreApplicationId = "dev.hyprdroid.launcher"
 val experimentalApplicationId = "$coreApplicationId.experimental"
@@ -50,7 +51,20 @@ android {
     }
     sourceSets["experimental"].java.srcDir("src/externalLua/java")
     sourceSets["experimental"].aidl.srcDir("src/externalLua/aidl")
-    listOf("debug", "release").forEach { sourceSets[it].java.srcDir("src/noExternalLua/java") }
+    sourceSets["release"].java.srcDir("src/noExternalLua/java")
+    if (externalLuaOnMain) {
+        buildTypes.getByName("debug") {
+            ndk.abiFilters += listOf("arm64-v8a", "x86_64")
+            buildConfigField("boolean", "EXTERNAL_LUA", "true")
+        }
+        sourceSets["debug"].apply {
+            java.srcDir("src/externalLua/java")
+            aidl.srcDir("src/externalLua/aidl")
+            manifest.srcFile("src/externalLua/AndroidManifest.xml")
+        }
+    } else {
+        sourceSets["debug"].java.srcDir("src/noExternalLua/java")
+    }
     if (distribution) {
         signingConfigs.getByName("debug") {
             storeFile = file(requireNotNull(System.getenv("HYPRDROID_KEYSTORE_FILE")) { "Persistent signing key is required" })
@@ -96,6 +110,7 @@ androidComponents {
 }
 dependencies {
     add("experimentalImplementation", project(":external-lua-native"))
+    if (externalLuaOnMain) debugImplementation(project(":external-lua-native"))
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)
     implementation("androidx.activity:activity-compose:1.9.3")

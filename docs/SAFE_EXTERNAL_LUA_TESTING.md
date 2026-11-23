@@ -1,6 +1,6 @@
 # Проверка экспериментального внешнего Lua
 
-[ADR 0001](adr/0001-safe-external-lua-runtime.md) фиксирует выбор PUC Lua 5.4.9. В обычную сборку native VM и её Binder-интерфейсы не входят. Для тестов используется вариант `experimental` с ID `dev.hyprdroid.launcher.experimental`. Разрешён один опубликованный first-party пакет `hello-tile` 1.0.0 с заранее известным SHA-256 архива. DroidFetch продолжает работать через LuaJ.
+[ADR 0001](adr/0001-safe-external-lua-runtime.md) фиксирует выбор PUC Lua 5.4.9. В обычную сборку native VM и её Binder-интерфейсы не входят. Основной способ проверки — подписанный APK HyprDroid с ID `dev.hyprdroid.launcher` и явным флагом `-PexternalLuaOnMain=true`. Дополнительный вариант `experimental` сохраняет отдельный ID `dev.hyprdroid.launcher.experimental`. Разрешён один опубликованный first-party пакет `hello-tile` 1.0.0 с заранее известным SHA-256 архива. DroidFetch продолжает работать через LuaJ.
 
 ## Границы эксперимента
 
@@ -9,13 +9,19 @@
 - Арена Lua ограничена 2 МиБ. Лимиты исполнения составляют 50 000 инструкций и 100 мс CPU потока с проверкой каждые 250 инструкций. Нативный POSIX-таймер посылает SIGKILL через одну секунду. Превышение 96 МиБ по выборке PSS и обработанный JVM OOM тоже завершают worker. PSS проверяется периодически, поэтому кратковременный пик и другой нативный расход памяти могут превышать порог.
 - Worker не загружает стандартные библиотеки Lua. JNI и Lua VM входят в границу доверия. Принимаются только типизированные сообщения с ограниченными полями, а Core повторно проверяет дерево UI. Состояние двух тайлов хранится отдельно в памяти Core и сбрасывается при пересоздании соответствующей композиции или проверке новой ревизии каталога.
 
-## Сборка и Pixel 9
+## Основная сборка и Pixel 9
+
+В GitHub Actions запустите **Android debug APK** для ветки `feature/safe-external-lua-runtime` с параметром `external_lua=true`. Скачайте APK из артефакта `HyprDroid-debug-…` успешного запуска. Этот APK использует постоянный сертификат Core и общий счётчик версий. [Установка и миграция](UPDATING.md)
+
+После установки откройте **Настройки → Приложения → Приложения по умолчанию → Домашнее приложение** и выберите **HyprDroid**. В меню «О приложении» можно сверить ID, versionCode и сертификат. Публикация без флага сохраняет HOME и отключает внешний Runtime.
+
+## Дополнительная сборка с отдельным хранилищем
 
 В GitHub Actions выберите workflow **External Lua experimental Android** на ветке `feature/safe-external-lua-runtime`. В успешном запуске скачайте артефакт `hyprdroid-experimental-apk`, распакуйте ZIP и установите `app-experimental.apk`. Откройте **HyprDroid Experimental** из списка приложений. Сборка устанавливается рядом с основной версией и не регистрируется как HOME. У неё отдельные настройки и реестр пакетов. При повторной установке Android также проверяет сертификат предыдущей экспериментальной сборки.
 
 Предыдущий тестовый APK из запуска `45189082973` имел ID `dev.hyprdroid.launcher` и временный отладочный сертификат с SHA-256 `7dea727d…`. Закреплённый сертификат основной версии начинается с `0050f505…`. При установленном APK с закреплённым сертификатом Android отклоняет попытку обновления с таким отладочным ключом. Проверка архива APK, подписи v2, минимального API 29 и ARM64-библиотек прошла. [Предыдущая сборка](https://github.com/PseudoEF/HyprDroid/actions/runs/45189082973)
 
-На Pixel 9 в экспериментальной сборке выполните:
+Чтобы проверить Hello Tile на Pixel 9 в одной из сборок с включённым Runtime, выполните:
 
 ```text
 hypr repo update
@@ -30,6 +36,11 @@ hypr tile list
 Для запуска тестов worker на подключённом устройстве используйте JDK 17, Android SDK 35, NDK 28.2.13676358 и CMake 3.22.1:
 
 ```sh
+./gradlew :app:assembleDebug -PexternalLuaOnMain=true
+./gradlew :app:connectedDebugAndroidTest -PexternalLuaOnMain=true \
+  -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.external.ExternalLuaAndroidTest
+
+# Дополнительная сборка с отдельным ID
 ./gradlew :app:assembleExperimental
 ./gradlew :app:connectedExperimentalAndroidTest -PtestExperimental=true \
   -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.external.ExternalLuaAndroidTest

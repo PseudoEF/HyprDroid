@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+component=dev.hyprdroid.launcher/.MainActivity
+
+case "${1:-check}" in
+  select) adb shell cmd package set-home-activity --user 0 "$component" ;;
+  check) ;;
+  *) exit 2 ;;
+esac
+
+candidates=$(adb shell cmd package query-activities --brief --user 0 \
+  -a android.intent.action.MAIN -c android.intent.category.HOME -c android.intent.category.DEFAULT)
+printf '%s\n' "$candidates"
+printf '%s\n' "$candidates" | grep -Fx "$component"
+
+if [ "${1:-check}" = select ]; then
+    resolved=$(adb shell cmd package resolve-activity --brief --user 0 \
+      -a android.intent.action.MAIN -c android.intent.category.HOME -c android.intent.category.DEFAULT)
+    printf '%s\n' "$resolved"
+    printf '%s\n' "$resolved" | grep -Fx "$component"
+fi
