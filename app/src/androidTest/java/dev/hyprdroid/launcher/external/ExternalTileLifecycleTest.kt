@@ -4,6 +4,7 @@ import android.os.SystemClock
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.Lifecycle
@@ -63,22 +64,26 @@ class ExternalTileLifecycleTest {
             scenario.recreate()
             awaitCount(1)
 
-            selectWorkspace(workspace, 1)
+            selectWorkspace(1)
             awaitCount(0)
             click("Increment")
             awaitCount(1)
-            selectWorkspace(workspace, 0)
+            selectWorkspace(0)
             awaitCount(1)
             click("Reset")
             awaitCount(0)
-            selectWorkspace(workspace, 1)
+            selectWorkspace(1)
             awaitCount(1)
         }
-        ActivityScenario.launch(MainActivity::class.java).use { awaitCount(1) }
+        ActivityScenario.launch(MainActivity::class.java).use {
+            awaitCount(1)
+            selectWorkspace(0)
+            awaitCount(0)
+        }
     }
 
-    private fun selectWorkspace(repository: WorkspaceRepository, id: Int) {
-        runBlocking { repository.selectWorkspace(id) }
+    private fun selectWorkspace(id: Int) {
+        compose.onNodeWithContentDescription("Рабочее пространство ${id + 1}").performClick()
         compose.waitUntil(20_000) {
             compose.onAllNodesWithTag("tiling-window-hello-test-$id").fetchSemanticsNodes().size == 1 &&
                 compose.onAllNodesWithTag("tiling-window-hello-test-${1 - id}").fetchSemanticsNodes().isEmpty()
