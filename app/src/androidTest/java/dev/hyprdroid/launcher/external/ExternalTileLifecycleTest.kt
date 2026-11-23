@@ -13,6 +13,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.hyprdroid.launcher.BuildConfig
 import dev.hyprdroid.launcher.MainActivity
+import dev.hyprdroid.launcher.data.TileStateSlot
 import dev.hyprdroid.launcher.data.WorkspaceEngineStore
 import dev.hyprdroid.launcher.data.WorkspaceRepository
 import dev.hyprdroid.launcher.packages.AndroidPackages
@@ -28,6 +29,7 @@ import dev.hyprdroid.launcher.workspaceengine.WindowId
 import dev.hyprdroid.launcher.workspaceengine.WorkspaceEngine
 import dev.hyprdroid.launcher.workspaceengine.WorkspaceWindow
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
@@ -80,6 +82,13 @@ class ExternalTileLifecycleTest {
             awaitCount(1)
             selectWorkspace(0)
             awaitCount(0)
+            selectWorkspace(1)
+            awaitCount(1)
+            runBlocking { AndroidPackages.manager(app).remove(HELLO_TILE_ID) }
+            compose.waitUntil(20_000) { compose.onAllNodesWithText("Установите hello-tile").fetchSemanticsNodes().isNotEmpty() }
+            runBlocking {
+                assertEquals("1", layout.tileState(TileStateSlot(HELLO_TILE_ID, 1, WindowId("hello-test-1"))))
+            }
         }
     }
 

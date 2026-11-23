@@ -28,6 +28,7 @@ import dev.hyprdroid.launcher.packages.HELLO_TILE_ID
 import dev.hyprdroid.launcher.plugins.PluginResult
 import dev.hyprdroid.launcher.plugins.TilePluginSession
 import dev.hyprdroid.launcher.plugins.TileScreen
+import dev.hyprdroid.launcher.plugins.whileAuthorized
 import dev.hyprdroid.launcher.ui.Mocha
 import dev.hyprdroid.launcher.workspaceengine.WindowId
 import java.io.IOException
@@ -80,12 +81,18 @@ internal object ExternalHelloTileModule : TileModule {
                 if (request.event == null) {
                     Log.d("HyprLuaTile", "Rendering from Core state; initial mount or explicit retry")
                 }
-                val result = ExperimentalExternalLua.run(context, bytes, request.copy(state = saved))
+                val result = whileAuthorized(manager.helloTileGeneration, generation) {
+                    ExperimentalExternalLua.run(context, bytes, request.copy(state = saved)) {
+                        manager.helloTileGeneration.value == generation
+                    }
+                } ?: return@execute PluginResult.Failure("Доверенная запись Hello Tile изменилась")
                 if (manager.helloTileGeneration.value != generation) {
                     return@execute PluginResult.Failure("Доверенная запись Hello Tile изменилась")
                 }
                 val updated = (result as? PluginResult.Success)?.tile?.state
-                if (updated != null && request.event != null) store.saveTileState(slot, saved, updated)
+                if (updated != null && request.event != null) store.saveTileState(slot, saved, updated) {
+                    manager.helloTileGeneration.value == generation
+                }
                 result
             } catch (error: IOException) {
                 PluginResult.Failure(error.message ?: "Пакет не подтверждён")

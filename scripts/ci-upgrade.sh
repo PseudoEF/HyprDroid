@@ -43,9 +43,9 @@ fixture verify "$CODE_B" 0.9.0 "$HYPRDROID_BUILD_COMMIT"
 adb shell appops get "$package" SYSTEM_ALERT_WINDOW > "$report/overlay-permission-after.txt"
 adb shell dumpsys package "$package" > "$report/package-after.txt"
 if [ "${HYPRDROID_TEST_EXTERNAL_LUA:-false}" = true ]; then
-  adb shell am instrument -w -r -e class dev.hyprdroid.launcher.external.ExternalLuaAndroidTest,dev.hyprdroid.launcher.external.ExternalTileLifecycleTest     "$package.test/androidx.test.runner.AndroidJUnitRunner" > "$report/external-lua.txt"
+  adb shell am instrument -w -r -e class dev.hyprdroid.launcher.external.ExternalLuaAndroidTest,dev.hyprdroid.launcher.external.ExternalTileLifecycleTest,dev.hyprdroid.launcher.external.ExternalLuaProtocolTest     "$package.test/androidx.test.runner.AndroidJUnitRunner" > "$report/external-lua.txt"
   cat "$report/external-lua.txt"
-  grep -q 'OK (6 tests)' "$report/external-lua.txt"
+  grep -q 'OK (8 tests)' "$report/external-lua.txt"
 fi
 sh scripts/ci-home.sh select > "$report/home-registration.txt"
 cat "$report/home-registration.txt"

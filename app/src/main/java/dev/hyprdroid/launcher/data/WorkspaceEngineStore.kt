@@ -40,7 +40,7 @@ internal class WorkspaceEngineStore(private val store: DataStore<Preferences>) {
     suspend fun tileState(slot: TileStateSlot): String = readState(store.data.first(), slot)
 
     /** Checks ownership and commits the state in the same transaction as layout deletion. */
-    suspend fun saveTileState(slot: TileStateSlot, expected: String, updated: String) {
+    suspend fun saveTileState(slot: TileStateSlot, expected: String, updated: String, authorized: () -> Boolean = { true }) {
         if (!validState(updated)) throw IOException("Lua Tile state exceeds its limits")
         if (updated == expected) return
         store.edit { preferences ->
@@ -48,7 +48,7 @@ internal class WorkspaceEngineStore(private val store: DataStore<Preferences>) {
                 key.name.startsWith("engine/") && value is String &&
                     WorkspaceEngine().deserialize(value).windowsById()[slot.windowId]?.moduleId == slot.packageId
             }
-            if (!belongsToPackage || readState(preferences, slot) != expected) {
+            if (!authorized() || !belongsToPackage || readState(preferences, slot) != expected) {
                 throw IOException("Lua Tile state changed or its tile was removed")
             }
             val key = stringPreferencesKey(slot.preferenceKey)

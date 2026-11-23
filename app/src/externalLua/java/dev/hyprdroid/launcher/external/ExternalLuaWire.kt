@@ -25,10 +25,10 @@ internal fun sealedBytes(bytes: ByteArray): SharedMemory =
         }
     }
 
-internal fun checkedBytes(memory: SharedMemory, limit: Int): ByteArray = memory.use {
-    require(it.size in 4..(4 + limit))
-    val mapped = it.mapReadOnly()
-    try {
+internal fun checkedBytes(memory: SharedMemory, limit: Int): ByteArray {
+    require(memory.size in 4..(4 + limit))
+    val mapped = memory.mapReadOnly()
+    return try {
         val length = mapped.int
         require(length == mapped.remaining() && length in 0..limit)
         ByteArray(length).also(mapped::get)
@@ -49,6 +49,6 @@ internal fun decodeFrame(bytes: ByteArray): PluginResult.Success {
         fields += Charsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(utf8)).toString()
     }
     val state = fields.removeAt(fields.lastIndex)
-    require(state.isPluginText(512))
+    require(state.isPluginText(512) && state.encodeToByteArray().size <= 512)
     return PluginResult.Success(emptyList(), null, TileResult(fields.takeIf { it.isNotEmpty() }?.let(TileUiCodec::decode), state))
 }

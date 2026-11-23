@@ -35,7 +35,8 @@ jobs:
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'workflow_dispatch' &&
-        (!inputs.external_lua || github.ref == 'refs/heads/feature/safe-external-lua-runtime'))
+        (!inputs.external_lua || github.ref == 'refs/heads/feature/safe-external-lua-runtime' ||
+          github.ref == 'refs/heads/feature/lua-runtime-hardening'))
     needs: build
     permissions:
       contents: write # Reserve immutable ci/debug/<versionCode> tags; never modify main.

@@ -6,6 +6,6 @@ import dev.hyprdroid.launcher.plugins.TileRequest
 
 internal object ExperimentalExternalLua {
     @Suppress("UNUSED_PARAMETER")
-    suspend fun run(context: Context, source: ByteArray, request: TileRequest): PluginResult =
+    suspend fun run(context: Context, source: ByteArray, request: TileRequest, authorized: () -> Boolean = { true }): PluginResult =
         PluginResult.Failure("Внешний Lua отключён")
 }

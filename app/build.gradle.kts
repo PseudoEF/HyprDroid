@@ -39,6 +39,7 @@ android {
     }
     buildFeatures { compose = true; buildConfig = true; aidl = true }
     sourceSets["androidTest"].assets.srcDir("src/test/resources/external")
+    if (externalLuaOnMain || testExperimental) sourceSets["androidTest"].java.srcDir("src/externalLuaAndroidTest/java")
     testBuildType = if (testExperimental) "experimental" else "debug"
     buildTypes {
         create("experimental") {

@@ -7,6 +7,8 @@ import android.os.Debug
 import android.os.IBinder
 import android.os.Process
 import android.os.SharedMemory
+import dev.hyprdroid.launcher.plugins.ExternalLuaSessionGate
+import dev.hyprdroid.launcher.plugins.isPluginText
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -22,10 +24,9 @@ class ExternalLuaService : Service() {
     private val monitor = Executors.newSingleThreadScheduledExecutor()
     private val active = AtomicBoolean(false)
     private var request: Request? = null
-    private var disposed = false
+    private val gate = ExternalLuaSessionGate()
 
     private data class Request(
-        val id: Long,
         val source: ByteArray,
         val state: ByteArray,
         val reply: IExternalLuaReply,
@@ -36,35 +37,35 @@ class ExternalLuaService : Service() {
 
     private val binder = object : IExternalLua.Stub() {
         @Synchronized
-        override fun createSession(id: Long, apiVersion: Int, source: SharedMemory, state: SharedMemory, reply: IExternalLuaReply) {
-            if (!authorized() || disposed || request != null || active.get() || id == 0L || apiVersion != 1) {
-                source.close()
-                state.close()
-                if (authorized()) reply.error(id, 1, 3)
-                return
-            }
+        override fun createSession(id: Long, apiVersion: Int, source: SharedMemory?, state: SharedMemory?, reply: IExternalLuaReply?) {
             try {
+                if (!authorized() || source == null || state == null || reply == null ||
+                    !gate.create(id, apiVersion)
+                ) return
                 val script = checkedBytes(source, 16384)
                 val initial = checkedBytes(state, 512)
                 require(script.isNotEmpty() && script[0] != 0x1b.toByte() && 0.toByte() !in script)
+                val text = Charsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(initial)).toString()
+                require(text.isPluginText(512))
                 reply.asBinder().linkToDeath({ terminate() }, 0)
-                request = Request(id, script, initial, reply)
+                request = Request(script, initial, reply)
+            } catch (_: OutOfMemoryError) {
+                terminate()
             } catch (_: Exception) {
-                reply.error(id, 1, 3)
+                // Malformed admission leaves no live session or replayable callback.
+                terminate()
             } finally {
-                source.close()
-                state.close()
+                source?.close()
+                state?.close()
             }
         }
 
         @Synchronized
         override fun dispatchEvent(id: Long, number: Int, event: Int) {
-            if (!authorized() || disposed) return
+            if (!authorized()) return
             val current = request ?: return
-            if (current.id != id || number != 1 || event !in 0..2 || !active.compareAndSet(false, true)) {
-                current.reply.error(current.id, 1, 3)
-                return
-            }
+            if (!gate.dispatch(id, number, event)) return
+            active.set(true)
             // Process-level PSS sampling complements the native arena and kernel deadline.
             monitor.scheduleAtFixedRate({
                 if (active.get()) {
@@ -92,8 +93,7 @@ class ExternalLuaService : Service() {
 
         @Synchronized
         override fun disposeSession(id: Long) {
-            if (!authorized() || request?.id != id) return
-            disposed = true
+            if (!authorized() || !gate.dispose(id)) return
             request = null
             terminate()
         }
