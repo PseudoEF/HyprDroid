@@ -119,7 +119,7 @@ internal fun RenderTileTree(node: TileNode, modifier: Modifier, enabled: Boolean
         is TileNode.Progress -> LinearProgressIndicator(progress = { node.fraction }, modifier = modifier.fillMaxWidth())
         is TileNode.Spacer -> Spacer(modifier.height(node.size.dp))
         TileNode.Divider -> HorizontalDivider(modifier)
-        is TileNode.Switch -> Switch(node.value, { onEvent(TileInteraction.Toggle(node.id, it)) }, modifier, enabled)
+        is TileNode.Switch -> Switch(node.value, { onEvent(TileInteraction.Toggle(node.id, it)) }, modifier = modifier, enabled = enabled)
         is TileNode.TextInput -> OutlinedTextField(
             value = node.value,
             onValueChange = { if (validTileInput(it)) onEvent(TileInteraction.Change(node.id, it)) },

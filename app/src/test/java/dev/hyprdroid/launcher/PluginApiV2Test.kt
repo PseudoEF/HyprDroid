@@ -3,6 +3,13 @@ package dev.hyprdroid.launcher
 import dev.hyprdroid.launcher.packages.PackageException
 import dev.hyprdroid.launcher.packages.PackageManifest
 import dev.hyprdroid.launcher.plugins.TileInteraction
+import dev.hyprdroid.launcher.plugins.TileEventGateV2
+import dev.hyprdroid.launcher.plugins.TileBatteryV2
+import dev.hyprdroid.launcher.plugins.TileScheduleV2
+import dev.hyprdroid.launcher.plugins.TileSignal
+import dev.hyprdroid.launcher.plugins.TileSystemSnapshotV2
+import dev.hyprdroid.launcher.plugins.TileTimer
+import dev.hyprdroid.launcher.plugins.tileSystemV2
 import dev.hyprdroid.launcher.plugins.TileStateV2
 import dev.hyprdroid.launcher.plugins.TileStateValue
 import dev.hyprdroid.launcher.plugins.TileUiCodec
@@ -31,6 +38,20 @@ class PluginApiV2Test {
     }
 
     @Test
+    fun eventGateRejectsReplayStaleFramesAndRapidEvents() {
+        val gate = TileEventGateV2()
+        val button = TileUiCodec.decode(listOf("button", "go", "Go"), 2)
+        val click = TileInteraction.Click("go")
+        val revision = gate.publish(button)
+        assertTrue(gate.accept(revision, 1, click, 0))
+        assertFalse(gate.accept(revision, 1, click, 500))
+        assertFalse(gate.accept(revision, 2, click, 200))
+        val next = gate.publish(button)
+        assertFalse(gate.accept(revision, 2, click, 500))
+        assertTrue(gate.accept(next, 2, click, 500))
+    }
+
+    @Test
     fun rejectsInvalidTrees() {
         val invalid = listOf(
             listOf("row", "2", "switch", "same", "true", "button", "same", "Duplicate"),
@@ -53,6 +74,30 @@ class PluginApiV2Test {
         assertThrows(IllegalArgumentException::class.java) {
             TileStateV2.encode(mapOf("count" to TileStateValue.Number(Double.NaN)))
         }
+    }
+
+    @Test
+    fun timersPauseAndNeverReplayMissedTicks() {
+        val schedule = TileScheduleV2()
+        assertThrows(IllegalArgumentException::class.java) { schedule.configure(listOf(TileTimer("fast", 1)), 0) }
+        schedule.configure(listOf(TileTimer("clock", 1_000)), 0)
+        assertEquals(TileSignal.Resume, schedule.setActive(true, 0))
+        assertEquals(null, schedule.setActive(true, 10))
+        assertTrue(schedule.poll(999).isEmpty())
+        assertEquals(listOf(TileSignal.Timer("clock")), schedule.poll(60_000))
+        assertTrue(schedule.poll(60_001).isEmpty())
+        schedule.setActive(false, 60_002)
+        assertTrue(schedule.poll(120_000).isEmpty())
+        assertEquals(TileSignal.Resume, schedule.setActive(true, 121_000))
+        assertTrue(schedule.poll(121_999).isEmpty())
+    }
+
+    @Test
+    fun systemSnapshotReadsOnlyGrantedFields() {
+        val none = tileSystemV2(emptySet(), { error("time exposed") }, { error("battery exposed") })
+        assertEquals(TileSystemSnapshotV2(null, null, null), none)
+        val battery = tileSystemV2(setOf("system.battery"), { error("time exposed") }, { TileBatteryV2(101, true) })
+        assertEquals(TileSystemSnapshotV2(null, null, true), battery)
     }
 
     @Test

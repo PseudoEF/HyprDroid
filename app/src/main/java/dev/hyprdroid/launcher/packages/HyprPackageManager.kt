@@ -155,6 +155,10 @@ internal class HyprPackageManager(
         val visiting = mutableSetOf<String>()
         fun visit(entry: CatalogPackage) {
             val manifest = entry.manifest
+            val previous = installed[manifest.id]?.manifest
+            if (previous != null && (previous.apiVersion == 2 || manifest.apiVersion == 2) &&
+                (previous.apiVersion != manifest.apiVersion || !previous.permissions.containsAll(manifest.permissions))
+            ) throw PackageException("Обновление меняет версию API или запрашивает новые разрешения: ${manifest.id}")
             if (manifest.id in pending) return
             if (!visiting.add(manifest.id)) throw PackageException("Цикл зависимостей: ${manifest.id}")
             for ((id, minimum) in manifest.dependencies) {
