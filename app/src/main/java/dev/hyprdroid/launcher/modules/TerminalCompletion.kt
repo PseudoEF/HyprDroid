@@ -22,6 +22,7 @@ internal class TerminalCompletion(input: String) {
         val candidates = when {
             !argument -> commands
             parts.size > 3 -> emptyList()
+            parts[1].equals("repo", true) -> listOf("hypr repo list", "hypr repo update")
             parts[1].equals("list", true) -> listOf("hypr list --installed")
             else -> {
                 val ids = when (packageSource) {
@@ -43,7 +44,7 @@ internal class TerminalCompletion(input: String) {
         val commands = listOf(
             "help", "clear", "history", "history clear", "modules", "date", "droidfetch",
             "demo install", "lua help", "lua run droidfetch", "hypr help", "hypr search",
-            "hypr list", "hypr info", "hypr install", "hypr remove", "hypr update",
+            "hypr list", "hypr repo list", "hypr repo update", "hypr info", "hypr install", "hypr remove", "hypr update",
         )
     }
 }

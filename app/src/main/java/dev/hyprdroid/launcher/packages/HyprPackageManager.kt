@@ -11,27 +11,46 @@ internal class HyprPackageManager(
     private val artifactSource: PackageArtifactSource,
     private val verifier: HypPackageVerifier,
     private val registry: PackageRegistry = FilePackageRegistry(root),
+    private val repository: SignedPackageRepository? = null,
 ) {
     private val lock = Any()
     private val objects = root.resolve("objects")
 
-    val catalogDescription: String get() = catalog.description
+    val catalogDescription: String get() = if (repository == null) catalog.description
+        else "${catalog.description} · ${repository.description} (проверенный кэш)"
+
+    fun repositoryStatus(): List<String> = listOf(catalog.description) +
+        listOfNotNull(repository?.status())
+
+    fun refreshRepository(): Int = synchronized(lock) {
+        repository?.refresh() ?: throw PackageException("Сетевой репозиторий не настроен")
+    }
+
+    private fun catalogEntries(): List<CatalogPackage> {
+        val bundled = catalog.packages()
+        val remote = try {
+            repository?.packages().orEmpty()
+        } catch (_: java.io.IOException) {
+            // A broken network cache must not make the bundled catalogue unusable.
+            emptyList()
+        }
+        return bundled + remote
+    }
 
     fun available(query: String = ""): List<PackageManifest> {
         val needle = query.trim().lowercase(Locale.ROOT)
-        return catalog.packages().map { it.manifest }.filter { needle in it.id }
+        return catalogEntries().map { it.manifest }.filter { needle in it.id }
     }
 
     fun installed(): List<PackageManifest> = synchronized(lock) {
         registry.read().values.map { it.manifest }.sortedBy { it.id }
     }
 
-    fun info(id: String): PackageDetails {
-        validatePackageId(id)
-        val installed = synchronized(lock) { registry.read()[id]?.manifest }
-        val available = catalog.packages().firstOrNull { it.manifest.id == id }?.manifest
-        if (available == null && installed == null) throw PackageException("Пакет $id не найден")
-        return PackageDetails(available, installed)
+    fun info(name: String): PackageDetails = synchronized(lock) {
+        val installed = registry.read()
+        val available = catalogEntries().associateBy { it.manifest.id }
+        val id = resolveName(name, available.keys + installed.keys)
+        PackageDetails(available[id]?.manifest, installed[id]?.manifest)
     }
 
     /** Authorizes the built-in tile adapter using the exact signed installation sample. */
@@ -57,11 +76,11 @@ internal class HyprPackageManager(
         if (actual != expected) throw PackageException("Содержимое установленного DroidFetch изменено")
     }
 
-    fun install(id: String): List<PackageManifest> = synchronized(lock) {
-        validatePackageId(id)
+    fun install(name: String): List<PackageManifest> = synchronized(lock) {
         val current = registry.read()
-        val entries = catalog.packages().associateBy { it.manifest.id }
-        val requested = entries[id] ?: throw PackageException("Пакет $id отсутствует в каталоге")
+        val entries = catalogEntries().associateBy { it.manifest.id }
+        val id = resolveName(name, entries.keys)
+        val requested = entries.getValue(id)
         if (current[id]?.manifest?.version?.let { it >= requested.manifest.version } == true) {
             return@synchronized emptyList()
         }
@@ -70,17 +89,17 @@ internal class HyprPackageManager(
 
     fun update(): List<PackageManifest> = synchronized(lock) {
         val current = registry.read()
-        val entries = catalog.packages().associateBy { it.manifest.id }
+        val entries = catalogEntries().associateBy { it.manifest.id }
         val requested = current.values.mapNotNull { installed ->
             entries[installed.manifest.id]?.takeIf { it.manifest.version > installed.manifest.version }
         }
         apply(current, plan(requested, current, entries))
     }
 
-    fun remove(id: String): PackageManifest = synchronized(lock) {
-        validatePackageId(id)
+    fun remove(name: String): PackageManifest = synchronized(lock) {
         val current = registry.read()
-        val removed = current[id] ?: throw PackageException("Пакет $id не установлен")
+        val id = resolveName(name, current.keys)
+        val removed = current.getValue(id)
         val dependents = current.values.map { it.manifest }.filter { id in it.dependencies }
         if (dependents.isNotEmpty()) {
             throw PackageException("Пакет требуется: ${dependents.joinToString { it.id }}")
@@ -152,7 +171,9 @@ internal class HyprPackageManager(
             val updates = plan.map { entry ->
                 val stage = Files.createTempDirectory(objects.toPath(), "pkg-").toFile()
                 staged.add(stage)
-                val manifest = artifactSource.open(entry).use { verifier.prepare(entry, it, stage) }
+                val source = if (entry.downloadUrl == null) artifactSource
+                    else repository ?: throw PackageException("Сетевой репозиторий не настроен")
+                val manifest = source.open(entry).use { verifier.prepare(entry, it, stage) }
                 next[manifest.id] = InstalledPackage(manifest, stage.name)
                 manifest
             }
@@ -190,3 +211,15 @@ internal fun deletePackageStaging(file: File) {
 }
 
 internal const val DROIDFETCH_SAMPLE_ID = "hyprdroid.droidfetch-sample"
+
+
+private fun resolveName(name: String, ids: Set<String>): String {
+    validatePackageId(name)
+    if (name in ids) return name
+    val matches = ids.filter { it.substringAfterLast('.') == name }
+    return when (matches.size) {
+        1 -> matches.single()
+        0 -> throw PackageException("Пакет $name не найден")
+        else -> throw PackageException("Укажите полный ID: ${matches.sorted().joinToString()}")
+    }
+}

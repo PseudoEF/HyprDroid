@@ -7,6 +7,7 @@ internal data class CatalogPackage(
     val sha256: String,
     val signature: String,
     val keyId: String,
+    val downloadUrl: String? = null,
 ) {
     val filename: String get() = "${manifest.id}-${manifest.version}.hyp"
 }

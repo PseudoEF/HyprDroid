@@ -10,6 +10,13 @@ import kotlinx.coroutines.withContext
 internal class PackageCommands(private val manager: () -> HyprPackageManager) {
     fun execute(args: List<String>): CommandResult = when (args.firstOrNull()) {
         null, "help" -> if (args.size <= 1) CommandResult.Output(USAGE) else invalid()
+        "repo" -> when (args) {
+            listOf("repo", "list") -> operation { repositoryStatus() }
+            listOf("repo", "update") -> operation("Проверка каталога GitHub…") {
+                listOf("Проверена ревизия каталога ${refreshRepository()}.")
+            }
+            else -> invalid()
+        }
         "search" -> if (args.size >= 2) {
             operation { listOf(catalogDescription) + available(args.drop(1).joinToString(" ")).summary() }
         } else invalid()
@@ -66,7 +73,7 @@ internal class PackageCommands(private val manager: () -> HyprPackageManager) {
                     } catch (error: PackageException) {
                         CommandOperationResult(listOf("Ошибка hypr: ${error.message}"), failed = true)
                     } catch (_: IOException) {
-                        CommandOperationResult(listOf("Ошибка hypr: не удалось прочитать или записать данные пакета."), failed = true)
+                        CommandOperationResult(listOf("Ошибка hypr: не удалось загрузить, прочитать или сохранить данные пакета."), failed = true)
                     } catch (_: SecurityException) {
                         CommandOperationResult(listOf("Ошибка hypr: Android отказал в доступе к хранилищу."), failed = true)
                     }
@@ -85,8 +92,10 @@ internal class PackageCommands(private val manager: () -> HyprPackageManager) {
 
     private companion object {
         val USAGE = listOf(
-            "Hypr Package Manager v0.1 · локальный тестовый каталог",
+            "Hypr Package Manager",
             "hypr help",
+            "hypr repo list",
+            "hypr repo update",
             "hypr search <query>",
             "hypr list",
             "hypr list --installed",

@@ -102,7 +102,7 @@ internal fun checkDirectoryCreated(directory: File) {
     if (!directory.isDirectory && !directory.mkdirs()) throw PackageException("Не удалось создать каталог пакета")
 }
 
-private fun String.decodeHex(size: Int): ByteArray {
+internal fun String.decodeHex(size: Int): ByteArray {
     if (length != size * 2 || any { it !in '0'..'9' && it !in 'a'..'f' }) {
         throw PackageException("Некорректная контрольная сумма, подпись или публичный ключ")
     }

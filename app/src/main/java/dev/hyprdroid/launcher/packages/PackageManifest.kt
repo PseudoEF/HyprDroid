@@ -56,7 +56,7 @@ internal data class PackageManifest(
 
     companion object {
         private val fields = setOf("id", "version", "apiVersion", "runtime", "entry", "permissions", "dependencies")
-        private val permissionsV1 = setOf("terminal.print", "system.device", "system.battery", "ui.window")
+        private val permissionsV1 = setOf("terminal.print", "system.device", "system.battery", "ui.window", "ui.tile")
 
         fun decode(json: JSONObject): PackageManifest {
             if (json.keys().asSequence().toSet() != fields) throw PackageException("Некорректные поля манифеста")
