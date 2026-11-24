@@ -1,0 +1,46 @@
+name: Developer Edition isolation
+on:
+  push:
+    branches: [feature/developer-edition]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build unit tests and APKs
+        run: ./gradlew :app:testDebugUnitTest :app:testDeveloperUnitTest :app:assembleDebug :app:assembleDeveloper :app:assembleDebugAndroidTest
+      - name: Check packaged identities, HOME and inclusion of Developer code
+        run: sh scripts/check-edition-apks.sh app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/developer/app-developer-unsigned.apk
+      - name: Create an Android emulator test APK
+        run: |
+          # This key and its APK stay within this test job. Distribution uses a distinct persistent key.
+          keytool -genkeypair -alias emulator-only -keystore "$RUNNER_TEMP/emulator-only.p12" -storetype PKCS12 -storepass android -dname CN=DeveloperEmulatorTest -keyalg RSA -keysize 2048 -validity 2
+          tools="$ANDROID_HOME/build-tools/35.0.0"
+          "$tools/zipalign" -f 4 app/build/outputs/apk/developer/app-developer-unsigned.apk "$RUNNER_TEMP/developer-aligned.apk"
+          "$tools/apksigner" sign --ks "$RUNNER_TEMP/emulator-only.p12" --ks-pass pass:android --out "$RUNNER_TEMP/developer-test.apk" "$RUNNER_TEMP/developer-aligned.apk"
+      - name: Enable KVM
+        run: sudo chmod 666 /dev/kvm
+      - name: Check parallel installation on Android 15
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: sh scripts/ci-developer-edition.sh

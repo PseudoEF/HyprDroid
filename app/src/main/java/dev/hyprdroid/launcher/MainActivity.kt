@@ -3,6 +3,7 @@ package dev.hyprdroid.launcher
 import android.os.Bundle
 import android.util.Log
 import android.content.Intent
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -19,7 +20,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.hyprdroid.launcher.ui.WorkspaceScreen
 import dev.hyprdroid.launcher.ui.WorkspaceViewModel
 
-class MainActivity : ComponentActivity() {
+open class MainActivity : ComponentActivity() {
     private lateinit var widgetBinding: WidgetBindingController
     private val route = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,9 +40,16 @@ class MainActivity : ComponentActivity() {
         setContent {
             val model: WorkspaceViewModel = viewModel()
             val requested by route.collectAsState()
-            CompositionLocalProvider(LocalWidgetBinding provides widgetBinding) { WorkspaceScreen(model, requested) { route.value = null } }
+            ActivityContent {
+                CompositionLocalProvider(LocalWidgetBinding provides widgetBinding) {
+                    WorkspaceScreen(model, requested) { route.value = null }
+                }
+            }
         }
     }
+    @Composable
+    protected open fun ActivityContent(content: @Composable () -> Unit) = content()
+
     override fun onStart() {
         super.onStart()
         if (BuildConfig.EXTERNAL_LUA) Log.d("HyprLuaTile", "Activity started")

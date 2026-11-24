@@ -45,7 +45,25 @@ android {
     sourceSets["androidTest"].assets.srcDir("src/test/resources/external")
     if (externalLuaOnMain || testExperimental) sourceSets["androidTest"].java.srcDir("src/externalLuaAndroidTest/java")
     testBuildType = if (testExperimental) "experimental" else "debug"
+    val developerKey = providers.environmentVariable("HYPRDROID_DEVELOPER_KEYSTORE_FILE").orNull
+    val developerSigning = developerKey?.let { path ->
+        signingConfigs.create("developer") {
+            storeFile = file(path)
+            require(storeFile!!.isFile) { "Developer keystore is missing" }
+            storeType = "PKCS12"
+            storePassword = requireNotNull(System.getenv("HYPRDROID_DEVELOPER_KEYSTORE_PASSWORD"))
+            keyAlias = "hyprdroid-developer"
+            keyPassword = storePassword
+        }
+    }
     buildTypes {
+        create("developer") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".developer"
+            matchingFallbacks += "debug"
+            signingConfig = developerSigning
+            buildConfigField("boolean", "DISTRIBUTION", "false")
+        }
         create("experimental") {
             initWith(getByName("debug"))
             applicationIdSuffix = ".experimental"
@@ -65,6 +83,7 @@ android {
     sourceSets["experimental"].java.srcDir("src/externalLua/java")
     sourceSets["experimental"].aidl.srcDir("src/externalLua/aidl")
     sourceSets["release"].java.srcDir("src/noExternalLua/java")
+    sourceSets["developer"].java.srcDir("src/noExternalLua/java")
     if (externalLuaOnMain) {
         buildTypes.getByName("debug") {
             ndk.abiFilters += listOf("arm64-v8a", "x86_64")
@@ -110,9 +129,16 @@ androidComponents {
     beforeVariants(selector().withBuildType("experimental")) { variant ->
         variant.enable = !distribution
     }
+    beforeVariants(selector().withBuildType("developer")) { variant ->
+        variant.enable = !distribution
+    }
     onVariants { variant ->
         val experimental = variant.buildType == "experimental"
-        val id = if (experimental) experimentalApplicationId else coreApplicationId
+        val id = when (variant.buildType) {
+            "developer" -> "$coreApplicationId.developer"
+            "experimental" -> experimentalApplicationId
+            else -> coreApplicationId
+        }
         val variantName = variant.name.replaceFirstChar { it.uppercaseChar() }
         val task = tasks.register<GenerateBuildIdentity>("generate${variantName}BuildIdentity") {
             output.set(layout.buildDirectory.dir("generated/buildInfoAssets/${variant.name}"))
