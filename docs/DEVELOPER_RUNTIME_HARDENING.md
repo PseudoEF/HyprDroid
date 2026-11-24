@@ -47,3 +47,5 @@ From the my-tile project, use the same public key and detached metadata you alre
     cp "$public_key" "$archive" "$signature" "$HOME/storage/downloads/"
 
 The existing private key stays in Termux. The three exported files are sufficient for the future import flow. The current isolation APK cannot import them.
+
+A [second Developer-branch full run](https://github.com/PseudoEF/HyprDroid/actions/runs/45382526410) retained a failure in the separate AndroidWidgetsTest RemoteViews scenario. It was not among the original ten. Both widget restoration phases still ran and passed. One [isolation run](https://github.com/PseudoEF/HyprDroid/actions/runs/45383091946) separately timed out in the trusted LuaJ service. Its runtime budget was kept unchanged. These runs are retained as failures.
