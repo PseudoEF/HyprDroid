@@ -51,7 +51,11 @@ internal object ExperimentalExternalLua {
         }
         val state = request.state.encodeToByteArray()
         if (state.size > 512) return PluginResult.Failure("Превышен размер Lua-запроса")
-        return execute<PluginResult>(context, source, state, event, null, authorized, { PluginResult.Failure(it) }, ::decodeFrame)
+        return execute(context, source, state, event, null, authorized,
+            rejected = { PluginResult.Failure("Внешний Lua занят") },
+            failure = { PluginResult.Failure(it) },
+            decode = ::decodeFrame,
+        )
     }
 
     suspend fun runV2(
@@ -61,15 +65,17 @@ internal object ExperimentalExternalLua {
         authorized: () -> Boolean = { true },
     ): TileFrameV2? {
         val wire = encodeRequestV2(request)
-        return execute<TileFrameV2?>(context, source, wire.context, 0, wire, authorized, { null }) {
+        return execute<TileFrameV2?>(context, source, wire.context, 0, wire, authorized,
+            rejected = { throw ExternalLuaBusy() }, failure = { null },
+        ) {
             decodeFrameV2(it, wire.capabilities)
         }
     }
 
     private suspend fun <T> execute(
         context: Context, source: ByteArray, state: ByteArray, event: Int, v2: WireRequestV2?,
-        authorized: () -> Boolean, failure: (String) -> T, decode: (ByteArray) -> T,
-    ): T = workers.execute(rejected = { failure("Внешний Lua занят") }) admitted@{
+        authorized: () -> Boolean, rejected: () -> T, failure: (String) -> T, decode: (ByteArray) -> T,
+    ): T = workers.execute(rejected) admitted@{
         if (!BuildConfig.EXTERNAL_LUA || uncertainDeath || excessiveFailures() || !authorized()) {
             return@admitted failure("Внешний Lua недоступен")
         }

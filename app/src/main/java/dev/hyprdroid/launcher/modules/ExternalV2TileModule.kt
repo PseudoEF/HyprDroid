@@ -24,6 +24,7 @@ import dev.hyprdroid.launcher.BuildConfig
 import dev.hyprdroid.launcher.data.TileStateSlot
 import dev.hyprdroid.launcher.data.WorkspaceEngineStore
 import dev.hyprdroid.launcher.external.ExperimentalExternalLua
+import dev.hyprdroid.launcher.external.ExternalLuaBusy
 import dev.hyprdroid.launcher.packages.AndroidPackages
 import dev.hyprdroid.launcher.plugins.*
 import dev.hyprdroid.launcher.ui.Mocha
@@ -109,6 +110,10 @@ internal class ExternalV2TileModule(override val id: String, override val title:
             } catch (cancelled: CancellationException) {
                 Log.d("HyprLuaTile", "v2 cancelled: $operationKind")
                 throw cancelled
+            } catch (_: ExternalLuaBusy) {
+                // A saturated queue can drop a timer tick. Keep the last validated
+                // frame and its schedule so the next tick can recover.
+                if (frame == null) failed = true
             } catch (_: Exception) {
                 Log.w("HyprLuaTile", "v2 rejected: $operationKind")
                 revision = gate.publish(null)

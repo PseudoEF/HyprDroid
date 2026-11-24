@@ -4,6 +4,8 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicInteger
 
+internal class ExternalLuaBusy : Exception()
+
 /** Bounds both in-flight calls and the number of callers allowed to suspend. */
 internal class WorkerAdmission(active: Int, pending: Int, private val waitMillis: Long) {
     private val slots = Semaphore(active)
