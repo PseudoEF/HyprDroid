@@ -71,5 +71,7 @@ jobs:
         if: always()
         with:
           name: hyprdroid-experimental-test-report
-          path: app/build/reports/androidTests/connected/
+          path: |
+            app/build/reports/androidTests/connected/
+            app/build/reports/androidTests/v2-persistence/
           if-no-files-found: warn

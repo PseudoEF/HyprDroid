@@ -27,8 +27,13 @@ private val Context.workspaceEngineStore by preferencesDataStore(
     corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
 )
 
-internal class WorkspaceEngineStore(private val store: DataStore<Preferences>) {
-    constructor(context: Context) : this(context.applicationContext.workspaceEngineStore)
+internal class WorkspaceEngineStore(
+    private val store: DataStore<Preferences>,
+    private val traceState: (String) -> Unit = {},
+) {
+    constructor(context: Context) : this(context.applicationContext.workspaceEngineStore, { message ->
+        if (BuildConfig.V2_FIXTURE_LUA) Log.d("HyprLuaTile", "v2 state $message")
+    })
 
     suspend fun save(workspaceId: String, engine: WorkspaceEngine, removedTile: WindowId? = null) {
         val serialized = engine.serialize()
@@ -155,8 +160,3 @@ internal data class TileStateSlot(val packageId: String, val schema: Int, val wi
 
 private fun validState(value: String) = value.isPluginText(TILE_STATE_LIMIT) &&
     value.encodeToByteArray().size <= TILE_STATE_LIMIT
-
-private fun traceState(message: String) {
-    if (!BuildConfig.V2_FIXTURE_LUA) return
-    Log.d("HyprLuaTile", "v2 state $message")
-}
