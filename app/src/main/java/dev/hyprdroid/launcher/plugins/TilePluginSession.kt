@@ -22,37 +22,42 @@ internal class TilePluginSession(private val nanoTime: () -> Long = System::nano
     private var localState = ""
     private var lastUpdate: Long? = null
 
-    suspend fun update(event: String? = null, execute: suspend (TileRequest) -> PluginResult) {
+    suspend fun update(
+        event: String? = null,
+        publish: suspend (() -> Unit) -> Unit = { it() },
+        execute: suspend (TileRequest) -> PluginResult,
+    ) {
         if (stopped || busy) return
         val now = nanoTime()
         if (lastUpdate?.let { now - it < 350_000_000L } == true) return
         if (event != null) {
             val root = (screen as? TileScreen.Ready)?.root ?: return
             if (!tileEventId.matches(event) || !root.containsButton(event)) return
-        } else {
-            screen = TileScreen.Loading
         }
         lastUpdate = now
         busy = true
         try {
+            if (event == null) publish { if (!stopped) screen = TileScreen.Loading }
             val result = execute(TileRequest(event, localState))
-            if (stopped) return
-            when (result) {
-                is PluginResult.Failure -> screen = TileScreen.Error(result.message)
-                is PluginResult.Success -> {
-                    val frame = result.tile
-                    if (frame == null) {
-                        screen = TileScreen.Error("Lua Runtime не вернул интерфейс тайла")
-                    } else {
-                        localState = frame.state
-                        screen = frame.root?.let { TileScreen.Ready(it) } ?: TileScreen.Empty
+            publish publishResult@{
+                if (stopped) return@publishResult
+                when (result) {
+                    is PluginResult.Failure -> screen = TileScreen.Error(result.message)
+                    is PluginResult.Success -> {
+                        val frame = result.tile
+                        if (frame == null) {
+                            screen = TileScreen.Error("Lua Runtime не вернул интерфейс тайла")
+                        } else {
+                            localState = frame.state
+                            screen = frame.root?.let { TileScreen.Ready(it) } ?: TileScreen.Empty
+                        }
                     }
                 }
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            if (!stopped) screen = TileScreen.Error("Не удалось обновить Lua-тайл")
+            publish { if (!stopped) screen = TileScreen.Error("Не удалось обновить Lua-тайл") }
         } finally {
             busy = false
         }

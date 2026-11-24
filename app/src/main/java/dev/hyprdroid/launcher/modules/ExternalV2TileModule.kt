@@ -88,37 +88,42 @@ internal class ExternalV2TileModule(override val id: String, override val title:
             try {
                 val operation = currentCoroutineContext()
                 val stillAllowed = { operation.isActive && manager.helloTileGeneration.value == generation }
-                val result = whileAuthorized(manager.helloTileGeneration, generation) {
+                val (result, previous, persist) = manager.externalAdmission.run(generation) {
                     val (manifest, source) = withContext(Dispatchers.IO) { manager.verifiedV2Tile(id) }
                     val permissions = manifest.permissions
                     val previous = if ("state.local" in permissions) store.loadTileStateV2(slot, diagnose = signal == TileSignal.Resume) else emptyMap()
                     val system = withContext(Dispatchers.IO) { captureSystem(app, permissions) }
                     val updated = ExperimentalExternalLua.runV2(app, source, TileExecutionV2(
                         permissions, previous, system, interaction, signal,
-                    ), authorized = stillAllowed) ?: error("Lua v2 did not return a valid frame")
-                    check(stillAllowed())
-                    if ("state.local" in permissions) store.saveTileStateV2(slot, previous, updated.state, stillAllowed)
-                    updated
+                    ),
+                        dispatch = { manager.externalAdmission.dispatch(generation, it) },
+                        authorized = stillAllowed,
+                    ) ?: error("Lua v2 did not return a valid frame")
+                    Triple(updated, previous, "state.local" in permissions)
+                } ?: return
+                manager.externalAdmission.commit(generation) {
+                    if (persist) store.saveTileStateV2(slot, previous, result.state, stillAllowed)
+                    if (!stillAllowed()) return@commit
+                    schedule.configure(result.timers, SystemClock.elapsedRealtime())
+                    revision = gate.publish(result.tree)
+                    frame = result
+                    failed = false
+                    if (operationKind != "timer") Log.d("HyprLuaTile", "v2 presented: $operationKind")
                 }
-                if (result == null || !stillAllowed()) return
-                // The validated frame and timer declarations become visible only after storage succeeds.
-                schedule.configure(result.timers, SystemClock.elapsedRealtime())
-                revision = gate.publish(result.tree)
-                frame = result
-                failed = false
-                if (operationKind != "timer") Log.d("HyprLuaTile", "v2 presented: $operationKind")
             } catch (cancelled: CancellationException) {
                 Log.d("HyprLuaTile", "v2 cancelled: $operationKind")
                 throw cancelled
             } catch (_: ExternalLuaBusy) {
                 // A saturated queue can drop a timer tick. Keep the last validated
                 // frame and its schedule so the next tick can recover.
-                if (frame == null) failed = true
+                manager.externalAdmission.commit(generation) { if (frame == null) failed = true }
             } catch (_: Exception) {
                 Log.w("HyprLuaTile", "v2 rejected: $operationKind")
-                revision = gate.publish(null)
-                frame = null
-                failed = true
+                manager.externalAdmission.commit(generation) {
+                    revision = gate.publish(null)
+                    frame = null
+                    failed = true
+                }
             } finally {
                 busy = false
             }
@@ -130,8 +135,9 @@ internal class ExternalV2TileModule(override val id: String, override val title:
         }
         LaunchedEffect(frame?.timers) {
             if (frame?.timers.isNullOrEmpty()) return@LaunchedEffect
-            while (true) {
+            while (manager.helloTileGeneration.value == generation) {
                 delay(schedule.delayUntilNext(SystemClock.elapsedRealtime()) ?: break)
+                if (manager.helloTileGeneration.value != generation) break
                 for (signal in schedule.poll(SystemClock.elapsedRealtime())) run(signal = signal)
             }
         }

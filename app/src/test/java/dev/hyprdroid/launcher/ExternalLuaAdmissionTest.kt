@@ -1,11 +1,10 @@
 package dev.hyprdroid.launcher
 
 import dev.hyprdroid.launcher.plugins.ExternalLuaSessionGate
-import dev.hyprdroid.launcher.plugins.whileAuthorized
+import dev.hyprdroid.launcher.plugins.ExecutionAdmission
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -34,11 +33,11 @@ class ExternalLuaAdmissionTest {
 
     @Test
     fun generationChangeCancelsOperationAndRejectsAlreadyStaleStarts() = runBlocking {
-        val generations = MutableStateFlow(4L)
+        val admission = ExecutionAdmission()
         val started = CompletableDeferred<Unit>()
         val disposed = CompletableDeferred<Unit>()
         val pending = async {
-            whileAuthorized<String>(generations, 4L) {
+            admission.run<String>(0) {
                 try {
                     started.complete(Unit)
                     awaitCancellation()
@@ -48,9 +47,9 @@ class ExternalLuaAdmissionTest {
             }
         }
         started.await()
-        generations.value++
+        admission.invalidate()
         assertNull(pending.await())
         assertTrue(disposed.isCompleted)
-        assertNull(whileAuthorized(generations, 4L) { error("stale operation started") })
+        assertNull(admission.run(0) { error("stale operation started") })
     }
 }

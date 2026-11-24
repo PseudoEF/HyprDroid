@@ -28,7 +28,6 @@ import dev.hyprdroid.launcher.packages.HELLO_TILE_ID
 import dev.hyprdroid.launcher.plugins.PluginResult
 import dev.hyprdroid.launcher.plugins.TilePluginSession
 import dev.hyprdroid.launcher.plugins.TileScreen
-import dev.hyprdroid.launcher.plugins.whileAuthorized
 import dev.hyprdroid.launcher.ui.Mocha
 import dev.hyprdroid.launcher.workspaceengine.WindowId
 import java.io.IOException
@@ -69,29 +68,27 @@ internal object ExternalHelloTileModule : TileModule {
             }
         }
         val scope = rememberCoroutineScope()
-        suspend fun update(event: String? = null) = session.update(event) execute@{ request ->
+        suspend fun update(event: String? = null) = session.update(event, publish = { apply ->
+            manager.externalAdmission.commit(generation) { apply() }
+        }) execute@{ request ->
             if (!BuildConfig.EXTERNAL_LUA) return@execute PluginResult.Failure("Экспериментальный Lua отключён")
             try {
-                val (bytes, saved) = withContext(Dispatchers.IO) {
-                    manager.verifiedHelloTile() to store.tileState(slot)
-                }
-                if (manager.helloTileGeneration.value != generation) {
-                    return@execute PluginResult.Failure("Доверенная запись Hello Tile изменилась")
-                }
-                if (request.event == null) {
-                    Log.d("HyprLuaTile", "Rendering from Core state; initial mount or explicit retry")
-                }
-                val result = whileAuthorized(manager.helloTileGeneration, generation) {
-                    ExperimentalExternalLua.run(context, bytes, request.copy(state = saved)) {
-                        manager.helloTileGeneration.value == generation
+                val (result, saved) = manager.externalAdmission.run(generation) {
+                    val (bytes, state) = withContext(Dispatchers.IO) {
+                        manager.verifiedHelloTile() to store.tileState(slot)
                     }
+                    if (request.event == null) {
+                        Log.d("HyprLuaTile", "Rendering from Core state; initial mount or explicit retry")
+                    }
+                    ExperimentalExternalLua.run(context, bytes, request.copy(state = state),
+                        dispatch = { manager.externalAdmission.dispatch(generation, it) },
+                    ) {
+                        manager.helloTileGeneration.value == generation
+                    } to state
                 } ?: return@execute PluginResult.Failure("Доверенная запись Hello Tile изменилась")
-                if (manager.helloTileGeneration.value != generation) {
-                    return@execute PluginResult.Failure("Доверенная запись Hello Tile изменилась")
-                }
                 val updated = (result as? PluginResult.Success)?.tile?.state
-                if (updated != null && request.event != null) store.saveTileState(slot, saved, updated) {
-                    manager.helloTileGeneration.value == generation
+                if (updated != null && request.event != null) {
+                    manager.externalAdmission.commit(generation) { store.saveTileState(slot, saved, updated) }
                 }
                 result
             } catch (error: IOException) {

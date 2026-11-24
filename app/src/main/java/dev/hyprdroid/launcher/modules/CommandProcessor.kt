@@ -1,5 +1,6 @@
 package dev.hyprdroid.launcher.modules
 
+import androidx.compose.runtime.staticCompositionLocalOf
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -21,6 +22,8 @@ internal sealed interface CommandEvent {
 
 internal data class CommandOperationResult(val lines: List<String>, val failed: Boolean = false)
 
+internal val LocalTerminalExtension = staticCompositionLocalOf<((List<String>) -> CommandResult?)?> { null }
+
 /** Routes built-in commands. Streaming operations run separately from command parsing. */
 internal class CommandProcessor(
     private val modules: () -> List<ModuleSummary> = { emptyList() },
@@ -30,6 +33,7 @@ internal class CommandProcessor(
     private val luaPluginCommands: LuaPluginCommands? = null,
     private val history: TerminalHistory? = null,
     private val tileCommands: TileCommands? = null,
+    private val extension: ((List<String>) -> CommandResult?)? = null,
 ) {
     private val whitespace = Regex("\\s+")
     private val dateFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss", Locale.getDefault())
@@ -38,13 +42,14 @@ internal class CommandProcessor(
         val command = raw.trim().lowercase(Locale.ROOT)
         if (command.isEmpty()) return CommandResult.Output("")
         val first = command.takeWhile { !it.isWhitespace() }
-        if (first == "hypr" && packageCommands != null) {
+        if (first == "hypr" && (packageCommands != null || extension != null)) {
             val args = command.split(whitespace).drop(1)
+            extension?.invoke(args)?.let { return it }
             if (args.firstOrNull() == "tile") {
                 return tileCommands?.execute(args.drop(1))
                     ?: CommandResult.Output("Команды тайлов доступны внутри рабочего пространства.", failed = true)
             }
-            return packageCommands.execute(args)
+            if (packageCommands != null) return packageCommands.execute(args)
         }
         if (first == "lua" && luaPluginCommands != null) {
             return luaPluginCommands.execute(command.split(whitespace).drop(1))

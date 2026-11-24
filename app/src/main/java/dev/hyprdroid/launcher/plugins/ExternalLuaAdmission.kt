@@ -1,11 +1,5 @@
 package dev.hyprdroid.launcher.plugins
 
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.selects.select
-
 /** At most one operation can use an isolated worker. Guarded by the service's Binder lock. */
 internal class ExternalLuaSessionGate {
     private var session: Long? = null
@@ -30,25 +24,5 @@ internal class ExternalLuaSessionGate {
         if (closed || session != id) return false
         closed = true
         return true
-    }
-}
-
-/** Revocation races the operation itself, independently of Compose disposal. */
-internal suspend fun <T : Any> whileAuthorized(
-    generations: StateFlow<Long>,
-    expected: Long,
-    execute: suspend () -> T,
-): T? = coroutineScope {
-    if (generations.value != expected) return@coroutineScope null
-    val revoke = async { generations.first { it != expected } }
-    val operation = async { execute() }
-    try {
-        select {
-            revoke.onAwait { null }
-            operation.onAwait { result -> result.takeIf { generations.value == expected } }
-        }
-    } finally {
-        revoke.cancel()
-        operation.cancel()
     }
 }

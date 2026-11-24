@@ -5,8 +5,8 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.security.MessageDigest
 import java.util.Locale
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import dev.hyprdroid.launcher.plugins.ExecutionAdmission
+import kotlinx.coroutines.runBlocking
 
 /** The application keeps one manager per private registry. Terminal tiles share this instance. */
 internal class HyprPackageManager(
@@ -21,8 +21,11 @@ internal class HyprPackageManager(
 ) {
     private val lock = Any()
     private val objects = root.resolve("objects")
-    private val helloGeneration = MutableStateFlow(0L)
-    val helloTileGeneration = helloGeneration.asStateFlow()
+    val externalAdmission = ExecutionAdmission()
+    val helloTileGeneration = externalAdmission.generations
+
+    // Package commands invoke synchronous registry mutations off the UI thread.
+    private fun invalidateExternalAdmission() = runBlocking { externalAdmission.invalidate() }
 
     val catalogDescription: String get() = if (repository == null) catalog.description
         else "${catalog.description} · ${repository.description} (проверенный кэш)"
@@ -32,7 +35,7 @@ internal class HyprPackageManager(
 
     fun refreshRepository(): Int = synchronized(lock) {
         val repo = repository ?: throw PackageException("Сетевой репозиторий не настроен")
-        repo.refresh().also { helloGeneration.value++ }
+        repo.refresh().also { invalidateExternalAdmission() }
     }
 
     private fun catalogEntries(): List<CatalogPackage> {
@@ -142,7 +145,7 @@ internal class HyprPackageManager(
     fun finishFixtureMigration(id: String) = synchronized(lock) {
         if (registry.read()[id]?.fixtureMigrationApproved != true) throw PackageException("Нет подтверждения перехода")
         verifiedV2Tile(id)
-        helloGeneration.value++
+        invalidateExternalAdmission()
     }
 
     private fun affectsExternalTile(id: String) = id == HELLO_TILE_ID || id in v2FixtureIds
@@ -212,7 +215,7 @@ internal class HyprPackageManager(
         }
         val next = current - id
         registry.publish(next)
-        if (affectsExternalTile(id)) helloGeneration.value++
+        if (affectsExternalTile(id)) invalidateExternalAdmission()
         prune(next)
         removed.manifest
     }
@@ -302,7 +305,7 @@ internal class HyprPackageManager(
             registry.publish(next)
             published = true
             if ((next.keys + current.keys).any { it != migratedId && affectsExternalTile(it) && next[it] != current[it] }
-            ) helloGeneration.value++
+            ) invalidateExternalAdmission()
             prune(next)
             return updates
         } finally {

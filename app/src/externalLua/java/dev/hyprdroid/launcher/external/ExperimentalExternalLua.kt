@@ -41,6 +41,7 @@ internal object ExperimentalExternalLua {
         context: Context,
         source: ByteArray,
         request: TileRequest,
+        dispatch: ((() -> Unit) -> Boolean)? = null,
         authorized: () -> Boolean = { true },
     ): PluginResult {
         val event = when (request.event) {
@@ -51,7 +52,7 @@ internal object ExperimentalExternalLua {
         }
         val state = request.state.encodeToByteArray()
         if (state.size > 512) return PluginResult.Failure("Превышен размер Lua-запроса")
-        return execute(context, source, state, event, null, authorized,
+        return execute(context, source, state, event, null, dispatch, authorized,
             rejected = { PluginResult.Failure("Внешний Lua занят") },
             failure = { PluginResult.Failure(it) },
             decode = ::decodeFrame,
@@ -62,10 +63,11 @@ internal object ExperimentalExternalLua {
         context: Context,
         source: ByteArray,
         request: TileExecutionV2,
+        dispatch: ((() -> Unit) -> Boolean)? = null,
         authorized: () -> Boolean = { true },
     ): TileFrameV2? {
         val wire = encodeRequestV2(request)
-        return execute<TileFrameV2?>(context, source, wire.context, 0, wire, authorized,
+        return execute<TileFrameV2?>(context, source, wire.context, 0, wire, dispatch, authorized,
             rejected = { throw ExternalLuaBusy() }, failure = { null },
         ) {
             decodeFrameV2(it, wire.capabilities)
@@ -74,20 +76,20 @@ internal object ExperimentalExternalLua {
 
     private suspend fun <T> execute(
         context: Context, source: ByteArray, state: ByteArray, event: Int, v2: WireRequestV2?,
-        authorized: () -> Boolean, rejected: () -> T, failure: (String) -> T, decode: (ByteArray) -> T,
+        dispatch: ((() -> Unit) -> Boolean)?, authorized: () -> Boolean, rejected: () -> T, failure: (String) -> T, decode: (ByteArray) -> T,
     ): T = workers.execute(rejected) admitted@{
         if (!BuildConfig.EXTERNAL_LUA || uncertainDeath || excessiveFailures() || !authorized()) {
             return@admitted failure("Внешний Lua недоступен")
         }
         if (source.size !in 1..TILE_SOURCE_LIMIT) return@admitted failure("Превышен размер Lua-запроса")
         withContext(Dispatchers.IO) {
-            bind(context.applicationContext, source, state, event, v2, authorized, failure, decode)
+            bind(context.applicationContext, source, state, event, v2, dispatch, authorized, failure, decode)
         }
     }
 
     private suspend fun <T> bind(
         app: Context, source: ByteArray, state: ByteArray, event: Int, v2: WireRequestV2?,
-        authorized: () -> Boolean, failure: (String) -> T, decode: (ByteArray) -> T,
+        dispatch: ((() -> Unit) -> Boolean)?, authorized: () -> Boolean, failure: (String) -> T, decode: (ByteArray) -> T,
     ): T {
         val uuid = UUID.randomUUID()
         val id = uuid.mostSignificantBits.takeUnless { it == 0L } ?: 1L
@@ -172,7 +174,9 @@ internal object ExperimentalExternalLua {
                     }
                 }
                 if (!authorized()) return@withTimeoutOrNull failure("Доверие к модулю отозвано")
-                port.dispatchEvent(id, 1, event)
+                val send = { port.dispatchEvent(id, 1, event) }
+                if (dispatch == null) send()
+                else if (!dispatch(send)) return@withTimeoutOrNull failure("Доверие к модулю отозвано")
                 outcome.await()
             } ?: failure("Внешний Lua не ответил вовремя")
         } catch (_: android.os.RemoteException) {
