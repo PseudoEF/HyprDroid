@@ -3,6 +3,11 @@ on:
   push:
     branches: [feature/safe-external-lua-runtime, feature/lua-runtime-hardening, feature/plugin-api-v2]
   workflow_dispatch:
+    inputs:
+      sustained:
+        description: Run the ten-minute Clock Tile scenario
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -10,7 +15,7 @@ permissions:
 jobs:
   android:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -65,7 +70,8 @@ jobs:
             sh scripts/ci-v2-persistence.sh dev.hyprdroid.launcher.experimental &&
             ./gradlew :app:connectedExperimentalAndroidTest -PtestExperimental=true -Pv2FixtureLua=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.external.ExternalLuaLoadTest &&
             adb logcat -d -s HyprLuaLoad:I > app/build/reports/androidTests/lua-load.txt &&
-            grep -F 'rounds=10 burst=6 completed=60' app/build/reports/androidTests/lua-load.txt
+            grep -F 'rounds=10 burst=6 completed=60' app/build/reports/androidTests/lua-load.txt &&
+            if [ "${{ inputs.sustained }}" = true ]; then sh scripts/ci-lua-sustained.sh; fi
       - uses: actions/upload-artifact@v4
         with:
           name: hyprdroid-experimental-apk
@@ -76,6 +82,7 @@ jobs:
         with:
           name: hyprdroid-experimental-test-report
           path: |
+            app/build/reports/androidTests/sustained/
             app/build/reports/androidTests/lua-load.txt
             app/build/reports/androidTests/connected/
             app/build/reports/androidTests/v2-persistence/
