@@ -24,13 +24,25 @@ internal class IsolatedWorkerBinding(private val app: Context) {
     private var endpoint: IExternalLua? = null
     private var closing = false
     private var bound = false
+    private var unexpectedExit = false
+
+    fun failedUnexpectedly(): Boolean = synchronized(lock) { unexpectedExit }
+
+    fun acceptsReply(): Boolean = synchronized(lock) { !closing && !disconnected.isCompleted }
+
+    private fun signalDisconnect() {
+        synchronized(lock) {
+            if (!closing) unexpectedExit = true
+            disconnected.complete(Unit)
+            connected.complete(null)
+        }
+    }
 
     private val death = IBinder.DeathRecipient {
         val expected = synchronized(lock) { closing }
         Log.d("HyprLuaTile", "Worker Binder died; disposalRequested=$expected")
         died.complete(Unit)
-        disconnected.complete(Unit)
-        connected.complete(null)
+        signalDisconnect()
     }
 
     private val connection = object : ServiceConnection {
@@ -47,10 +59,7 @@ internal class IsolatedWorkerBinding(private val app: Context) {
                 }
             }
         }
-        override fun onServiceDisconnected(name: ComponentName) {
-            disconnected.complete(Unit)
-            connected.complete(null)
-        }
+        override fun onServiceDisconnected(name: ComponentName) = signalDisconnect()
         override fun onBindingDied(name: ComponentName) = onServiceDisconnected(name)
         override fun onNullBinding(name: ComponentName) {
             connected.complete(null)

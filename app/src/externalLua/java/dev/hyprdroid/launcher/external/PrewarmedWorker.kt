@@ -65,12 +65,11 @@ internal class PrewarmedWorker(
         val candidate = Reserve(IsolatedWorkerBinding(app))
         reserve = candidate
         candidate.job = scope.launch(start = CoroutineStart.ATOMIC) {
-            var unexpected = false
+            var launched = false
             try {
-                if (!synchronized(this@PrewarmedWorker) { candidate.retiring || demandPending() || !healthy() } &&
-                    candidate.binding.start() &&
-                    withTimeoutOrNull(START_MS) { candidate.binding.connected.await() } != null
-                ) {
+                if (synchronized(this@PrewarmedWorker) { candidate.retiring || demandPending() || !healthy() }) return@launch
+                launched = candidate.binding.start()
+                if (launched && withTimeoutOrNull(START_MS) { candidate.binding.connected.await() } != null) {
                     synchronized(this@PrewarmedWorker) {
                         if (!candidate.retiring) candidate.ready = true
                     }
@@ -78,7 +77,7 @@ internal class PrewarmedWorker(
                     withTimeoutOrNull(IDLE_MS) {
                         select<Unit> {
                             candidate.taken.onAwait { }
-                            candidate.binding.disconnected.onAwait { unexpected = true }
+                            candidate.binding.disconnected.onAwait { }
                         }
                     }
                 }
@@ -93,13 +92,13 @@ internal class PrewarmedWorker(
                     }
                 }
                 if (owned) withContext(NonCancellable) {
-                    if (unexpected) unexpectedExit()
                     if (!candidate.binding.close(assigned = false)) unconfirmedExit()
+                    if (candidate.binding.failedUnexpectedly()) unexpectedExit()
                     synchronized(this@PrewarmedWorker) {
                         reserve = null
                         processes.release()
                     }
-                    Log.i(TAG, "reserve=unused")
+                    if (launched) Log.i(TAG, "reserve=unused")
                 }
             }
         }

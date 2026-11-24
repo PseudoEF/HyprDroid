@@ -30,7 +30,7 @@ internal object ExperimentalExternalLua {
     private val reserve = PrewarmedWorker(processes, workers::hasDemand,
         healthy = { !uncertainDeath && !excessiveFailures() },
         unconfirmedExit = ::blockAfterUnconfirmedExit,
-        unexpectedExit = { excessiveFailures(record = true) })
+        unexpectedExit = ::recordUnexpectedExit)
 
     fun visibleTile(context: Context): () -> Unit =
         if (BuildConfig.V2_FIXTURE_LUA && prewarmExperiment) reserve.visibleTile(context.applicationContext) else ({})
@@ -39,6 +39,10 @@ internal object ExperimentalExternalLua {
         uncertainDeath = true
         reserve.discard()
         Log.w("HyprLuaTile", "Worker death unconfirmed; new bindings blocked")
+    }
+
+    private fun recordUnexpectedExit() {
+        if (excessiveFailures(record = true)) reserve.discard()
     }
 
     private val failures = ArrayDeque<Long>()
@@ -125,7 +129,6 @@ internal object ExperimentalExternalLua {
         var permit = warm != null
         var binding: IsolatedWorkerBinding? = warm
         var assigned = false
-        var resolved = false
         val result = try {
             if (warm == null) {
                 if (withTimeoutOrNull(5_000) { processes.acquire(); permit = true; true } != true) {
@@ -136,13 +139,11 @@ internal object ExperimentalExternalLua {
                 if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaReserve", "reserve=cold")
                 if (!binding.start()) return failure("Android не запустил внешний Lua worker")
             }
-            val frame = dispatchToWorker(
+            dispatchToWorker(
                 checkNotNull(binding), source, state, event, v2, dispatch, authorized, failure, decode,
                 queuedAt, admittedAt, 5_000 - (SystemClock.elapsedRealtime() - started),
                 onAssigned = { assigned = true },
             )
-            resolved = true
-            frame
         } catch (_: android.os.RemoteException) {
             return failure("Ошибка Binder внешнего Lua")
         } catch (_: android.system.ErrnoException) {
@@ -150,8 +151,8 @@ internal object ExperimentalExternalLua {
         } catch (_: SecurityException) {
             return failure("Android отклонил запуск внешнего Lua")
         } finally {
-            if (binding?.disconnected?.isCompleted == true && !resolved) excessiveFailures(record = true)
             if (binding?.close(assigned) == false) blockAfterUnconfirmedExit()
+            if (binding?.failedUnexpectedly() == true) recordUnexpectedExit()
             if (permit) processes.release()
             if (BuildConfig.V2_FIXTURE_LUA && binding != null) {
                 Log.i("HyprLuaGate", "operation=${binding.id} phase=released sinceQueueMs=${SystemClock.elapsedRealtime() - queuedAt}")
@@ -178,7 +179,7 @@ internal object ExperimentalExternalLua {
         val receiver = object : IExternalLuaReply.Stub() {
             private fun valid(session: Long, number: Int) =
                 Binder.getCallingUid() >= 0 && Binder.getCallingUid() != Process.myUid() &&
-                    session == id && number == 1 && authorized() && !binding.disconnected.isCompleted && !outcome.isCompleted &&
+                    session == id && number == 1 && authorized() && binding.acceptsReply() && !outcome.isCompleted &&
                     replyClaimed.compareAndSet(false, true)
 
             override fun render(session: Long, number: Int, frame: SharedMemory?) {
@@ -220,17 +221,14 @@ internal object ExperimentalExternalLua {
                         trace("dispatch")
                         port.dispatchEvent(id, 1, event)
                     }
-                    if (!authorized() || (if (dispatch == null) { send(); false } else !dispatch(send))) {
-                        return@withTimeoutOrNull failure("Доверие к модулю отозвано")
-                    }
+                    if (!authorized()) return@withTimeoutOrNull failure("Доверие к модулю отозвано")
+                    if (dispatch == null) send()
+                    else if (!dispatch(send)) return@withTimeoutOrNull failure("Доверие к модулю отозвано")
                 }
             }
             select {
                 outcome.onAwait { it }
-                binding.disconnected.onAwait {
-                    excessiveFailures(record = true)
-                    failure("Изолированный Lua worker завершился")
-                }
+                binding.disconnected.onAwait { failure("Изолированный Lua worker завершился") }
             }
         } ?: run {
             if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaTile", "Worker response timed out")
