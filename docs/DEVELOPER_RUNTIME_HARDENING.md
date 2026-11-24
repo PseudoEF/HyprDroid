@@ -49,3 +49,7 @@ From the my-tile project, use the same public key and detached metadata you alre
 The existing private key stays in Termux. The three exported files are sufficient for the future import flow. The current isolation APK cannot import them.
 
 A [second Developer-branch full run](https://github.com/PseudoEF/HyprDroid/actions/runs/45382526410) retained a failure in the separate AndroidWidgetsTest RemoteViews scenario. It was not among the original ten. Both widget restoration phases still ran and passed. One [isolation run](https://github.com/PseudoEF/HyprDroid/actions/runs/45383091946) separately timed out in the trusted LuaJ service. Its runtime budget was kept unchanged. These runs are retained as failures.
+
+## Measured worker bursts
+
+[Android 15 experimental runtime CI](https://github.com/PseudoEF/HyprDroid/actions/runs/45383815914) completed all 60 requests in 8,195 ms. Each of 10 rounds submitted six simultaneous Hello Tile operations. Recorded end-to-end p95 was 876 ms and the maximum was 905 ms, with all 60 independent state results checked. The same run passed the 10 Lua, Binder, and lifecycle tests and the v2 process-persistence cases. This short workload used the official Hello fixture. It did not measure process PSS peaks, Android worker OOM recovery, malicious Parcel traffic, or sustained aggregate timer load.
