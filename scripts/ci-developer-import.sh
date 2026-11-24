@@ -2,7 +2,6 @@
 set -eu
 developer=dev.hyprdroid.launcher.developer
 target="$developer.test/androidx.test.runner.AndroidJUnitRunner"
-
 adb install -r app/build/outputs/apk/androidTest/developer/app-developer-androidTest.apk
 for file in developer.pub.pem my-tile-1.0.0.hyp my-tile.signature.json; do
     adb push "$HYPR_DEVELOPER_SDK_FIXTURE/$file" "/sdcard/Download/$file"

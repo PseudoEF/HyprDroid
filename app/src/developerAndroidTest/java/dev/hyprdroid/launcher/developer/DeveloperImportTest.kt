@@ -86,12 +86,13 @@ class DeveloperImportTest {
 
     private fun accept(title: String) {
         awaitOutput(title)
-        assertTrue("Missing confirmation button for $title", click(By.text("Подтвердить")))
+        compose.onNodeWithText("Подтвердить").performClick()
     }
 
     private fun awaitOutput(text: String, substring: Boolean = false) {
-        val selector = if (substring) By.textContains(text) else By.text(text)
-        assertTrue("Developer terminal did not show: $text", device.wait(Until.hasObject(selector), 15_000))
+        compose.waitUntil(15_000) {
+            compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     private fun pick(name: String) {
