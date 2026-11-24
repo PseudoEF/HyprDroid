@@ -66,12 +66,14 @@ jobs:
           ram-size: 2048M
           emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: sh scripts/ci-developer-edition.sh && sh scripts/ci-developer-import.sh
+          script: sh scripts/ci-developer-edition.sh && sh scripts/ci-developer-workspace.sh && sh scripts/ci-developer-import.sh
       - uses: actions/upload-artifact@v4
         if: always() && github.event_name != 'workflow_dispatch'
         with:
           name: hyprdroid-developer-import-test-report
-          path: app/build/reports/developer-import/
+          path: |
+            app/build/reports/developer-import/
+            app/build/reports/developer-workspace/
           if-no-files-found: warn
 
   signed-isolation-apk:
