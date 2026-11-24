@@ -29,6 +29,7 @@ jobs:
           packages: 'platform-tools platforms;android-35 build-tools;34.0.0 build-tools;35.0.0 ndk;28.2.13676358 cmake;3.22.1'
       - uses: gradle/actions/setup-gradle@v4
       - name: Build test-only APKs
+        id: build
         run: ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:testExperimentalUnitTest :app:assembleExperimental :app:assembleExperimentalAndroidTest -PtestExperimental=true -Pv2FixtureLua=true
       - name: Verify APK identity, signature and native alignment
         run: |
@@ -78,8 +79,19 @@ jobs:
             grep -F 'rounds=10 burst=6 completed=60' app/build/reports/androidTests/lua-load.txt &&
             adb install -r app/build/outputs/apk/experimental/app-experimental.apk &&
             adb install -r app/build/outputs/apk/androidTest/experimental/app-experimental-androidTest.apk &&
-            sh scripts/ci-lua-circuit.sh &&
-            if [ "${{ inputs.sustained }}" = true ]; then sh scripts/ci-lua-sustained.sh; fi
+            sh scripts/ci-lua-circuit.sh
+      - name: Run the independent ten-minute Clock Tile workload
+        if: always() && inputs.sustained && steps.build.outcome == 'success'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: >-
+            adb install app/build/outputs/apk/experimental/app-experimental.apk &&
+            adb install app/build/outputs/apk/androidTest/experimental/app-experimental-androidTest.apk &&
+            sh scripts/ci-lua-sustained.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:

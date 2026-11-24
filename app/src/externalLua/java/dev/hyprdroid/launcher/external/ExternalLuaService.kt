@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Binder
 import android.os.Debug
 import android.os.IBinder
+import android.os.Parcel
 import android.os.Process
 import android.os.SharedMemory
 import android.util.Log
@@ -41,6 +42,26 @@ class ExternalLuaService : Service() {
         Binder.getCallingUid() != Process.myUid()
 
     private val binder = object : IExternalLua.Stub() {
+        override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+            // The generated stub for the app's minimum SDK accepts trailing data.
+            // These primitive-only messages have an exact wire size.
+            when (code) {
+                TRANSACTION_dispatchEvent -> {
+                    data.enforceInterface(requireNotNull(interfaceDescriptor))
+                    if (data.dataAvail() != Long.SIZE_BYTES + 2 * Int.SIZE_BYTES) return false
+                    dispatchEvent(data.readLong(), data.readInt(), data.readInt())
+                    return true
+                }
+                TRANSACTION_disposeSession -> {
+                    data.enforceInterface(requireNotNull(interfaceDescriptor))
+                    if (data.dataAvail() != Long.SIZE_BYTES) return false
+                    disposeSession(data.readLong())
+                    return true
+                }
+                else -> return super.onTransact(code, data, reply, flags)
+            }
+        }
+
         @Synchronized
         override fun createSession(id: Long, apiVersion: Int, source: SharedMemory?, state: SharedMemory?, reply: IExternalLuaReply?) {
             try {
