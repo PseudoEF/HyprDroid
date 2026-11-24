@@ -90,7 +90,7 @@ class DeveloperWorkspaceTest {
     }
 
     @Test fun developerCommandRunsInTheRestoredTerminal() {
-        ActivityScenario.launch(DeveloperActivity::class.java).use {
+        ActivityScenario.launch(DeveloperActivity::class.java).use { scenario ->
             await("module-command-input-tile-1")
             // Drive the real field without Compose's idle barrier while the caret animates.
             val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
@@ -99,6 +99,12 @@ class DeveloperWorkspaceTest {
             device.executeShellCommand("input text hypr%sdev%slist")
             assertTrue("Command text did not reach the field", device.wait(Until.hasObject(By.text("hypr dev list")), 10_000))
             device.pressEnter()
+            assertTrue("Terminal did not echo the submitted command",
+                device.wait(Until.hasObject(By.text("› hypr dev list")), 10_000))
+            scenario.onActivity { activity ->
+                androidx.core.view.WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+                    .hide(androidx.core.view.WindowInsetsCompat.Type.ime())
+            }
             val printed = device.wait(Until.hasObject(By.textContains("Нет локальных пакетов.")), 15_000)
             if (!printed) {
                 val hierarchy = java.io.ByteArrayOutputStream()
