@@ -53,7 +53,10 @@ internal object ExperimentalExternalLua {
         val state = request.state.encodeToByteArray()
         if (state.size > 512) return PluginResult.Failure("Превышен размер Lua-запроса")
         return execute(context, source, state, event, null, dispatch, authorized,
-            rejected = { PluginResult.Failure("Внешний Lua занят") },
+            rejected = {
+                if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaTile", "Worker admission declined")
+                PluginResult.Failure("Внешний Lua занят")
+            },
             failure = { PluginResult.Failure(it) },
             decode = ::decodeFrame,
         )
@@ -68,7 +71,10 @@ internal object ExperimentalExternalLua {
     ): TileFrameV2? {
         val wire = encodeRequestV2(request)
         return execute<TileFrameV2?>(context, source, wire.context, 0, wire, dispatch, authorized,
-            rejected = { throw ExternalLuaBusy() }, failure = { null },
+            rejected = {
+                if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaTile", "Worker admission declined")
+                throw ExternalLuaBusy()
+            }, failure = { null },
         ) {
             decodeFrameV2(it, wire.capabilities)
         }
@@ -178,7 +184,10 @@ internal object ExperimentalExternalLua {
                 if (dispatch == null) send()
                 else if (!dispatch(send)) return@withTimeoutOrNull failure("Доверие к модулю отозвано")
                 outcome.await()
-            } ?: failure("Внешний Lua не ответил вовремя")
+            } ?: run {
+                if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaTile", "Worker response timed out")
+                failure("Внешний Lua не ответил вовремя")
+            }
         } catch (_: android.os.RemoteException) {
             failure("Ошибка Binder внешнего Lua")
         } catch (_: android.system.ErrnoException) {

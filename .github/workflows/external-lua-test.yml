@@ -78,11 +78,6 @@ jobs:
             grep -F 'rounds=10 burst=6 completed=60' app/build/reports/androidTests/lua-load.txt &&
             if [ "${{ inputs.sustained }}" = true ]; then sh scripts/ci-lua-sustained.sh; fi
       - uses: actions/upload-artifact@v4
-        with:
-          name: hyprdroid-experimental-apk
-          path: app/build/outputs/apk/experimental/app-experimental.apk
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: hyprdroid-experimental-test-report

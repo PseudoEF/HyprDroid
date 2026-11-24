@@ -19,8 +19,11 @@ adb shell am instrument -w -r -e class dev.hyprdroid.launcher.external.ExternalL
 cat "$report/instrumentation.txt"
 collect
 grep -F 'elapsedMs=' "$report/logcat.txt" | tail -25
-printf 'binding_requests=%s\nunexpected_deaths=%s\n' \
+printf 'binding_requests=%s\nbinding_closures=%s\nadmission_declined=%s\nresponse_timeouts=%s\nunexpected_deaths=%s\n' \
     "$(grep -c 'Worker binding requested' "$report/logcat.txt" || true)" \
+    "$(grep -c 'Worker binding closing' "$report/logcat.txt" || true)" \
+    "$(grep -c 'Worker admission declined' "$report/logcat.txt" || true)" \
+    "$(grep -c 'Worker response timed out' "$report/logcat.txt" || true)" \
     "$(grep -c 'Worker Binder died; disposalRequested=false' "$report/logcat.txt" || true)" |
     tee "$report/worker-counts.txt"
 test "$status" -eq 0
