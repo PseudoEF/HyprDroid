@@ -46,7 +46,11 @@ internal class FilePackageRegistry(private val root: File) : PackageRegistry {
                         if (record.get("signedEvidence") != 1) throw PackageException("Неизвестная схема доказательства")
                         true
                     } else false
-                    put(manifest.id, InstalledPackage(manifest, directory, evidence, record.optInt("fixtureMigrationApproved", 0) == 1))
+                    val migration = record.has("fixtureMigrationApproved")
+                    if (migration && (record.get("fixtureMigrationApproved") != 1 || !evidence || manifest.apiVersion != 2)) {
+                        throw PackageException("Некорректное доказательство перехода")
+                    }
+                    put(manifest.id, InstalledPackage(manifest, directory, evidence, migration))
                 }
             }
         }
