@@ -35,8 +35,11 @@ internal class WorkspaceEngineStore(
         if (BuildConfig.V2_FIXTURE_LUA) Log.d("HyprLuaTile", "v2 state $message")
     })
 
+    suspend fun save(workspaceId: String, engine: WorkspaceEngine, removedTile: WindowId? = null) =
+        save(workspaceId, engine, removedTile, open = null)
+
     suspend fun save(
-        workspaceId: String, engine: WorkspaceEngine, removedTile: WindowId? = null, open: Boolean? = null,
+        workspaceId: String, engine: WorkspaceEngine, removedTile: WindowId? = null, open: Boolean?,
     ) {
         val serialized = engine.serialize()
         require(removedTile == null || removedTile !in engine.windowsById())

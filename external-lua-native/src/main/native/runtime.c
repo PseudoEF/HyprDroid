@@ -328,7 +328,7 @@ static jbyteArray run(JNIEnv *env, jbyteArray input, jbyteArray state, jint even
                 volatile unsigned char *memory = blocks[i];
                 for (size_t page = 0; page < chunk; page += 4096) memory[page] = 1;
                 __android_log_print(ANDROID_LOG_INFO, "HyprLuaPressure", "native touchedMiB=%zu", (i + 1) * 8);
-                struct timespec settle = { .tv_sec = 0, .tv_nsec = 35000000 };
+                struct timespec settle = { .tv_sec = 0, .tv_nsec = 8000000 };
                 nanosleep(&settle, NULL);
             }
             for (size_t i = 0; i < 15; ++i) free(blocks[i]);

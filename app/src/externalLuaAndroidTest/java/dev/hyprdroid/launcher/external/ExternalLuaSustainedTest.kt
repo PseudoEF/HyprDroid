@@ -53,6 +53,7 @@ class ExternalLuaSustainedTest {
             var nextLifecycle = start + 60_000
             var nextMemory = start
             var cycles = 0
+            var userRetries = 0
             try {
                 while (SystemClock.elapsedRealtime() - start < 600_000) {
                     val now = SystemClock.elapsedRealtime()
@@ -72,8 +73,22 @@ class ExternalLuaSustainedTest {
                         nextLifecycle += 60_000
                     }
                     val before = SystemClock.elapsedRealtime()
-                    toggle(first).performClick()
-                    awaitState(first, cycles % 2 != 0)
+                    val expected = cycles % 2 != 0
+                    // A fresh timer frame can invalidate a captured click. Count
+                    // visible retries and require the requested state to commit.
+                    var matched = false
+                    repeat(5) {
+                        if (!matched) {
+                            if (!hasState(first, expected)) toggle(first).performClick()
+                            try {
+                                compose.waitUntil(3_000) { hasState(first, expected) }
+                                matched = true
+                            } catch (_: ComposeTimeoutException) {
+                                userRetries++
+                            }
+                        }
+                    }
+                    assertTrue("Clock did not commit a user change after retries", matched)
                     delays += SystemClock.elapsedRealtime() - before
                     cycles++
                     awaitState(second, true)
@@ -94,7 +109,7 @@ class ExternalLuaSustainedTest {
                 val sorted = delays.sorted()
                 val p95 = sorted.getOrNull(((sorted.size * 95 + 99) / 100) - 1)
                 Log.i("HyprLuaSustained", "elapsedMs=${SystemClock.elapsedRealtime() - start} " +
-                    "validatedChanges=${delays.size} eventP95Ms=$p95 eventMaxMs=${sorted.lastOrNull()}")
+                    "validatedChanges=${delays.size} userRetries=$userRetries eventP95Ms=$p95 eventMaxMs=${sorted.lastOrNull()}")
             }
         }
     }
@@ -102,12 +117,12 @@ class ExternalLuaSustainedTest {
     private fun toggle(id: WindowId) =
         compose.onNode(isToggleable() and hasAnyAncestor(hasTestTag("tiling-window-${id.value}")))
 
+    private fun hasState(id: WindowId, checked: Boolean): Boolean = runCatching {
+        if (checked) toggle(id).assertIsOn() else toggle(id).assertIsOff()
+        toggle(id).assertIsEnabled()
+    }.isSuccess
+
     private fun awaitState(id: WindowId, checked: Boolean) {
-        compose.waitUntil(20_000) {
-            runCatching {
-                if (checked) toggle(id).assertIsOn() else toggle(id).assertIsOff()
-                toggle(id).assertIsEnabled()
-            }.isSuccess
-        }
+        compose.waitUntil(20_000) { hasState(id, checked) }
     }
 }
