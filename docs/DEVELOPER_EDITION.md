@@ -23,3 +23,15 @@ CI checks both packaged manifests and DEX code, then installs both apps on Andro
 После получения APK, подписанного постоянным сертификатом Developer Edition, установите его рядом с обычным HyprDroid. Проверьте, что Android показывает две иконки, у Developer Edition есть подпись в рабочем пространстве, а в системном выборе домашнего приложения доступен обычный HyprDroid. Измените пространство в Developer Edition и убедитесь, что настройки обычного приложения не изменились.
 
 Для создания и подписи пакета своим ключом используйте [инструкцию SDK](https://github.com/PseudoEF/HyprDroid-SDK/blob/v0.1.1/docs/GETTING_STARTED.md). Импорт ключей и пакетов, обновление и отзыв допуска ожидают реализации после закрытия проверок Runtime.
+
+### Physical validation of SDK 0.1.1 and the isolation APK
+
+The project owner reported 20/20 checks on a Pixel 9 running Android 17.
+
+| Build | Result | Checks |
+| --- | --- | --- |
+| SDK 0.1.1, `ac9c395` | 8/8 | Update, local Preview, browser launch, HTML rendering, server shutdown, key generation, signing and verification |
+| HyprDroid 10191, `84f7b5a` | 5/5 | In-place update, existing tiles, Clock format persistence, terminal and DroidFetch, Android HOME |
+| Developer version code 14, `f85bf80` | 7/7 | Parallel installation, distinct icons, edition banner, independent workspaces and data, absence from HOME, settings persistence |
+
+This validates the isolation APK. Local package installation and execution remain disabled.

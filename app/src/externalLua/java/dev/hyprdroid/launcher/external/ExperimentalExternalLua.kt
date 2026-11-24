@@ -21,12 +21,11 @@ import java.util.UUID
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 internal object ExperimentalExternalLua {
-    private val workers = Semaphore(2)
+    private val workers = WorkerAdmission(active = 2, pending = 4, waitMillis = 5_000)
     @Volatile private var uncertainDeath = false
 
     private val failures = ArrayDeque<Long>()
@@ -70,21 +69,13 @@ internal object ExperimentalExternalLua {
     private suspend fun <T> execute(
         context: Context, source: ByteArray, state: ByteArray, event: Int, v2: WireRequestV2?,
         authorized: () -> Boolean, failure: (String) -> T, decode: (ByteArray) -> T,
-    ): T {
-        var acquired = false
-        try {
-            if (withTimeoutOrNull(5_000) { workers.acquire(); acquired = true; true } != true) {
-                return failure("Внешний Lua занят")
-            }
-            if (!BuildConfig.EXTERNAL_LUA || uncertainDeath || excessiveFailures() || !authorized()) {
-                return failure("Внешний Lua недоступен")
-            }
-            if (source.size !in 1..TILE_SOURCE_LIMIT) return failure("Превышен размер Lua-запроса")
-            return withContext(Dispatchers.IO) {
-                bind(context.applicationContext, source, state, event, v2, authorized, failure, decode)
-            }
-        } finally {
-            if (acquired) workers.release()
+    ): T = workers.execute(rejected = { failure("Внешний Lua занят") }) admitted@{
+        if (!BuildConfig.EXTERNAL_LUA || uncertainDeath || excessiveFailures() || !authorized()) {
+            return@admitted failure("Внешний Lua недоступен")
+        }
+        if (source.size !in 1..TILE_SOURCE_LIMIT) return@admitted failure("Превышен размер Lua-запроса")
+        withContext(Dispatchers.IO) {
+            bind(context.applicationContext, source, state, event, v2, authorized, failure, decode)
         }
     }
 
