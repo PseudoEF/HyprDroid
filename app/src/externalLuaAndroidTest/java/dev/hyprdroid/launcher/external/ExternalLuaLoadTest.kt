@@ -16,7 +16,7 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class ExternalLuaLoadTest {
-    @Test fun repeatedWorkerBurstsPreserveIndependentResults() = runBlocking {
+    @Test fun repeatedWorkerBurstsPreserveIndependentResults(): Unit = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val app = instrumentation.targetContext
         val source = instrumentation.context.assets.open("external-hello-1.0.0.lua").use { it.readBytes() }
