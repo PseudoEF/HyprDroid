@@ -24,7 +24,7 @@ class DeveloperActivity : MainActivity() {
             ) {
                 Text(stringResource(R.string.developer_edition_banner), Modifier.padding(8.dp))
             }
-            content()
+            DeveloperTools(content)
         }
     }
 }

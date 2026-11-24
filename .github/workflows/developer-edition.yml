@@ -23,6 +23,17 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
       - uses: gradle/actions/setup-gradle@v4
+      - name: Generate a signed fixture using SDK 0.1.1
+        run: |
+          set -eu
+          sudo apt-get install -y lua5.4
+          wheel=hyprdroid_sdk-0.1.1-py3-none-any.whl
+          curl --fail --location --silent --show-error "https://github.com/PseudoEF/HyprDroid-SDK/releases/download/v0.1.1/$wheel" --output "$RUNNER_TEMP/$wheel"
+          printf '%s  %s\n' 8228f6041467e3623da59b87823bdeff2a8a44be3f1fa919dd4ea435731296b5 "$RUNNER_TEMP/$wheel" | sha256sum -c -
+          python3 -m venv "$RUNNER_TEMP/hyp-sdk"
+          "$RUNNER_TEMP/hyp-sdk/bin/pip" install --no-index "$RUNNER_TEMP/$wheel"
+          PATH="$RUNNER_TEMP/hyp-sdk/bin:$PATH" sh scripts/developer-sdk-fixture.sh "$RUNNER_TEMP/developer-sdk-fixture"
+          echo "HYPR_DEVELOPER_SDK_FIXTURE=$RUNNER_TEMP/developer-sdk-fixture" >> "$GITHUB_ENV"
       - name: Build unit tests and APKs
         run: ./gradlew :app:testDebugUnitTest :app:testDeveloperUnitTest :app:assembleDebug :app:assembleDeveloper :app:assembleDebugAndroidTest
       - name: Check packaged identities, HOME and inclusion of Developer code
@@ -31,10 +42,16 @@ jobs:
         if: github.event_name != 'workflow_dispatch'
         run: |
           # This key and its APK stay within this test job. Distribution uses a distinct persistent key.
-          keytool -genkeypair -alias emulator-only -keystore "$RUNNER_TEMP/emulator-only.p12" -storetype PKCS12 -storepass android -dname CN=DeveloperEmulatorTest -keyalg RSA -keysize 2048 -validity 2
+          keytool -genkeypair -alias hyprdroid-developer -keystore "$RUNNER_TEMP/emulator-only.p12" -storetype PKCS12 -storepass android -dname CN=DeveloperEmulatorTest -keyalg RSA -keysize 2048 -validity 2
           tools="$ANDROID_HOME/build-tools/35.0.0"
           "$tools/zipalign" -f 4 app/build/outputs/apk/developer/app-developer-unsigned.apk "$RUNNER_TEMP/developer-aligned.apk"
           "$tools/apksigner" sign --ks "$RUNNER_TEMP/emulator-only.p12" --ks-pass pass:android --out "$RUNNER_TEMP/developer-test.apk" "$RUNNER_TEMP/developer-aligned.apk"
+      - name: Build the Developer instrumentation APK with the emulator-only key
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          HYPRDROID_DEVELOPER_KEYSTORE_FILE: ${{ runner.temp }}/emulator-only.p12
+          HYPRDROID_DEVELOPER_KEYSTORE_PASSWORD: android
+        run: ./gradlew :app:assembleDeveloperAndroidTest -PtestDeveloper=true
       - name: Enable KVM
         if: github.event_name != 'workflow_dispatch'
         run: sudo chmod 666 /dev/kvm
@@ -49,7 +66,13 @@ jobs:
           ram-size: 2048M
           emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: sh scripts/ci-developer-edition.sh
+          script: sh scripts/ci-developer-edition.sh && sh scripts/ci-developer-import.sh
+      - uses: actions/upload-artifact@v4
+        if: always() && github.event_name != 'workflow_dispatch'
+        with:
+          name: hyprdroid-developer-import-test-report
+          path: app/build/reports/developer-import/
+          if-no-files-found: warn
 
   signed-isolation-apk:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feature/developer-edition'

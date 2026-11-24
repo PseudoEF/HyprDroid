@@ -8,6 +8,7 @@ val distribution = providers.environmentVariable("HYPRDROID_DISTRIBUTION").orNul
 val externalLuaOnMain = providers.gradleProperty("externalLuaOnMain").orNull == "true"
 val v2OfficialLua = providers.gradleProperty("v2OfficialLua").orNull == "true"
 val v2FixtureLua = providers.gradleProperty("v2FixtureLua").orNull == "true"
+val testDeveloper = providers.gradleProperty("testDeveloper").orNull == "true"
 val testExperimental = providers.gradleProperty("testExperimental").orNull == "true"
 val coreApplicationId = "dev.hyprdroid.launcher"
 val experimentalApplicationId = "$coreApplicationId.experimental"
@@ -44,7 +45,13 @@ android {
     buildFeatures { compose = true; buildConfig = true; aidl = true }
     sourceSets["androidTest"].assets.srcDir("src/test/resources/external")
     if (externalLuaOnMain || testExperimental) sourceSets["androidTest"].java.srcDir("src/externalLuaAndroidTest/java")
-    testBuildType = if (testExperimental) "experimental" else "debug"
+    require(!testDeveloper || !testExperimental && !distribution)
+    if (testDeveloper) sourceSets["androidTest"].java.srcDir("src/developerAndroidTest/java")
+    testBuildType = when {
+        testDeveloper -> "developer"
+        testExperimental -> "experimental"
+        else -> "debug"
+    }
     val developerKey = providers.environmentVariable("HYPRDROID_DEVELOPER_KEYSTORE_FILE").orNull
     val developerSigning = developerKey?.let { path ->
         signingConfigs.create("developer") {
