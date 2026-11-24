@@ -161,7 +161,10 @@ class ExternalLuaService : Service() {
         }
     }
 
-    override fun onBind(intent: Intent): IBinder = binder
+    override fun onBind(intent: Intent): IBinder {
+        if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaReserve", "worker launched pid=${Process.myPid()}")
+        return binder
+    }
 
     override fun onUnbind(intent: Intent): Boolean {
         terminate()

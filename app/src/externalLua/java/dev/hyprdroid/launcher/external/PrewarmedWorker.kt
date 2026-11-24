@@ -105,6 +105,9 @@ internal class PrewarmedWorker(
     }
 
     @Synchronized
+    fun readyId(): Long? = reserve?.takeIf { it.ready && !it.retiring }?.binding?.id
+
+    @Synchronized
     fun take(): IsolatedWorkerBinding? {
         val candidate = reserve ?: return null
         if (!candidate.ready || candidate.retiring || candidate.binding.disconnected.isCompleted) {

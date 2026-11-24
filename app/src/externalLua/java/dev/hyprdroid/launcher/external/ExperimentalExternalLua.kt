@@ -35,6 +35,14 @@ internal object ExperimentalExternalLua {
     fun visibleTile(context: Context): () -> Unit =
         if (BuildConfig.V2_FIXTURE_LUA && prewarmExperiment) reserve.visibleTile(context.applicationContext) else ({})
 
+    internal fun fixtureReadyWorker(): Long? = if (BuildConfig.V2_FIXTURE_LUA) reserve.readyId() else null
+
+    internal fun fixtureProcessPermits(): Int = if (BuildConfig.V2_FIXTURE_LUA) processes.availablePermits else 0
+
+    internal fun fixtureTrimMemory() {
+        if (BuildConfig.V2_FIXTURE_LUA) reserve.onLowMemory()
+    }
+
     private fun blockAfterUnconfirmedExit() {
         uncertainDeath = true
         reserve.discard()
