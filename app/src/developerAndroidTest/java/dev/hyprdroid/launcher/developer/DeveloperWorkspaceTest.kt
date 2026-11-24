@@ -7,12 +7,16 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.Until
 import dev.hyprdroid.launcher.dismissBackgroundPixelLauncherAnr
 import dev.hyprdroid.launcher.data.WorkspaceEngineStore
 import dev.hyprdroid.launcher.modules.BuiltInModules
 import dev.hyprdroid.launcher.modules.CommandPanelModule
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -41,11 +45,14 @@ class DeveloperWorkspaceTest {
             selectClassic()
             menu("Терминал")
             await("module-command-input-tile-1")
-            compose.onNodeWithTag("module-command-input-tile-1").performTextReplacement("hypr dev list")
-            compose.onNodeWithText("Пуск").performClick()
-            compose.waitUntil(15_000) { compose.onAllNodesWithText("Нет локальных пакетов.").fetchSemanticsNodes().isNotEmpty() }
-
-            closeFocused()
+            // A focused terminal animates the caret continuously. Drive text and
+            // submission with Android input without waiting for Compose to become idle.
+            val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+            val field = checkNotNull(device.wait(Until.findObject(By.clazz("android.widget.EditText")), 10_000))
+            field.text = "hypr dev list"
+            checkNotNull(device.wait(Until.findObject(By.text("Пуск").enabled(true)), 10_000)).click()
+            assertTrue(device.wait(Until.hasObject(By.text("Нет локальных пакетов.")), 15_000))
+            checkNotNull(device.wait(Until.findObject(By.desc("Закрыть окно")), 10_000)).click()
             compose.waitUntil(15_000) { !exists("tiling-surface") }
             menu("Оконный тайл")
             await("module-picker-tile-1")
