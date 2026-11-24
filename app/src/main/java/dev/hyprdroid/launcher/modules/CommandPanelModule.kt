@@ -167,7 +167,7 @@ internal object CommandPanelModule : TileModule {
         }
 
         LaunchedEffect(lastLine, followOutput, suggestions.isNotEmpty()) {
-            if (followOutput) listState.scrollToItem(commandState.lines.size)
+            if (followOutput) listState.requestScrollToItem(commandState.lines.size)
         }
         LaunchedEffect(inputFocused, input, selection) {
             if (inputFocused && !commandState.running) inputVisibility.bringIntoView()

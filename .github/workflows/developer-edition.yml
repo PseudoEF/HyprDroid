@@ -66,12 +66,7 @@ jobs:
           ram-size: 2048M
           emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: |
-            status=0
-            sh scripts/ci-developer-edition.sh || status=1
-            sh scripts/ci-developer-import.sh || status=1
-            sh scripts/ci-developer-workspace.sh || status=1
-            exit "$status"
+          script: sh scripts/ci-developer-regression.sh
       - uses: actions/upload-artifact@v4
         if: always() && github.event_name != 'workflow_dispatch'
         with:
