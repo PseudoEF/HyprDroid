@@ -12,11 +12,13 @@ report=app/build/reports/androidTests/v2-persistence
 mkdir -p "$report"
 trap 'adb logcat -d -s HyprLuaTile > "$report/logcat.txt" || true' EXIT
 phase() {
-    output=$(adb shell am instrument -w -r \
+    status=0
+    adb shell am instrument -w -r \
         -e class dev.hyprdroid.launcher.external.ExternalV2PersistenceTest \
-        -e persistencePhase "$1" "$runner")
-    printf '%s\n' "$output" | tee "$report/$1.txt"
-    printf '%s\n' "$output" | grep -F 'OK (1 test)'
+        -e persistencePhase "$1" "$runner" > "$report/$1.txt" 2>&1 || status=$?
+    cat "$report/$1.txt"
+    test "$status" -eq 0
+    grep -F 'OK (1 test)' "$report/$1.txt"
 }
 phase seed
 adb shell am force-stop "$package"
