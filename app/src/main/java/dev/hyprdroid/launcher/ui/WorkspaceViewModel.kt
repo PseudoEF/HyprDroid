@@ -15,6 +15,7 @@ import dev.hyprdroid.launcher.data.ShellRepository
 import dev.hyprdroid.launcher.data.WorkspaceRepository
 import dev.hyprdroid.launcher.data.WorkspaceEngineStore
 import dev.hyprdroid.launcher.data.SidebarEntry
+import dev.hyprdroid.launcher.modules.CommandPanelModule
 import dev.hyprdroid.launcher.modules.ModuleRegistry
 import dev.hyprdroid.launcher.model.WorkspaceItem
 import dev.hyprdroid.launcher.model.ShellPresentation
@@ -56,6 +57,7 @@ internal data class WorkspaceUiState(
     val shellError: Boolean = false,
     val message: String? = null,
     internal val tiling: TilingSessions = emptyMap(),
+    internal val workspacesWithWindows: Set<Int> = emptySet(),
 )
 
 internal class WorkspaceViewModel(application: Application) : AndroidViewModel(application) {
@@ -89,7 +91,9 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
                 // Restore every workspace independently: an open flag only opens its own workspace.
                 val restored = restoreTiling(engineStore.load(), engineStore.openWorkspaces())
                 engines.putAll(restored.engines)
-                mutableState.update { it.copy(tiling = restored.sessions) }
+                mutableState.update {
+                    it.copy(tiling = restored.sessions, workspacesWithWindows = occupiedTilingWorkspaces())
+                }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { /* An unreadable engine store must not block the launcher. */ }
         }
@@ -275,12 +279,15 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
         }
     }
 
+    private fun occupiedTilingWorkspaces() = engines.filterValues { it.root != null }.keys
+
     private fun openTilingSession(workspaceId: Int, engine: WorkspaceEngine) {
-        mutableState.update { it.copy(tiling = it.tiling.withOpenSession(workspaceId, engine)) }
-        save {
-            engineStore.save(workspaceId.toString(), engine)
-            engineStore.setOpen(workspaceId.toString(), true)
+        val snapshot = engine.snapshot()
+        mutableState.update {
+            it.copy(tiling = it.tiling.withOpenSession(workspaceId, snapshot),
+                workspacesWithWindows = occupiedTilingWorkspaces())
         }
+        save { engineStore.save(workspaceId.toString(), snapshot, open = true) }
     }
 
     private fun publishTiling(workspaceId: Int, engine: WorkspaceEngine) {
@@ -289,22 +296,32 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
 
     /** Removes only one workspace surface; the persisted trees of the other workspaces stay open. */
     private fun hideTilingSession(workspaceId: Int) {
-        mutableState.update { it.copy(tiling = it.tiling.withoutSession(workspaceId)) }
-        save { engineStore.setOpen(workspaceId.toString(), false) }
+        mutableState.update {
+            it.copy(tiling = it.tiling.withoutSession(workspaceId),
+                workspacesWithWindows = occupiedTilingWorkspaces())
+        }
     }
 
     /** Opens the internal tiling surface for one workspace; an empty tree receives a neutral tile. */
-    fun openTilingSurface(workspaceId: Int) = viewModelScope.launch {
-        try {
-            val engine = engines.getOrPut(workspaceId) { WorkspaceEngine() }
-            if (engine.root == null) engine.addFirstWindow(WorkspaceWindow(WindowId("tile-1"), TILING_UNASSIGNED_MODULE_ID, 0, 0))
-            openTilingSession(workspaceId, engine)
-        } catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: IOException) { showMessage("Не удалось открыть окно. Освободите память и попробуйте снова.") }
+    fun openTilingSurface(workspaceId: Int) = openFirstTile(workspaceId, TILING_UNASSIGNED_MODULE_ID)
+
+    fun openTerminal(workspaceId: Int) = openFirstTile(workspaceId, CommandPanelModule.id)
+
+    private fun openFirstTile(workspaceId: Int, firstModule: String) = viewModelScope.launch {
+        // Restoration may be waiting for DataStore when the shell menu first appears.
+        engineJob?.join()
+        val engine = engines.getOrPut(workspaceId) { WorkspaceEngine() }
+        if (engine.root == null) {
+            engine.addFirstWindow(WorkspaceWindow(WindowId("tile-1"), firstModule, 0, 0))
+        }
+        openTilingSession(workspaceId, engine)
     }
 
-    /** Closes the tiling surface of [workspaceId] only; its placement tree and other workspaces are kept. */
-    fun closeTilingSurface(workspaceId: Int) = hideTilingSession(workspaceId)
+    /** Closes the tiling surface of [workspaceId] only; its placement tree is kept. */
+    fun closeTilingSurface(workspaceId: Int) {
+        hideTilingSession(workspaceId)
+        save { engineStore.setOpen(workspaceId.toString(), false) }
+    }
 
     /** Splits the focused internal window with a fresh neutral window using the adaptive layout. */
     internal fun addTilingWindow(
@@ -366,8 +383,10 @@ internal class WorkspaceViewModel(application: Application) : AndroidViewModel(a
         val engine = engines[workspaceId] ?: return false
         if (expectedModule != null && engine.windowsById()[windowId]?.moduleId != expectedModule) return false
         if (!engine.removeWindow(windowId)) return false
-        save { engineStore.save(workspaceId.toString(), engine, removedTile = windowId) }
-        if (engine.root == null) hideTilingSession(workspaceId)
+        val snapshot = engine.snapshot()
+        val empty = snapshot.root == null
+        save { engineStore.save(workspaceId.toString(), snapshot, removedTile = windowId, open = if (empty) false else null) }
+        if (empty) hideTilingSession(workspaceId)
         else publishTiling(workspaceId, engine)
         return true
     }

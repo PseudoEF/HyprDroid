@@ -93,6 +93,7 @@ internal fun WorkspaceScreen(model: WorkspaceViewModel, requestedScreen: String?
                 presentation = model::setPresentation,
                 systemSettings = { action -> if (!openSystemSettings(context, action)) model.showMessage("Системные настройки недоступны.") },
                 openTiling = model::openTilingSurface,
+                openTerminal = model::openTerminal,
                 closeTilingSurface = model::closeTilingSurface,
                 addTilingWindow = { workspaceId, area, density, target -> model.addTilingWindow(workspaceId, area, density, target) },
                 addPluginTile = { workspaceId, area, density ->
@@ -143,6 +144,7 @@ internal data class ShellActions(
     val sidebarPlaceBefore: (String, String?, () -> Unit) -> Unit,
     val presentation: (ShellPresentation, () -> Unit) -> Unit,
     val openTiling: (Int) -> Unit,
+    val openTerminal: (Int) -> Unit,
     val closeTilingSurface: (Int) -> Unit,
     internal val addTilingWindow: (Int, LayoutArea, Float, WindowId?) -> Unit,
     internal val addPluginTile: (Int, LayoutArea, Float) -> WindowId?,
@@ -309,6 +311,9 @@ internal fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdro
             if (presentation.dockVisibility == DockVisibility.AUTO) add(AppMenuAction("Показать dock", onClick = revealDock))
             add(AppMenuAction("Редактировать пространство", workspaceReady, enterEdit))
             add(AppMenuAction("Оконный тайл", shellReady) { actions.openTiling(pager.currentPage) })
+            if (pager.currentPage !in state.workspacesWithWindows) {
+                add(AppMenuAction("Терминал", shellReady) { actions.openTerminal(pager.currentPage) })
+            }
             add(AppMenuAction("Вид пространства", workspaceReady) { appearanceWorkspace = pager.currentPage })
             add(AppMenuAction("Порядок элементов", workspaceReady) { orderWorkspace = pager.currentPage })
             add(AppMenuAction("Выбрать изображение…", shellReady, actions.chooseWallpaper))
@@ -326,10 +331,10 @@ internal fun ShellHome(state: WorkspaceUiState, actions: ShellActions, onBackdro
         Spacer(Modifier.height(12.dp))
         HorizontalPager(state = pager, modifier = Modifier.weight(1f).widthIn(max = 960.dp).fillMaxWidth().testTag("home-pager"),
             userScrollEnabled = !overlayOpen && !dragging) { page ->
-            if (!classic) Box(Modifier.fillMaxSize().testTag("workspace-canvas-$page")) {
-                Box(Modifier.fillMaxSize().testTag("clean-workspace-$page")
+            val pageTiling = state.tiling.sessionFor(page)
+            if (pageTiling != null || !classic) Box(Modifier.fillMaxSize().testTag("workspace-canvas-$page")) {
+                if (!classic) Box(Modifier.fillMaxSize().testTag("clean-workspace-$page")
                     .homeBlankGestures(!overlayOpen, true, openPresentation, openDrawer, openControl, revealDock))
-                val pageTiling = state.tiling.sessionFor(page)
                 if (pageTiling != null) CompositionLocalProvider(LocalExternalTileVisible provides (page == pager.settledPage)) {
                     TilingSurface(
                         engine = pageTiling.engine,

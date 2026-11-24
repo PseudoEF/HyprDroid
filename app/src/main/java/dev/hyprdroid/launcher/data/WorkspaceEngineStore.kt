@@ -35,7 +35,9 @@ internal class WorkspaceEngineStore(
         if (BuildConfig.V2_FIXTURE_LUA) Log.d("HyprLuaTile", "v2 state $message")
     })
 
-    suspend fun save(workspaceId: String, engine: WorkspaceEngine, removedTile: WindowId? = null) {
+    suspend fun save(
+        workspaceId: String, engine: WorkspaceEngine, removedTile: WindowId? = null, open: Boolean? = null,
+    ) {
         val serialized = engine.serialize()
         require(removedTile == null || removedTile !in engine.windowsById())
         store.edit { preferences ->
@@ -45,6 +47,7 @@ internal class WorkspaceEngineStore(
                 }.forEach { preferences.remove(stringPreferencesKey(it.name)) }
             }
             preferences[stringPreferencesKey("engine/$workspaceId")] = serialized
+            if (open != null) preferences[booleanPreferencesKey("tiling/$workspaceId/open")] = open
         }
     }
 

@@ -16,3 +16,15 @@ for mode in clean classic; do
     cat "$report"
     grep -F 'OK (1 test)' "$report"
 done
+
+adb uninstall "$developer" | grep -Fx Success
+adb install "$RUNNER_TEMP/developer-test.apk"
+adb install -r app/build/outputs/apk/androidTest/developer/app-developer-androidTest.apk
+for phase in createsTerminalAndMultipleTilesThroughTheRealWorkspace restoresTilesAfterProcessStop; do
+    adb shell am force-stop "$developer"
+    report="app/build/reports/developer-workspace/$phase.txt"
+    adb shell am instrument -w -r \
+        -e class "dev.hyprdroid.launcher.developer.DeveloperWorkspaceTest#$phase" "$target" > "$report"
+    cat "$report"
+    grep -F 'OK (1 test)' "$report"
+done
