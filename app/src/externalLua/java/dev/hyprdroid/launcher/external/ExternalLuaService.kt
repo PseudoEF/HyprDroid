@@ -8,6 +8,7 @@ import android.os.IBinder
 import android.os.Parcel
 import android.os.Process
 import android.os.SharedMemory
+import android.os.SystemClock
 import android.util.Log
 import dev.hyprdroid.launcher.BuildConfig
 import dev.hyprdroid.launcher.plugins.ExternalLuaSessionGate
@@ -129,9 +130,13 @@ class ExternalLuaService : Service() {
             }, 0, 25, TimeUnit.MILLISECONDS)
             worker.execute {
                 try {
+                    val startedAt = SystemClock.elapsedRealtime()
                     val frame = if (current.eventV2 != null) {
                         NativeLua.runV2(current.source, current.state, current.eventV2, current.capabilities)
                     } else NativeLua.run(current.source, current.state, event)
+                    if (BuildConfig.V2_FIXTURE_LUA) {
+                        Log.i("HyprLuaGate", "operation=$id phase=lua luaMs=${SystemClock.elapsedRealtime() - startedAt}")
+                    }
                     if (frame == null || frame.isEmpty() || frame[0] != 0.toByte()) {
                         current.reply.error(id, number, if (frame?.firstOrNull() == 1.toByte()) 1 else 2)
                     } else {

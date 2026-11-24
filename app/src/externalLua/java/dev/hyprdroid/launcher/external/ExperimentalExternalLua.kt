@@ -83,22 +83,34 @@ internal object ExperimentalExternalLua {
     private suspend fun <T> execute(
         context: Context, source: ByteArray, state: ByteArray, event: Int, v2: WireRequestV2?,
         dispatch: ((() -> Unit) -> Boolean)?, authorized: () -> Boolean, rejected: () -> T, failure: (String) -> T, decode: (ByteArray) -> T,
-    ): T = workers.execute(rejected) admitted@{
-        if (!BuildConfig.EXTERNAL_LUA || uncertainDeath || excessiveFailures() || !authorized()) {
-            return@admitted failure("Внешний Lua недоступен")
-        }
-        if (source.size !in 1..TILE_SOURCE_LIMIT) return@admitted failure("Превышен размер Lua-запроса")
-        withContext(Dispatchers.IO) {
-            bind(context.applicationContext, source, state, event, v2, dispatch, authorized, failure, decode)
+    ): T {
+        val queuedAt = SystemClock.elapsedRealtime()
+        return workers.execute(rejected) admitted@{
+            val admittedAt = SystemClock.elapsedRealtime()
+            if (!BuildConfig.EXTERNAL_LUA || uncertainDeath || excessiveFailures() || !authorized()) {
+                return@admitted failure("Внешний Lua недоступен")
+            }
+            if (source.size !in 1..TILE_SOURCE_LIMIT) return@admitted failure("Превышен размер Lua-запроса")
+            withContext(Dispatchers.IO) {
+                bind(context.applicationContext, source, state, event, v2, dispatch, authorized, failure, decode, queuedAt, admittedAt)
+            }
         }
     }
 
     private suspend fun <T> bind(
         app: Context, source: ByteArray, state: ByteArray, event: Int, v2: WireRequestV2?,
         dispatch: ((() -> Unit) -> Boolean)?, authorized: () -> Boolean, failure: (String) -> T, decode: (ByteArray) -> T,
+        queuedAt: Long, admittedAt: Long,
     ): T {
         val uuid = UUID.randomUUID()
         val id = uuid.mostSignificantBits.takeUnless { it == 0L } ?: 1L
+        val bindingAt = SystemClock.elapsedRealtime()
+        fun trace(phase: String) {
+            if (BuildConfig.V2_FIXTURE_LUA) {
+                Log.i("HyprLuaGate", "operation=$id phase=$phase sinceQueueMs=${SystemClock.elapsedRealtime() - queuedAt} queueMs=${admittedAt - queuedAt} ioMs=${bindingAt - admittedAt}")
+            }
+        }
+        trace("binding")
         val connected = CompletableDeferred<IExternalLua?>()
         val outcome = CompletableDeferred<T>()
         val died = CompletableDeferred<Unit>()
@@ -126,6 +138,7 @@ internal object ExperimentalExternalLua {
                     frame?.close()
                     return
                 }
+                trace("reply")
                 val result = try {
                     requireNotNull(frame).use { decode(checkedBytes(it, TILE_FRAME_LIMIT)) }
                 } catch (_: Exception) {
@@ -150,6 +163,7 @@ internal object ExperimentalExternalLua {
                     service.linkToDeath(death, 0)
                     val port = IExternalLua.Stub.asInterface(service)
                     endpoint.set(port)
+                    trace("connected")
                     connected.complete(port)
                 } catch (_: android.os.RemoteException) {
                     recordUnexpectedDeath()
@@ -186,7 +200,10 @@ internal object ExperimentalExternalLua {
                     }
                 }
                 if (!authorized()) return@withTimeoutOrNull failure("Доверие к модулю отозвано")
-                val send = { port.dispatchEvent(id, 1, event) }
+                val send = {
+                    trace("dispatch")
+                    port.dispatchEvent(id, 1, event)
+                }
                 if (dispatch == null) send()
                 else if (!dispatch(send)) return@withTimeoutOrNull failure("Доверие к модулю отозвано")
                 outcome.await()
@@ -228,6 +245,7 @@ internal object ExperimentalExternalLua {
                 }
             }
         }
+        trace("released")
         return if (uncertainDeath) failure("Остановка Lua worker не подтверждена") else result
     }
 }

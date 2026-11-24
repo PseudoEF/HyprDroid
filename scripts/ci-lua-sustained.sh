@@ -4,7 +4,7 @@ package=dev.hyprdroid.launcher.experimental
 report=app/build/reports/androidTests/sustained
 mkdir -p "$report"
 collect() {
-    adb logcat -d -s HyprLuaSustained HyprLuaTile > "$report/logcat.txt" || true
+    adb logcat -d -s HyprLuaSustained HyprLuaTile HyprLuaGate > "$report/logcat.txt" || true
     adb shell dumpsys meminfo "$package" > "$report/final-meminfo.txt" || true
 }
 trap collect EXIT

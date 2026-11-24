@@ -96,3 +96,14 @@ Keep local Lua execution disabled. The run establishes controlled recovery from 
 ## Pixel 9 smoke check
 
 Install ordinary 10209 over 10199 and Developer 110 over 80. Verify the ordinary app remains available as HOME, compare existing workspaces and open a first tile and terminal in Classic and Clean. Keep two official clocks visible for at least ten minutes, change one clock format, switch workspaces and apps, and verify the other clock remains independent. After force-stop confirm the stored format. In Developer, inspect an existing signed local package and verify execution remains blocked. Revoke its key and confirm re-adding the key does not restore the old grant.
+
+## Runtime release gate
+
+The owner reported 20/20 checks on a physical Pixel 9 with Android 17. Both APKs were built from `bc85622`.
+
+- HyprDroid 10209 passed 12/12. The signed update preserved data and HOME. Classic and Clean could create their first tile, and the terminal worked. Hello Tile accepted repeated Increment events and retained the count after backgrounding. Two Clock Tiles ran continuously for ten minutes with independent formats. Workspace changes, returning from the background and force-stop preserved state.
+- HyprDroid Developer 110 passed 8/8. The signed update preserved data. Developer Edition stayed out of the HOME list. Window tiles and the terminal worked. Imported my-tile remained visible through `hypr dev info` and execution was denied. Revocation persisted and reimporting the key did not restore artifact trust.
+
+[CI 45434190931](https://github.com/PseudoEF/HyprDroid/actions/runs/45434190931) timed out waiting for the first Hello Tile Increment to become visible, before the first background transition. Its report lacks a correlated click, worker and state trace, so the cause of that occurrence is unproven. The release-gate runner repeats the first Increment on 20 fresh tile slots and checks the stored value and the displayed value after stop/resume and Activity recreation on each iteration. It retains the first failure and collects the experimental logs even when the test fails.
+
+Fixture logs separate worker queue wait, dispatch handoff, worker connection, native execution, callback and teardown. For Hello Tile they also record the click, DataStore commit duration and publication. No script, state value or package data appears in the trace. The gate report captures Android exit information and lmkd logs. A force-stop, Lua arena failure, ART OOM or PSS guard termination cannot establish a system low-memory eviction. This remains a separate release condition.

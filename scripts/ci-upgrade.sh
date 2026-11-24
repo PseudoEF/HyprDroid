@@ -70,7 +70,7 @@ if [ "${HYPRDROID_TEST_EXTERNAL_LUA:-false}" = true ]; then
   adb shell am instrument -w -r -e class "$tests,dev.hyprdroid.launcher.external.ExternalLuaProtocolTest" \
     "$package.test/androidx.test.runner.AndroidJUnitRunner" > "$report/external-lua.txt"
   cat "$report/external-lua.txt"
-  grep -q 'OK (6 tests)' "$report/external-lua.txt"
+  grep -q 'OK (7 tests)' "$report/external-lua.txt"
 fi
 if [ "${HYPRDROID_TEST_V2_FIXTURES:-false}" = true ]; then
   adb shell am instrument -w -r -e class dev.hyprdroid.launcher.external.ExternalV2WorkerTest     "$package.test/androidx.test.runner.AndroidJUnitRunner" > "$report/external-lua-v2.txt"

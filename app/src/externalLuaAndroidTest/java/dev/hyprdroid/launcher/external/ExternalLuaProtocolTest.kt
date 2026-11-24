@@ -8,6 +8,7 @@ import android.os.IBinder
 import android.os.Parcel
 import android.os.RemoteException
 import android.os.SharedMemory
+import android.system.OsConstants
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.util.UUID
@@ -94,6 +95,38 @@ class ExternalLuaProtocolTest {
                 sealedBytes(byteArrayOf()).use { state -> worker.createSession(17, 1, source, state, reply) }
             }
             assertNotNull(withTimeout(5_000) { died.await() })
+        }
+    }
+
+    @Test
+    fun invalidSharedMemoryLengthClosesTheSessionWithoutAReply() = runBlocking {
+        for (declared in listOf(-1, 0, 2)) {
+            withWorker { worker, died ->
+                val replies = AtomicInteger()
+                val reply = object : IExternalLuaReply.Stub() {
+                    override fun render(id: Long, request: Int, frame: SharedMemory) {
+                        frame.close()
+                        replies.incrementAndGet()
+                    }
+                    override fun error(id: Long, request: Int, code: Int) {
+                        replies.incrementAndGet()
+                    }
+                }
+                SharedMemory.create(null, 5).use { source ->
+                    val mapping = source.mapReadWrite()
+                    try {
+                        mapping.putInt(declared)
+                    } finally {
+                        SharedMemory.unmap(mapping)
+                    }
+                    check(source.setProtect(OsConstants.PROT_READ))
+                    sealedBytes(byteArrayOf()).use { state ->
+                        worker.createSession(17, 1, source, state, reply)
+                    }
+                }
+                withTimeout(5_000) { died.await() }
+                assertEquals(0, replies.get())
+            }
         }
     }
 

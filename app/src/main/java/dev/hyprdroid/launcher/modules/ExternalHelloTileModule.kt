@@ -1,6 +1,7 @@
 package dev.hyprdroid.launcher.modules
 
 import android.util.Log
+import android.os.SystemClock
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -69,7 +70,10 @@ internal object ExternalHelloTileModule : TileModule {
         }
         val scope = rememberCoroutineScope()
         suspend fun update(event: String? = null) = session.update(event, publish = { apply ->
-            manager.externalAdmission.commit(generation) { apply() }
+            manager.externalAdmission.commit(generation) {
+                apply()
+                if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaGate", "hello published generation=$generation screen=${session.screen.javaClass.simpleName}")
+            }
         }) execute@{ request ->
             if (!BuildConfig.EXTERNAL_LUA) return@execute PluginResult.Failure("Экспериментальный Lua отключён")
             try {
@@ -88,7 +92,11 @@ internal object ExternalHelloTileModule : TileModule {
                 } ?: return@execute PluginResult.Failure("Доверенная запись Hello Tile изменилась")
                 val updated = (result as? PluginResult.Success)?.tile?.state
                 if (updated != null && request.event != null) {
-                    manager.externalAdmission.commit(generation) { store.saveTileState(slot, saved, updated) }
+                    val commitStarted = SystemClock.elapsedRealtime()
+                    manager.externalAdmission.commit(generation) {
+                        store.saveTileState(slot, saved, updated)
+                        if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaGate", "hello commitMs=${SystemClock.elapsedRealtime() - commitStarted} generation=$generation")
+                    }
                 }
                 result
             } catch (error: IOException) {
@@ -99,7 +107,10 @@ internal object ExternalHelloTileModule : TileModule {
         when (val screen = session.screen) {
             is TileScreen.Ready -> RenderTile(
                 screen.root, modifier.clipToBounds().padding(6.dp), !session.busy,
-            ) { event -> scope.launch { update(event) } }
+            ) { event ->
+                if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaGate", "hello click generation=$generation busy=${session.busy}")
+                scope.launch { update(event) }
+            }
             else -> Column(modifier.verticalScroll(rememberScrollState()).padding(6.dp)) {
                 Text(when (screen) {
                     TileScreen.Loading -> "Загрузка Hello Tile…"

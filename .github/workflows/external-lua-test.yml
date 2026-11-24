@@ -4,6 +4,10 @@ on:
     branches: [feature/safe-external-lua-runtime, feature/lua-runtime-hardening, feature/plugin-api-v2]
   workflow_dispatch:
     inputs:
+      release_gate:
+        description: Repeat Hello Tile lifecycle twenty times and capture stage timings
+        type: boolean
+        default: false
       sustained:
         description: Run the ten-minute Clock Tile scenario
         type: boolean
@@ -65,7 +69,7 @@ jobs:
             adb shell pm path dev.hyprdroid.launcher.experimental &&
             sh scripts/ci-home.sh select &&
             adb shell am start -W -n dev.hyprdroid.launcher.experimental/dev.hyprdroid.launcher.MainActivity &&
-            ./gradlew :app:connectedExperimentalAndroidTest -PtestExperimental=true -Pv2FixtureLua=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.external.ExternalLuaAndroidTest,dev.hyprdroid.launcher.external.ExternalTileLifecycleTest,dev.hyprdroid.launcher.external.ExternalLuaProtocolTest,dev.hyprdroid.launcher.external.ExternalV2WorkerTest &&
+            ./gradlew :app:connectedExperimentalAndroidTest -PtestExperimental=true -Pv2FixtureLua=true '-Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.external.ExternalLuaAndroidTest,dev.hyprdroid.launcher.external.ExternalTileLifecycleTest#countsSurviveBackgroundWorkspaceChangeAndActivityRecreation,dev.hyprdroid.launcher.external.ExternalLuaProtocolTest,dev.hyprdroid.launcher.external.ExternalV2WorkerTest' &&
             adb install -r app/build/outputs/apk/experimental/app-experimental.apk &&
             adb install -r app/build/outputs/apk/androidTest/experimental/app-experimental-androidTest.apk &&
             adb logcat -d -s HyprLuaPressure > app/build/reports/androidTests/lua-pressure.txt &&
@@ -80,6 +84,18 @@ jobs:
             adb install -r app/build/outputs/apk/experimental/app-experimental.apk &&
             adb install -r app/build/outputs/apk/androidTest/experimental/app-experimental-androidTest.apk &&
             sh scripts/ci-lua-circuit.sh
+      - name: Repeat Hello Tile lifecycle on a separate emulator
+        if: always() && inputs.release_gate && steps.build.outcome == 'success'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: >-
+            adb install app/build/outputs/apk/experimental/app-experimental.apk &&
+            adb install app/build/outputs/apk/androidTest/experimental/app-experimental-androidTest.apk &&
+            sh scripts/ci-lua-gate.sh
       - name: Run the independent ten-minute Clock Tile workload
         if: always() && inputs.sustained && steps.build.outcome == 'success'
         uses: reactivecircus/android-emulator-runner@v2
@@ -98,6 +114,7 @@ jobs:
           name: hyprdroid-experimental-test-report
           path: |
             app/build/reports/androidTests/sustained/
+            app/build/reports/androidTests/release-gate/
             app/build/reports/androidTests/lua-circuit.txt
             app/build/reports/androidTests/lua-pressure.txt
             app/build/reports/androidTests/lua-load.txt

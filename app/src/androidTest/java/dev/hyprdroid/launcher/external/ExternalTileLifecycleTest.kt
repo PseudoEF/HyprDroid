@@ -1,6 +1,7 @@
 package dev.hyprdroid.launcher.external
 
 import android.os.SystemClock
+import android.util.Log
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -88,6 +89,44 @@ class ExternalTileLifecycleTest {
             compose.waitUntil(20_000) { compose.onAllNodesWithText("Установите hello-tile").fetchSemanticsNodes().isNotEmpty() }
             runBlocking {
                 assertEquals("1", layout.tileState(TileStateSlot(HELLO_TILE_ID, 1, WindowId("hello-test-1"))))
+            }
+        }
+    }
+
+    @Test
+    fun firstIncrementAfterMountPersistsAcrossRecreationTwentyTimes() {
+        assumeTrue(BuildConfig.V2_FIXTURE_LUA)
+        val app = instrumentation.targetContext
+        val layout = WorkspaceEngineStore(app)
+        runBlocking {
+            installSignedFixture()
+            WorkspaceRepository(app).selectWorkspace(0)
+        }
+        repeat(20) { index ->
+            val window = WindowId("hello-gate-$index")
+            val slot = TileStateSlot(HELLO_TILE_ID, 1, window)
+            val start = SystemClock.elapsedRealtime()
+            runBlocking {
+                layout.save("0", WorkspaceEngine().apply {
+                    addFirstWindow(WorkspaceWindow(window, HELLO_TILE_ID, 0, 0))
+                })
+                layout.setOpen("0", true)
+                assertEquals("", layout.tileState(slot))
+            }
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                awaitCount(0)
+                SystemClock.sleep(400)
+                val clickAt = SystemClock.elapsedRealtime()
+                compose.onNodeWithText("Increment").performClick()
+                awaitCount(1)
+                val shownAt = SystemClock.elapsedRealtime()
+                runBlocking { assertEquals("1", layout.tileState(slot)) }
+                scenario.moveToState(Lifecycle.State.CREATED)
+                scenario.moveToState(Lifecycle.State.RESUMED)
+                awaitCount(1)
+                scenario.recreate()
+                awaitCount(1)
+                Log.i("HyprLuaGate", "lifecycle round=${index + 1} clickToUiMs=${shownAt - clickAt} totalMs=${SystemClock.elapsedRealtime() - start}")
             }
         }
     }
