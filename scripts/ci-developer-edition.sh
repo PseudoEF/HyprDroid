@@ -29,5 +29,6 @@ adb install -r "$ordinary_apk"
 adb install -r "$developer_updated"
 adb shell run-as "$ordinary" test -f ordinary-private
 adb shell run-as "$developer" test -f developer-private
-./gradlew :app:connectedDebugAndroidTest \
+core_code=$("$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-code "$ordinary_apk")
+./gradlew :app:connectedDebugAndroidTest -PbuildVersionCode="$core_code" \
     -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.TerminalInlinePromptTest,dev.hyprdroid.launcher.TilingSurfaceBoundsTest,dev.hyprdroid.launcher.plugins.LuaPluginServiceTest
