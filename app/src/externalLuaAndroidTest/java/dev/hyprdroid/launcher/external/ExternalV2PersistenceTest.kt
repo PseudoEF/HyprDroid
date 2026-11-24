@@ -15,9 +15,13 @@ import dev.hyprdroid.launcher.model.DesktopMode
 import dev.hyprdroid.launcher.model.ShellPresentation
 import dev.hyprdroid.launcher.packages.AndroidPackages
 import dev.hyprdroid.launcher.plugins.TileStateValue
+import dev.hyprdroid.launcher.plugins.TileExecutionV2
+import dev.hyprdroid.launcher.plugins.TileInteraction
+import dev.hyprdroid.launcher.plugins.TileSystemSnapshotV2
 import dev.hyprdroid.launcher.workspaceengine.*
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -72,6 +76,16 @@ class ExternalV2PersistenceTest {
 
     private fun restore() {
         assertState(first, false)
+        runBlocking {
+            val snapshot = store.loadTileStateV2(slot(first))
+            val request = TileExecutionV2(
+                setOf("ui.tile", "state.local"), snapshot, TileSystemSnapshotV2(null, null, null),
+                interaction = TileInteraction.Toggle("format24", true),
+            )
+            val watchdogFixture = "-- hypr-test-force-kernel-timeout".encodeToByteArray()
+            assertNull(ExperimentalExternalLua.runV2(app, watchdogFixture, request))
+            assertEquals(snapshot, store.loadTileStateV2(slot(first)))
+        }
         ActivityScenario.launch(MainActivity::class.java).use {
             awaitSwitch(first, false)
             awaitSwitch(second, true)

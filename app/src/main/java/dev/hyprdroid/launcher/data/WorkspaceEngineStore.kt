@@ -1,6 +1,8 @@
 package dev.hyprdroid.launcher.data
 
 import android.content.Context
+import android.util.Log
+import dev.hyprdroid.launcher.BuildConfig
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.Preferences
@@ -17,6 +19,8 @@ import dev.hyprdroid.launcher.workspaceengine.WindowId
 import dev.hyprdroid.launcher.workspaceengine.WorkspaceEngine
 import java.io.IOException
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 
 private val Context.workspaceEngineStore by preferencesDataStore(
     name = "workspace_engine",
@@ -41,9 +45,12 @@ internal class WorkspaceEngineStore(private val store: DataStore<Preferences>) {
 
     suspend fun tileState(slot: TileStateSlot): String = readState(store.data.first(), slot)
 
-    suspend fun loadTileStateV2(slot: TileStateSlot): Map<String, TileStateValue> {
+    suspend fun loadTileStateV2(slot: TileStateSlot, diagnose: Boolean = false): Map<String, TileStateValue> {
         require(slot.schema == 2)
-        return TileStateV2.decode(tileState(slot))
+        val raw = tileState(slot)
+        val state = TileStateV2.decode(raw)
+        if (diagnose) traceState(if (raw.isEmpty()) "restore: slot missing" else "restore: slot present")
+        return state
     }
 
     /** Uses the existing owner check and compare-and-set transaction, with a separate schema slot. */
@@ -55,7 +62,9 @@ internal class WorkspaceEngineStore(private val store: DataStore<Preferences>) {
     ) {
         require(slot.schema == 2)
         fun serialize(values: Map<String, TileStateValue>) = if (values.isEmpty()) "" else TileStateV2.encode(values)
-        saveTileState(slot, serialize(expected), serialize(updated), authorized)
+        val scope = currentCoroutineContext()
+        writeTileState(slot, serialize(expected), serialize(updated)) { scope.isActive && authorized() }
+        if (expected != updated) traceState("durable commit")
     }
 
     /** Core-only reset. The caller supplies the tile slot after explicit user consent. */
@@ -66,16 +75,21 @@ internal class WorkspaceEngineStore(private val store: DataStore<Preferences>) {
 
     /** Checks ownership and commits the state in the same transaction as layout deletion. */
     suspend fun saveTileState(slot: TileStateSlot, expected: String, updated: String, authorized: () -> Boolean = { true }) {
+        if (updated != expected) writeTileState(slot, expected, updated, authorized)
+    }
+
+    private suspend fun writeTileState(slot: TileStateSlot, expected: String, updated: String, authorized: () -> Boolean) {
         if (!validState(updated)) throw IOException("Lua Tile state exceeds its limits")
-        if (updated == expected) return
         store.edit { preferences ->
             val belongsToPackage = preferences.asMap().entries.any { (key, value) ->
                 key.name.startsWith("engine/") && value is String &&
                     WorkspaceEngine().deserialize(value).windowsById()[slot.windowId]?.moduleId == slot.packageId
             }
             if (!authorized() || !belongsToPackage || readState(preferences, slot) != expected) {
+                if (slot.schema == 2) traceState("commit rejected: stale or revoked")
                 throw IOException("Lua Tile state changed or its tile was removed")
             }
+            if (updated == expected) return@edit
             val key = stringPreferencesKey(slot.preferenceKey)
             if (updated.isEmpty()) {
                 preferences.remove(key)
@@ -141,3 +155,8 @@ internal data class TileStateSlot(val packageId: String, val schema: Int, val wi
 
 private fun validState(value: String) = value.isPluginText(TILE_STATE_LIMIT) &&
     value.encodeToByteArray().size <= TILE_STATE_LIMIT
+
+private fun traceState(message: String) {
+    if (!BuildConfig.V2_FIXTURE_LUA) return
+    Log.d("HyprLuaTile", "v2 state $message")
+}

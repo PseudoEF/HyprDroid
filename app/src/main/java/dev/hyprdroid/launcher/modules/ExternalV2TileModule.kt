@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.SystemClock
+import android.util.Log
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -68,17 +69,27 @@ internal class ExternalV2TileModule(override val id: String, override val title:
         var failed by remember { mutableStateOf(false) }
         var busy by remember { mutableStateOf(false) }
         val schedule = remember { TileScheduleV2() }
+        DisposableEffect(Unit) {
+            Log.d("HyprLuaTile", "v2 tile activated")
+            onDispose { Log.d("HyprLuaTile", "v2 tile deactivated") }
+        }
 
         suspend fun run(interaction: TileInteraction? = null, signal: TileSignal? = null) {
             if (busy) return
             busy = true
+            val operationKind = when {
+                interaction != null -> "interaction"
+                signal is TileSignal.Timer -> "timer"
+                signal is TileSignal.Resume -> "resume"
+                else -> "retry"
+            }
             try {
                 val operation = currentCoroutineContext()
                 val stillAllowed = { operation.isActive && manager.helloTileGeneration.value == generation }
                 val result = whileAuthorized(manager.helloTileGeneration, generation) {
                     val (manifest, source) = withContext(Dispatchers.IO) { manager.verifiedV2Fixture(id) }
                     val permissions = manifest.permissions
-                    val previous = if ("state.local" in permissions) store.loadTileStateV2(slot) else emptyMap()
+                    val previous = if ("state.local" in permissions) store.loadTileStateV2(slot, diagnose = signal == TileSignal.Resume) else emptyMap()
                     val system = withContext(Dispatchers.IO) { captureSystem(app, permissions) }
                     val updated = ExperimentalExternalLua.runV2(app, source, TileExecutionV2(
                         permissions, previous, system, interaction, signal,
@@ -93,9 +104,12 @@ internal class ExternalV2TileModule(override val id: String, override val title:
                 revision = gate.publish(result.tree)
                 frame = result
                 failed = false
+                if (operationKind != "timer") Log.d("HyprLuaTile", "v2 presented: $operationKind")
             } catch (cancelled: CancellationException) {
+                Log.d("HyprLuaTile", "v2 cancelled: $operationKind")
                 throw cancelled
             } catch (_: Exception) {
+                Log.w("HyprLuaTile", "v2 rejected: $operationKind")
                 revision = gate.publish(null)
                 frame = null
                 failed = true

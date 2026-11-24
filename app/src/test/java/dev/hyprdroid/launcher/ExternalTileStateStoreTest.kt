@@ -89,6 +89,34 @@ class ExternalTileStateStoreTest {
         }
     }
 
+    @Test
+    fun staleTimerAndRevokedOperationCannotConfirmOrChangeV2State(): Unit = runBlocking {
+        val file = folder.newFolder().resolve("engine.preferences_pb")
+        val slot = TileStateSlot("clock-tile", 2, WindowId("first"))
+        val old = mapOf("format24" to TileStateValue.Flag(true))
+        val updated = mapOf("format24" to TileStateValue.Flag(false),
+            "number" to TileStateValue.Number(3.25), "text" to TileStateValue.Text("stored"))
+        val job = SupervisorJob()
+        val store = open(file, job)
+        store.save("0", engine(slot))
+        store.saveTileStateV2(slot, emptyMap(), old) { true }
+        val timerSnapshot = store.loadTileStateV2(slot)
+        store.saveTileStateV2(slot, old, updated) { true }
+        assertThrows(IOException::class.java) {
+            runBlocking { store.saveTileStateV2(slot, timerSnapshot, timerSnapshot) { true } }
+        }
+        assertThrows(IOException::class.java) {
+            runBlocking { store.saveTileStateV2(slot, updated, old) { false } }
+        }
+        job.cancelAndJoin()
+        val reopened = SupervisorJob()
+        try {
+            assertEquals(updated, open(file, reopened).loadTileStateV2(slot))
+        } finally {
+            reopened.cancelAndJoin()
+        }
+    }
+
     private fun open(file: java.io.File, job: kotlinx.coroutines.Job) = WorkspaceEngineStore(
         PreferenceDataStoreFactory.create(scope = CoroutineScope(job + Dispatchers.IO), produceFile = { file }),
     )
