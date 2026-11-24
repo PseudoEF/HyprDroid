@@ -37,8 +37,8 @@ if [ "${HYPRDROID_TEST_V2_OFFICIAL:-false}" = true ]; then
   baseline_commit=caf1b17edec8be135d994460ed1d87dd167bab20
 fi
 if [ "${HYPRDROID_TEST_OFFICIAL_UPGRADE:-false}" = true ]; then
-  baseline_code=10197
-  baseline_commit=88bf0c2de34ee099051b30b82f03b8ab68544c12
+  baseline_code=10199
+  baseline_commit=d435279278f3132f27565affb8b58b47f83abb09
 fi
 fixture seed "$baseline_code" 0.9.0 "$baseline_commit"
 if [ "${HYPRDROID_TEST_V2_OFFICIAL:-false}" = true ]; then

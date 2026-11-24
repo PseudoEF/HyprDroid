@@ -4,10 +4,10 @@ destination="$RUNNER_TEMP/hyprdroid-distribution"
 mkdir "$destination"
 mkdir "$RUNNER_TEMP/hyprdroid-upgrade"
 if [ "${HYPRDROID_TEST_OFFICIAL_UPGRADE:-false}" = true ]; then
-  baseline_commit=88bf0c2de34ee099051b30b82f03b8ab68544c12
-  cp .local/upgrade-10197/HyprDroid-0.9.0-10197.apk "$RUNNER_TEMP/hyprdroid-upgrade/a.apk"
-  HYPRDROID_BUILD_COMMIT="$baseline_commit" GITHUB_RUN_ID=45383165423 GITHUB_RUN_ATTEMPT=1 \
-    python3 scripts/verify-apk.py "$RUNNER_TEMP/hyprdroid-upgrade/a.apk" 10197 0.9.0
+  baseline_commit=d435279278f3132f27565affb8b58b47f83abb09
+  cp .local/upgrade-10199/HyprDroid-0.9.0-10199.apk "$RUNNER_TEMP/hyprdroid-upgrade/a.apk"
+  HYPRDROID_BUILD_COMMIT="$baseline_commit" GITHUB_RUN_ID=45395548914 GITHUB_RUN_ATTEMPT=1 \
+    python3 scripts/verify-apk.py "$RUNNER_TEMP/hyprdroid-upgrade/a.apk" 10199 0.9.0
 elif [ "${HYPRDROID_TEST_V2_OFFICIAL:-false}" = true ]; then
   baseline_commit=caf1b17edec8be135d994460ed1d87dd167bab20
   cp .local/upgrade-10185/HyprDroid-0.9.0-10185.apk "$RUNNER_TEMP/hyprdroid-upgrade/a.apk"

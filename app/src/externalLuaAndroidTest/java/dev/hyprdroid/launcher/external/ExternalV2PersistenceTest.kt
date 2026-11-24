@@ -82,8 +82,8 @@ class ExternalV2PersistenceTest {
                 setOf("ui.tile", "state.local"), snapshot, TileSystemSnapshotV2(null, null, null),
                 interaction = TileInteraction.Toggle("format24", true),
             )
-            val watchdogFixture = "-- hypr-test-force-kernel-timeout".encodeToByteArray()
-            assertNull(ExperimentalExternalLua.runV2(app, watchdogFixture, request))
+            val pressureFixture = "-- hypr-test-native-memory-pressure".encodeToByteArray()
+            assertNull(ExperimentalExternalLua.runV2(app, pressureFixture, request))
             assertEquals(snapshot, store.loadTileStateV2(slot(first)))
         }
         ActivityScenario.launch(MainActivity::class.java).use {
