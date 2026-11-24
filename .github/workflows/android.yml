@@ -38,7 +38,8 @@ jobs:
         (!inputs.external_lua || github.ref == 'refs/heads/feature/safe-external-lua-runtime' ||
           github.ref == 'refs/heads/feature/lua-runtime-hardening' ||
           github.ref == 'refs/heads/feature/plugin-api-v2' ||
-          github.ref == 'refs/heads/feature/official-v2-packages'))
+          github.ref == 'refs/heads/feature/official-v2-packages' ||
+          github.ref == 'refs/heads/feature/developer-edition'))
     needs: build
     permissions:
       actions: read
@@ -51,7 +52,7 @@ jobs:
     env:
       HYPRDROID_DISTRIBUTION: 'true'
       HYPRDROID_BUILD_COMMIT: ${{ github.sha }}
-      HYPRDROID_TEST_V2_OFFICIAL: ${{ (inputs.external_lua && github.ref == 'refs/heads/feature/official-v2-packages') && 'true' || 'false' }}
+      HYPRDROID_TEST_V2_OFFICIAL: ${{ (inputs.external_lua && (github.ref == 'refs/heads/feature/official-v2-packages' || github.ref == 'refs/heads/feature/developer-edition')) && 'true' || 'false' }}
       HYPRDROID_TEST_V2_FIXTURES: ${{ (inputs.external_lua && github.ref == 'refs/heads/feature/plugin-api-v2') && 'true' || 'false' }}
       HYPRDROID_TEST_EXTERNAL_LUA: ${{ inputs.external_lua && 'true' || 'false' }}
     steps:
