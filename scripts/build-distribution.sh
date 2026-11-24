@@ -38,7 +38,8 @@ with ZipFile(sys.argv[1]) as apk:
     assert workers, "Expected native runtime"
     for worker in workers:
         binary = apk.read(worker)
-        for marker in (b"-- hypr-test-force-kernel-timeout", b"-- hypr-test-native-memory-pressure"):
+        for marker in (b"-- hypr-test-force-kernel-timeout", b"-- hypr-test-native-memory-pressure",
+                       b"-- hypr-test-managed-out-of-memory"):
             assert marker not in binary, f"Test fixture present in signed APK: {worker}"
 PY_CHECK
 fi

@@ -85,6 +85,9 @@ class ExternalV2PersistenceTest {
             val pressureFixture = "-- hypr-test-native-memory-pressure".encodeToByteArray()
             assertNull(ExperimentalExternalLua.runV2(app, pressureFixture, request))
             assertEquals(snapshot, store.loadTileStateV2(slot(first)))
+            val heapFixture = "-- hypr-test-managed-out-of-memory".encodeToByteArray()
+            assertNull(ExperimentalExternalLua.runV2(app, heapFixture, request))
+            assertEquals(snapshot, store.loadTileStateV2(slot(first)))
         }
         ActivityScenario.launch(MainActivity::class.java).use {
             awaitSwitch(first, false)

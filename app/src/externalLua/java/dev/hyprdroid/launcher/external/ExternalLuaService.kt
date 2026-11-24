@@ -117,6 +117,7 @@ class ExternalLuaService : Service() {
                         sealedBytes(frame).use { current.reply.render(id, number, it) }
                     }
                 } catch (_: OutOfMemoryError) {
+                    if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaPressure", "worker caught managed OutOfMemoryError")
                     terminate()
                 } catch (_: LinkageError) {
                     current.reply.error(id, number, 2)

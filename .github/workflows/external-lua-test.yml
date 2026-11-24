@@ -71,6 +71,8 @@ jobs:
             grep -F 'native touchedMiB=' app/build/reports/androidTests/lua-pressure.txt &&
             grep -E 'worker PSS guard|native allocation failed' app/build/reports/androidTests/lua-pressure.txt &&
             sh scripts/ci-v2-persistence.sh dev.hyprdroid.launcher.experimental &&
+            adb logcat -d -s HyprLuaPressure >> app/build/reports/androidTests/lua-pressure.txt &&
+            grep -F 'worker caught managed OutOfMemoryError' app/build/reports/androidTests/lua-pressure.txt &&
             ./gradlew :app:connectedExperimentalAndroidTest -PtestExperimental=true -Pv2FixtureLua=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.external.ExternalLuaLoadTest &&
             adb logcat -d -s HyprLuaLoad:I > app/build/reports/androidTests/lua-load.txt &&
             grep -F 'rounds=10 burst=6 completed=60' app/build/reports/androidTests/lua-load.txt &&

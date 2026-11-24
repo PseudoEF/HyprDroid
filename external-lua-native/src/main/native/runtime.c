@@ -299,6 +299,15 @@ static jbyteArray run(JNIEnv *env, jbyteArray input, jbyteArray state, jint even
 #ifdef HYPR_RUNTIME_TEST_FIXTURES
         static const char watchdog_fixture[] = "-- hypr-test-force-kernel-timeout";
         static const char pressure_fixture[] = "-- hypr-test-native-memory-pressure";
+        static const char heap_fixture[] = "-- hypr-test-managed-out-of-memory";
+        if ((size_t)n == sizeof(heap_fixture) - 1 &&
+            !memcmp(source, heap_fixture, sizeof(heap_fixture) - 1)) {
+            // This one impossible allocation exceeds the worker ART heap cap.
+            // JNI leaves the actual OutOfMemoryError pending for the caller.
+            jbyteArray impossible = (*env)->NewByteArray(env, INT_MAX);
+            timer_delete(timer);
+            return impossible;
+        }
         if ((size_t)n == sizeof(watchdog_fixture) - 1 &&
             !memcmp(source, watchdog_fixture, sizeof(watchdog_fixture) - 1)) {
             for (;;) pause();
