@@ -76,6 +76,9 @@ jobs:
             ./gradlew :app:connectedExperimentalAndroidTest -PtestExperimental=true -Pv2FixtureLua=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.external.ExternalLuaLoadTest &&
             adb logcat -d -s HyprLuaLoad:I > app/build/reports/androidTests/lua-load.txt &&
             grep -F 'rounds=10 burst=6 completed=60' app/build/reports/androidTests/lua-load.txt &&
+            adb install -r app/build/outputs/apk/experimental/app-experimental.apk &&
+            adb install -r app/build/outputs/apk/androidTest/experimental/app-experimental-androidTest.apk &&
+            sh scripts/ci-lua-circuit.sh &&
             if [ "${{ inputs.sustained }}" = true ]; then sh scripts/ci-lua-sustained.sh; fi
       - uses: actions/upload-artifact@v4
         if: always()
@@ -83,6 +86,7 @@ jobs:
           name: hyprdroid-experimental-test-report
           path: |
             app/build/reports/androidTests/sustained/
+            app/build/reports/androidTests/lua-circuit.txt
             app/build/reports/androidTests/lua-pressure.txt
             app/build/reports/androidTests/lua-load.txt
             app/build/reports/androidTests/connected/

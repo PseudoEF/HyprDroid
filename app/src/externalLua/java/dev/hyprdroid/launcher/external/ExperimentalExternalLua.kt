@@ -104,10 +104,14 @@ internal object ExperimentalExternalLua {
         val died = CompletableDeferred<Unit>()
         val closing = AtomicBoolean(false)
         val replyClaimed = AtomicBoolean(false)
+        val failureRecorded = AtomicBoolean(false)
+        fun recordUnexpectedDeath() {
+            if (!closing.get() && failureRecorded.compareAndSet(false, true)) excessiveFailures(record = true)
+        }
         Log.d("HyprLuaTile", "Worker binding requested")
         val death = IBinder.DeathRecipient {
             Log.d("HyprLuaTile", "Worker Binder died; disposalRequested=${closing.get()}")
-            if (!closing.get()) excessiveFailures(record = true)
+            recordUnexpectedDeath()
             died.complete(Unit)
             outcome.complete(failure("Изолированный Lua worker завершился"))
         }
@@ -148,11 +152,13 @@ internal object ExperimentalExternalLua {
                     endpoint.set(port)
                     connected.complete(port)
                 } catch (_: android.os.RemoteException) {
+                    recordUnexpectedDeath()
                     died.complete(Unit)
                     connected.complete(null)
                 }
             }
             override fun onServiceDisconnected(name: ComponentName) {
+                recordUnexpectedDeath()
                 outcome.complete(failure("Связь с Lua worker потеряна"))
             }
             override fun onBindingDied(name: ComponentName) {
