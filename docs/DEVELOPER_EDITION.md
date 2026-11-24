@@ -14,7 +14,7 @@ A follow-up should reuse the package verifier and transaction path for the pair 
 
 Run `./gradlew :app:assembleDeveloper` to produce the isolation build. It is unsigned by default. The Developer signing configuration accepts a dedicated PKCS12 file via `HYPRDROID_DEVELOPER_KEYSTORE_FILE` and its password via `HYPRDROID_DEVELOPER_KEYSTORE_PASSWORD`. Use the alias `hyprdroid-developer`. Keep the private file outside source control, retain it securely between updates, and keep it distinct from the normal APK signing key and from plugin Ed25519 keys.
 
-CI checks both packaged manifests and DEX code, then installs both apps on Android 15 under different UIDs. Its disposable emulator certificate is for that job only. No unsigned or disposable APK is published for device installation.
+CI checks both packaged manifests and DEX code, then installs both apps on Android 15 under different UIDs. Its disposable emulator certificate is for that job only. The manual workflow uses the separate persistent key stored in the branch-scoped developer-signing environment. It publishes the signed isolation APK only after an Android 15 update check. The Developer signing certificate SHA-256 is 5c30c0c6b00e6170775331db79585f667870092fea380110ac1434ece20a7bff.
 
 ### Pixel 9
 

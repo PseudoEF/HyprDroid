@@ -44,3 +44,76 @@ jobs:
           target: google_apis
           disable-animations: true
           script: sh scripts/ci-developer-edition.sh
+
+  signed-isolation-apk:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feature/developer-edition'
+    needs: android
+    environment: developer-signing
+    concurrency:
+      group: hyprdroid-developer-distribution
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build two consecutive version codes
+        run: |
+          set -eu
+          current=$((GITHUB_RUN_NUMBER * 2))
+          ./gradlew :app:assembleDebug :app:assembleDeveloper :app:assembleDebugAndroidTest -PbuildVersionCode="$((current - 1))"
+          cp app/build/outputs/apk/developer/app-developer-unsigned.apk "$RUNNER_TEMP/developer-previous-unsigned.apk"
+          ./gradlew :app:assembleDeveloper -PbuildVersionCode="$current"
+          cp app/build/outputs/apk/developer/app-developer-unsigned.apk "$RUNNER_TEMP/developer-current-unsigned.apk"
+      - name: Sign Developer APKs with the dedicated persistent certificate
+        env:
+          HYPRDROID_DEVELOPER_KEYSTORE_BASE64: ${{ secrets.HYPRDROID_DEVELOPER_KEYSTORE_BASE64 }}
+          HYPRDROID_DEVELOPER_KEYSTORE_PASSWORD: ${{ secrets.HYPRDROID_DEVELOPER_KEYSTORE_PASSWORD }}
+        run: |
+          set -eu
+          umask 077
+          : "${HYPRDROID_DEVELOPER_KEYSTORE_BASE64:?missing Developer APK signing keystore}"
+          : "${HYPRDROID_DEVELOPER_KEYSTORE_PASSWORD:?missing Developer APK signing password}"
+          key="$RUNNER_TEMP/developer-signing.p12"
+          trap 'rm -f "$key"' EXIT
+          printf '%s' "$HYPRDROID_DEVELOPER_KEYSTORE_BASE64" | base64 --decode > "$key"
+          tools="$ANDROID_HOME/build-tools/35.0.0"
+          for build in previous current; do
+            "$tools/zipalign" -f 4 "$RUNNER_TEMP/developer-$build-unsigned.apk" "$RUNNER_TEMP/developer-$build-aligned.apk"
+            "$tools/apksigner" sign --ks "$key" --ks-key-alias hyprdroid-developer --ks-pass env:HYPRDROID_DEVELOPER_KEYSTORE_PASSWORD --out "$RUNNER_TEMP/developer-$build.apk" "$RUNNER_TEMP/developer-$build-aligned.apk"
+            "$tools/apksigner" verify --print-certs "$RUNNER_TEMP/developer-$build.apk" > "$RUNNER_TEMP/developer-$build-certs.txt"
+            grep -Fx 'Signer #1 certificate SHA-256 digest: 5c30c0c6b00e6170775331db79585f667870092fea380110ac1434ece20a7bff' "$RUNNER_TEMP/developer-$build-certs.txt"
+          done
+      - name: Enable KVM
+        run: sudo chmod 666 /dev/kvm
+      - name: Verify Developer APK update on Android 15
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          DEVELOPER_INITIAL_APK: ${{ runner.temp }}/developer-previous.apk
+          DEVELOPER_UPDATED_APK: ${{ runner.temp }}/developer-current.apk
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: sh scripts/ci-developer-edition.sh
+      - name: Stage the verified Developer APK
+        run: |
+          mkdir -p dist
+          cp "$RUNNER_TEMP/developer-current.apk" dist/HyprDroid-Developer-isolation.apk
+          cd dist
+          sha256sum HyprDroid-Developer-isolation.apk > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hyprdroid-developer-isolation-apk
+          path: dist/
+          if-no-files-found: error
