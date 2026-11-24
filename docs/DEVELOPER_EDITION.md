@@ -77,3 +77,7 @@ In the shell menu, **Оконный тайл** opens a neutral tile with the mod
 Before this fix, the window menu could create and persist a tiling session in Classic while the pager continued showing the shortcut canvas. The window picker is internal to HyprDroid and does not require the Android HOME role. Developer Edition remains a regular launcher-list app.
 
 The signed update CI for this fix uses the previously released Developer version 54 as its upgrade baseline. The workspace UI test creates tiles by pressing the real menu and window controls, and checks restoration in a separate invocation after force-stopping the app.
+
+On Android 15, the pre-fix build passed the fresh Clean case and timed out waiting for the neutral picker after switching to Classic. The fixed build passed both cases, module selection, closing and recreating an empty workspace, process-stop restoration, and a real terminal command. The signed update preserved the Developer installation from version 54 to version 64.
+
+[Pre-fix reproduction](https://github.com/PseudoEF/HyprDroid/actions/runs/45404138647) · [Workspace regression phases](https://github.com/PseudoEF/HyprDroid/actions/runs/45408170434) · [Signed upgrade](https://github.com/PseudoEF/HyprDroid/actions/runs/45404374758)

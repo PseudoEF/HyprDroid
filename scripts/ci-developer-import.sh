@@ -2,6 +2,11 @@
 set -eu
 developer=dev.hyprdroid.launcher.developer
 target="$developer.test/androidx.test.runner.AndroidJUnitRunner"
+
+# This disposable emulator fixture installs fresh before the import test.
+# The workspace suite leaves a focused terminal and two persisted windows.
+adb uninstall "$developer" | grep -Fx Success
+adb install "$RUNNER_TEMP/developer-test.apk"
 adb install -r app/build/outputs/apk/androidTest/developer/app-developer-androidTest.apk
 for file in developer.pub.pem my-tile-1.0.0.hyp my-tile.signature.json; do
     adb push "$HYPR_DEVELOPER_SDK_FIXTURE/$file" "/sdcard/Download/$file"
