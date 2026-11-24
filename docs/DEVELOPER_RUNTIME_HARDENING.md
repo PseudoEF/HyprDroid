@@ -53,3 +53,11 @@ A [second Developer-branch full run](https://github.com/PseudoEF/HyprDroid/actio
 ## Measured worker bursts
 
 [Android 15 experimental runtime CI](https://github.com/PseudoEF/HyprDroid/actions/runs/45383815914) completed all 60 requests in 8,195 ms. Each of 10 rounds submitted six simultaneous Hello Tile operations. Recorded end-to-end p95 was 876 ms and the maximum was 905 ms, with all 60 independent state results checked. The same run passed the 10 Lua, Binder, and lifecycle tests and the v2 process-persistence cases. This short workload used the official Hello fixture. It did not measure process PSS peaks, Android worker OOM recovery, malicious Parcel traffic, or sustained aggregate timer load.
+
+## Final validation scope
+
+The ten-minute Android 15 fixture exercises two visible Clock Tile instances, each with an ongoing Core timer. It validates alternating user-selected state, checks that the second tile's state remains independent, switches workspaces and drives Activity through stopped and resumed states. Removal at the end invalidates the signed package during ongoing timer activity. Reinstall checks the recorded state. Event latency includes test-driver and UI dispatch time. PSS samples include the Core process and its instrumentation overhead.
+
+The native pressure fixture touches bounded chunks outside the Lua allocator in the actual isolated worker. The test distinguishes the worker PSS guard, observed native allocation failure and watchdog termination through logs. This is a controlled process-pressure test. The 2 MiB Lua arena is a separate hard limit. A run in which the PSS guard stops the worker before allocation failure does not establish Linux LMK or full-process OOM recovery. The native fixtures are compiled only into the experimental instrumentation build. Release packaging scans native binaries for fixture markers.
+
+The Binder suite uses real dispatches and file descriptors. It checks malformed descriptor and trailing Parcel data followed by a valid owner dispatch, plus the existing session, replay, oversized SharedMemory and Binder-death assertions. This suite does not establish exhaustive Parcel compatibility or protection against system-level resource pressure.

@@ -81,3 +81,7 @@ The signed update CI for this fix uses the previously released Developer version
 On Android 15, the pre-fix build passed the fresh Clean case and timed out waiting for the neutral picker after switching to Classic. The fixed build passed both cases, module selection, closing and recreating an empty workspace, process-stop restoration, and a real terminal command. The signed update preserved the Developer installation from version 54 to version 64.
 
 [Pre-fix reproduction](https://github.com/PseudoEF/HyprDroid/actions/runs/45404138647) · [Workspace regression phases](https://github.com/PseudoEF/HyprDroid/actions/runs/45408170434) · [Signed upgrade](https://github.com/PseudoEF/HyprDroid/actions/runs/45404374758)
+
+### Physical validation of Developer version 80
+
+The owner tested signed Developer version 80 (APK commit `13cdb73`) on a Pixel 9 running Android 17. Window creation and terminal access worked. Ed25519 public-key import, signed local package import and package inspection worked. Local execution remained blocked. Keys and package records survived force-stop. The owner verified key revocation and that re-adding the same key left the old package trust revoked.
