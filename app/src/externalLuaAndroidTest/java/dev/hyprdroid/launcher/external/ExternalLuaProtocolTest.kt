@@ -56,7 +56,7 @@ class ExternalLuaProtocolTest {
             val binder = worker.asBinder()
             // Neither a wrong descriptor nor trailing data may reach the owner
             // as a dispatch. The valid event that follows must still win.
-            for (descriptor in listOf("invalid.test.descriptor", binder.interfaceDescriptor)) {
+            for (descriptor in listOf("invalid.test.descriptor", requireNotNull(binder.interfaceDescriptor))) {
                 val parcel = Parcel.obtain()
                 try {
                     parcel.writeInterfaceToken(descriptor)
