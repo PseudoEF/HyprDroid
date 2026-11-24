@@ -101,13 +101,18 @@ internal class ExternalV2TileModule(override val id: String, override val title:
                     ) ?: error("Lua v2 did not return a valid frame")
                     Triple(updated, previous, "state.local" in permissions)
                 } ?: return
+                val commitStarted = if (BuildConfig.V2_FIXTURE_LUA) SystemClock.elapsedRealtime() else 0L
                 manager.externalAdmission.commit(generation) {
                     if (persist) store.saveTileStateV2(slot, previous, result.state, stillAllowed)
                     if (!stillAllowed()) return@commit
+                    val committedAt = if (BuildConfig.V2_FIXTURE_LUA) SystemClock.elapsedRealtime() else 0L
                     schedule.configure(result.timers, SystemClock.elapsedRealtime())
                     revision = gate.publish(result.tree)
                     frame = result
                     failed = false
+                    if (BuildConfig.V2_FIXTURE_LUA) {
+                        Log.i("HyprLuaGate", "v2 kind=$operationKind commitMs=${committedAt - commitStarted} publishMs=${SystemClock.elapsedRealtime() - committedAt}")
+                    }
                     if (operationKind != "timer") Log.d("HyprLuaTile", "v2 presented: $operationKind")
                 }
             } catch (cancelled: CancellationException) {

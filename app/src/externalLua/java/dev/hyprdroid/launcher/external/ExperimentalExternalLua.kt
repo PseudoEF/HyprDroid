@@ -84,9 +84,9 @@ internal object ExperimentalExternalLua {
         context: Context, source: ByteArray, state: ByteArray, event: Int, v2: WireRequestV2?,
         dispatch: ((() -> Unit) -> Boolean)?, authorized: () -> Boolean, rejected: () -> T, failure: (String) -> T, decode: (ByteArray) -> T,
     ): T {
-        val queuedAt = SystemClock.elapsedRealtime()
+        val queuedAt = if (BuildConfig.V2_FIXTURE_LUA) SystemClock.elapsedRealtime() else 0L
         return workers.execute(rejected) admitted@{
-            val admittedAt = SystemClock.elapsedRealtime()
+            val admittedAt = if (BuildConfig.V2_FIXTURE_LUA) SystemClock.elapsedRealtime() else 0L
             if (!BuildConfig.EXTERNAL_LUA || uncertainDeath || excessiveFailures() || !authorized()) {
                 return@admitted failure("Внешний Lua недоступен")
             }
@@ -104,7 +104,7 @@ internal object ExperimentalExternalLua {
     ): T {
         val uuid = UUID.randomUUID()
         val id = uuid.mostSignificantBits.takeUnless { it == 0L } ?: 1L
-        val bindingAt = SystemClock.elapsedRealtime()
+        val bindingAt = if (BuildConfig.V2_FIXTURE_LUA) SystemClock.elapsedRealtime() else 0L
         fun trace(phase: String) {
             if (BuildConfig.V2_FIXTURE_LUA) {
                 Log.i("HyprLuaGate", "operation=$id phase=$phase sinceQueueMs=${SystemClock.elapsedRealtime() - queuedAt} queueMs=${admittedAt - queuedAt} ioMs=${bindingAt - admittedAt}")
@@ -148,7 +148,9 @@ internal object ExperimentalExternalLua {
             }
 
             override fun error(session: Long, number: Int, code: Int) {
-                if (valid(session, number)) outcome.complete(failure(when (code) {
+                if (!valid(session, number)) return
+                trace("error")
+                outcome.complete(failure(when (code) {
                     1 -> "Исчерпана память Lua VM"
                     2 -> "Lua завершился с ошибкой или превысил квоту"
                     else -> "Недопустимый Lua-запрос"

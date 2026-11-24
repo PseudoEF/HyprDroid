@@ -92,7 +92,7 @@ internal object ExternalHelloTileModule : TileModule {
                 } ?: return@execute PluginResult.Failure("Доверенная запись Hello Tile изменилась")
                 val updated = (result as? PluginResult.Success)?.tile?.state
                 if (updated != null && request.event != null) {
-                    val commitStarted = SystemClock.elapsedRealtime()
+                    val commitStarted = if (BuildConfig.V2_FIXTURE_LUA) SystemClock.elapsedRealtime() else 0L
                     manager.externalAdmission.commit(generation) {
                         store.saveTileState(slot, saved, updated)
                         if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaGate", "hello commitMs=${SystemClock.elapsedRealtime() - commitStarted} generation=$generation")

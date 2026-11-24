@@ -91,7 +91,9 @@ class DeveloperImportTest {
 
     private fun awaitOutput(text: String, substring: Boolean = false) {
         compose.waitUntil(15_000) {
-            compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty()
+            // DocumentsUI can still own the resumed window immediately after a file tap.
+            compose.onAllNodesWithText(text, substring = substring)
+                .fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
         }
     }
 

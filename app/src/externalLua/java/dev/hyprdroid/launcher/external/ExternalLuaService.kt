@@ -130,7 +130,7 @@ class ExternalLuaService : Service() {
             }, 0, 25, TimeUnit.MILLISECONDS)
             worker.execute {
                 try {
-                    val startedAt = SystemClock.elapsedRealtime()
+                    val startedAt = if (BuildConfig.V2_FIXTURE_LUA) SystemClock.elapsedRealtime() else 0L
                     val frame = if (current.eventV2 != null) {
                         NativeLua.runV2(current.source, current.state, current.eventV2, current.capabilities)
                     } else NativeLua.run(current.source, current.state, event)

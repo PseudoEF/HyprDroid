@@ -18,6 +18,7 @@ status=0
 adb shell am instrument -w -r -e class dev.hyprdroid.launcher.external.ExternalLuaSustainedTest "$runner" > "$report/instrumentation.txt" 2>&1 || status=$?
 cat "$report/instrumentation.txt"
 collect
+python3 scripts/ci-lua-timings.py "$report/logcat.txt" | tee "$report/timings.txt"
 grep -F 'elapsedMs=' "$report/logcat.txt" | tail -25
 printf 'binding_requests=%s\nbinding_closures=%s\nadmission_declined=%s\nresponse_timeouts=%s\nunexpected_deaths=%s\n' \
     "$(grep -c 'Worker binding requested' "$report/logcat.txt" || true)" \

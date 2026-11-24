@@ -18,6 +18,7 @@ status=0
 adb shell am instrument -w -r -e class 'dev.hyprdroid.launcher.external.ExternalTileLifecycleTest#firstIncrementAfterMountPersistsAcrossRecreationTwentyTimes' "$runner" > "$report/instrumentation.txt" 2>&1 || status=$?
 cat "$report/instrumentation.txt"
 collect
+python3 scripts/ci-lua-timings.py "$report/logcat.txt" | tee "$report/timings.txt"
 grep -F 'lifecycle round=' "$report/logcat.txt" | tee "$report/lifecycle-rounds.txt"
 test "$status" -eq 0
 grep -F 'OK (1 test)' "$report/instrumentation.txt"
