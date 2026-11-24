@@ -9,6 +9,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import dev.hyprdroid.launcher.modules.CommandPanelModule
@@ -104,8 +105,17 @@ class DeveloperImportTest {
     }
 
     private fun click(selector: androidx.test.uiautomator.BySelector): Boolean {
-        val objectToClick = device.wait(Until.findObject(selector), 10_000) ?: return false
-        objectToClick.click()
-        return true
+        val deadline = android.os.SystemClock.elapsedRealtime() + 10_000
+        while (true) {
+            val remaining = deadline - android.os.SystemClock.elapsedRealtime()
+            if (remaining <= 0) return false
+            val objectToClick = device.wait(Until.findObject(selector), remaining) ?: return false
+            try {
+                objectToClick.click()
+                return true
+            } catch (_: StaleObjectException) {
+                // DocumentsUI may replace the row when a provider finishes scanning.
+            }
+        }
     }
 }

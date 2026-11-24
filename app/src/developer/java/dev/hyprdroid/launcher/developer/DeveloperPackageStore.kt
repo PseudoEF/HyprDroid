@@ -123,10 +123,12 @@ internal class DeveloperPackageStore(
 
     private fun readKeys(): List<Key> = keyDirectory.listFiles().orEmpty().filter { !it.name.startsWith(".") }
         .sortedBy { it.name }.map { file ->
-            val json = parsePackageJson(file.inputStream().use { readPackageBytes(it, 512) })
-            val raw = json.requiredString("raw")
-            checkLimit(sha256(ED25519_SPKI + raw.decodeHex(32)) == file.name, "Повреждён публичный ключ")
-            Key(file.name, raw, json.requiredString("grant"))
+            packageMetadata("Повреждён публичный ключ") {
+                val json = parsePackageJson(file.inputStream().use { readPackageBytes(it, 512) })
+                val raw = json.requiredString("raw")
+                checkLimit(sha256(ED25519_SPKI + raw.decodeHex(32)) == file.name, "Повреждён публичный ключ")
+                Key(file.name, raw, json.requiredString("grant"))
+            }
         }
 
     private fun verify(record: Record, key: Key, archive: java.io.InputStream, stage: File) {

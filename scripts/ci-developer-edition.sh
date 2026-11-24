@@ -23,8 +23,20 @@ if adb shell run-as "$developer" cat "/data/user/0/$ordinary/ordinary-private"; 
 fi
 sh scripts/ci-home.sh select
 adb shell am start -W -n "$developer/dev.hyprdroid.launcher.developer.DeveloperActivity"
-adb shell uiautomator dump /sdcard/hyprdroid-developer.xml
-adb shell cat /sdcard/hyprdroid-developer.xml | grep -F 'text="Developer Edition"' >/dev/null
+banner_seen=false
+for attempt in 1 2 3 4 5 6; do
+    if adb shell uiautomator dump /sdcard/hyprdroid-developer.xml &&
+        adb shell cat /sdcard/hyprdroid-developer.xml | grep -F 'text="Developer Edition"' >/dev/null; then
+        banner_seen=true
+        break
+    fi
+    sleep 1
+done
+if [ "$banner_seen" != true ]; then
+    adb shell dumpsys activity activities | grep -F mResumedActivity || true
+    adb shell cat /sdcard/hyprdroid-developer.xml
+    exit 1
+fi
 adb install -r "$ordinary_apk"
 adb install -r "$developer_updated"
 adb shell run-as "$ordinary" test -f ordinary-private
