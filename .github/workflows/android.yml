@@ -88,11 +88,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh run download 45328873979 --name HyprDroid-debug-10185-run45328873979-attempt1 --dir .local/upgrade-10185
-      - name: Fetch the signed 10191 upgrade baseline
+      - name: Fetch the signed 10197 upgrade baseline
         if: env.HYPRDROID_TEST_OFFICIAL_UPGRADE == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run download 45372808949 --name HyprDroid-debug-10191-run45372808949-attempt1 --dir .local/upgrade-10191
+        run: gh run download 45383165423 --name HyprDroid-debug-10197-run45383165423-attempt1 --dir .local/upgrade-10197
       - name: Check out the actual v0.9.0 baseline for in-place upgrade
         if: env.HYPRDROID_TEST_V2_OFFICIAL != 'true'
         uses: actions/checkout@v4
