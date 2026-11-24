@@ -28,3 +28,22 @@ The Lua arena remains 2 MiB. PSS is a periodic observation of process memory, wi
 ## Signed upgrade fixtures
 
 The Developer upgrade installs the previously distributed version 14 APK and checks its existing signing certificate before replacing it. The ordinary upgrade uses signed build 10191 as its baseline and seeds the official Clock Tile state before replacement. After the update it verifies the stored setting by executing Clock through the isolated worker. The separate test-only to official package migration remains on its original 10185 fixture.
+
+## Reproduction on a matched emulator
+
+The full shell suite on a fresh Pixel 6 emulator with Android 15 passed on both the [official baseline](https://github.com/PseudoEF/HyprDroid/actions/runs/45382149127) and the [Developer branch](https://github.com/PseudoEF/HyprDroid/actions/runs/45381970971). This includes the nine UI assertions that failed in the original isolation workflow. Both runs also passed the separate widget seed and verify phases. The original job used a different emulator profile and selected HyprDroid as HOME before the full UI suite. Those conditions differed together, so no individual UI failure has an isolated root-cause reproduction. There were no assertion relaxations.
+
+The full suite runner now carries the failure status forward while still running widget restoration after a clean reset of the disposable emulator's app data. This keeps the two failure signals independent.
+
+## Prepare the existing signed package in Termux
+
+From the my-tile project, use the same public key and detached metadata you already created with SDK 0.1.1. Adapt the public-key and metadata paths to your own files.
+
+    public_key="$HOME/.hyp-my-tile-keys/developer.pub.pem"
+    archive=dist/my-tile-1.0.0.hyp
+    signature=dist/my-tile.signature.json
+    hyp verify "$archive" --signature "$signature" --public "$public_key"
+    termux-setup-storage
+    cp "$public_key" "$archive" "$signature" "$HOME/storage/downloads/"
+
+The existing private key stays in Termux. The three exported files are sufficient for the future import flow. The current isolation APK cannot import them.
