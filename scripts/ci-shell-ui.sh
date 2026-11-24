@@ -12,6 +12,7 @@ if [ "${HYPRDROID_TEST_API:-35}" = 37 ]; then
   grep -q '^2' .local/shell-ui/navigation-mode.txt
 fi
 # Keep seeded workspaces installed for the font-size and orientation previews.
+ui_status=0
 if [ "${HYPRDROID_UI_SUITE:-all}" = wallpaper ]; then
   ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.MinimalWallpaperTest --no-daemon --stacktrace
 elif [ "${HYPRDROID_UI_SUITE:-all}" = interaction ]; then
@@ -21,10 +22,15 @@ elif [ "${HYPRDROID_UI_SUITE:-all}" = topbar ]; then
 elif [ "${HYPRDROID_UI_SUITE:-all}" = quicksettings ]; then
   ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.QuickSettingsUiTest,dev.hyprdroid.launcher.QuickSettingsStateTest,dev.hyprdroid.launcher.OverlaySidebarTest --no-daemon --stacktrace
 else
-  ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.notClass=dev.hyprdroid.launcher.UpgradePersistenceTest,dev.hyprdroid.launcher.WidgetProcessRestoreTest --no-daemon --stacktrace
+  ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.notClass=dev.hyprdroid.launcher.UpgradePersistenceTest,dev.hyprdroid.launcher.WidgetProcessRestoreTest --no-daemon --stacktrace || ui_status=$?
 fi
 # A separate pair of instrumentation invocations proves restoration after a real process death.
 # Shell binding permission is limited to this isolated emulator fixture, never product code.
+if [ "$ui_status" -ne 0 ]; then
+  # A failed UI scenario can leave a widget or preferences behind. Start the
+  # separate process-restoration fixture on an empty emulator app sandbox.
+  adb shell pm clear --user 0 dev.hyprdroid.launcher | grep -Fx Success
+fi
 adb shell appwidget grantbind --package dev.hyprdroid.launcher --user 0
 for widget_phase in seed verify; do
   if [ "$widget_phase" = verify ]; then
@@ -53,3 +59,5 @@ adb shell settings put system accelerometer_rotation 0
 adb shell settings put system user_rotation 1
 sleep 3
 adb shell screencap -p /sdcard/Download/hyprdroid-shell/landscape.png
+
+exit "$ui_status"
