@@ -65,17 +65,12 @@ fixture verify "$CODE_B" 0.9.0 "$HYPRDROID_BUILD_COMMIT"
 adb shell appops get "$package" SYSTEM_ALERT_WINDOW > "$report/overlay-permission-after.txt"
 adb shell dumpsys package "$package" > "$report/package-after.txt"
 if [ "${HYPRDROID_TEST_EXTERNAL_LUA:-false}" = true ]; then
-  tests=dev.hyprdroid.launcher.external.ExternalLuaAndroidTest
-  if [ "${HYPRDROID_TEST_V2_FIXTURES:-false}" != true ]; then
-    tests="$tests#enabledAppUsesPrivateWorkerAndItsOwnPackageStorage,$tests#arenaAndInstructionLimitsFailWithoutCrashingCore,$tests#twoSimultaneousRequestsCarryIndependentStateAndRejectUnknownEvent,$tests#rejectsInvalidSourceAndPrivilegedLibraries"
-  fi
-  adb shell am instrument -w -r -e class "$tests,dev.hyprdroid.launcher.external.ExternalLuaProtocolTest"     "$package.test/androidx.test.runner.AndroidJUnitRunner" > "$report/external-lua.txt"
+  worker=dev.hyprdroid.launcher.external.ExternalLuaAndroidTest
+  tests="$worker#enabledAppUsesPrivateWorkerAndItsOwnPackageStorage,$worker#arenaAndInstructionLimitsFailWithoutCrashingCore,$worker#twoSimultaneousRequestsCarryIndependentStateAndRejectUnknownEvent,$worker#rejectsInvalidSourceAndPrivilegedLibraries"
+  adb shell am instrument -w -r -e class "$tests,dev.hyprdroid.launcher.external.ExternalLuaProtocolTest" \
+    "$package.test/androidx.test.runner.AndroidJUnitRunner" > "$report/external-lua.txt"
   cat "$report/external-lua.txt"
-  if [ "${HYPRDROID_TEST_V2_FIXTURES:-false}" = true ]; then
-    grep -q 'OK (8 tests)' "$report/external-lua.txt"
-  else
-    grep -q 'OK (6 tests)' "$report/external-lua.txt"
-  fi
+  grep -q 'OK (6 tests)' "$report/external-lua.txt"
 fi
 if [ "${HYPRDROID_TEST_V2_FIXTURES:-false}" = true ]; then
   adb shell am instrument -w -r -e class dev.hyprdroid.launcher.external.ExternalV2WorkerTest     "$package.test/androidx.test.runner.AndroidJUnitRunner" > "$report/external-lua-v2.txt"

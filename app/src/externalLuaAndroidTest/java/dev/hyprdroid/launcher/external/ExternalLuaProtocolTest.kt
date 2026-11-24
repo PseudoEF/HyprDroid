@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
+import android.os.Parcel
 import android.os.RemoteException
 import android.os.SharedMemory
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -52,6 +53,23 @@ class ExternalLuaProtocolTest {
             worker.dispatchEvent(18, 1, 2)
             worker.dispatchEvent(17, 3, 1)
             worker.dispatchEvent(17, 1, 3)
+            val binder = worker.asBinder()
+            // Neither a wrong descriptor nor trailing data may reach the owner
+            // as a dispatch. The valid event that follows must still win.
+            for (descriptor in listOf("invalid.test.descriptor", binder.interfaceDescriptor)) {
+                val parcel = Parcel.obtain()
+                try {
+                    parcel.writeInterfaceToken(descriptor)
+                    parcel.writeLong(17)
+                    parcel.writeInt(1)
+                    parcel.writeInt(2)
+                    parcel.writeInt(123)
+                    assertEquals(true, binder.transact(IExternalLua.Stub.TRANSACTION_dispatchEvent,
+                        parcel, null, IBinder.FLAG_ONEWAY))
+                } finally {
+                    parcel.recycle()
+                }
+            }
             worker.dispatchEvent(17, 1, 1)
             worker.dispatchEvent(17, 1, 1)
             assertEquals("8", withTimeout(5_000) { result.await() })

@@ -2,7 +2,8 @@ import java.util.Properties
 
 plugins { id("com.android.library") }
 
-val runtimeFixtures = providers.gradleProperty("v2FixtureLua").orNull == "true"
+val runtimeFixtures = providers.gradleProperty("v2FixtureLua").orNull == "true" &&
+    providers.gradleProperty("testExperimental").orNull == "true"
 require(!runtimeFixtures || providers.environmentVariable("HYPRDROID_DISTRIBUTION").orNull != "true")
 val workerNdkVersion = "28.2.13676358"
 val localSdk = rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use { input ->

@@ -67,6 +67,9 @@ jobs:
             ./gradlew :app:connectedExperimentalAndroidTest -PtestExperimental=true -Pv2FixtureLua=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.external.ExternalLuaAndroidTest,dev.hyprdroid.launcher.external.ExternalTileLifecycleTest,dev.hyprdroid.launcher.external.ExternalLuaProtocolTest,dev.hyprdroid.launcher.external.ExternalV2WorkerTest &&
             adb install -r app/build/outputs/apk/experimental/app-experimental.apk &&
             adb install -r app/build/outputs/apk/androidTest/experimental/app-experimental-androidTest.apk &&
+            adb logcat -d -s HyprLuaPressure > app/build/reports/androidTests/lua-pressure.txt &&
+            grep -F 'native touchedMiB=' app/build/reports/androidTests/lua-pressure.txt &&
+            grep -E 'worker PSS guard|native allocation failed' app/build/reports/androidTests/lua-pressure.txt &&
             sh scripts/ci-v2-persistence.sh dev.hyprdroid.launcher.experimental &&
             ./gradlew :app:connectedExperimentalAndroidTest -PtestExperimental=true -Pv2FixtureLua=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.external.ExternalLuaLoadTest &&
             adb logcat -d -s HyprLuaLoad:I > app/build/reports/androidTests/lua-load.txt &&
@@ -83,6 +86,7 @@ jobs:
           name: hyprdroid-experimental-test-report
           path: |
             app/build/reports/androidTests/sustained/
+            app/build/reports/androidTests/lua-pressure.txt
             app/build/reports/androidTests/lua-load.txt
             app/build/reports/androidTests/connected/
             app/build/reports/androidTests/v2-persistence/

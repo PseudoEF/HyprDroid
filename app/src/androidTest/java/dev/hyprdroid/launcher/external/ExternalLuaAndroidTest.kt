@@ -55,7 +55,7 @@ class ExternalLuaAndroidTest {
 
     @Test
     fun kernelTimeoutKillsWorkerAndNextBindingRecovers() = runBlocking {
-        assumeTrue("Watchdog fixture is only compiled into test builds", BuildConfig.V2_FIXTURE_LUA)
+        assumeTrue("Watchdog fixture is only compiled into test builds", BuildConfig.V2_FIXTURE_LUA && app.packageName.endsWith(".experimental"))
         val dead = evaluate("-- hypr-test-force-kernel-timeout")
         assertTrue("Unexpected watchdog result: $dead", dead is PluginResult.Failure &&
             (dead.message.contains("worker завершился") || dead.message.contains("Связь")))
@@ -64,7 +64,7 @@ class ExternalLuaAndroidTest {
 
     @Test
     fun nativePressureOutsideTheArenaKillsOnlyTheWorker() = runBlocking {
-        assumeTrue("Native pressure fixture is only compiled into test builds", BuildConfig.V2_FIXTURE_LUA)
+        assumeTrue("Native pressure fixture is only compiled into test builds", BuildConfig.V2_FIXTURE_LUA && app.packageName.endsWith(".experimental"))
         val result = evaluate("-- hypr-test-native-memory-pressure")
         assertTrue("Expected Binder death under native pressure: $result", result is PluginResult.Failure &&
             (result.message.contains("worker завершился") || result.message.contains("Связь")))
