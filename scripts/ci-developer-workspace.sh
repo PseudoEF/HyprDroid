@@ -2,11 +2,13 @@
 set -eu
 developer=dev.hyprdroid.launcher.developer
 target="$developer.test/androidx.test.runner.AndroidJUnitRunner"
-adb install -r app/build/outputs/apk/androidTest/developer/app-developer-androidTest.apk
 mkdir -p app/build/reports/developer-workspace
 for mode in clean classic; do
-    # The two first-window scenarios each start with a fresh emulator sandbox.
-    adb shell pm clear "$developer" | grep -Fx Success
+    # Uninstall only the emulator fixture. A fresh install also resets the
+    # PackageManager timestamps used by the shell presentation migration.
+    adb uninstall "$developer" | grep -Fx Success
+    adb install "$RUNNER_TEMP/developer-test.apk"
+    adb install -r app/build/outputs/apk/androidTest/developer/app-developer-androidTest.apk
     report="app/build/reports/developer-workspace/$mode.txt"
     adb shell am instrument -w -r \
         -e class 'dev.hyprdroid.launcher.developer.DeveloperWorkspaceTest#firstWindowOpensFromTheWorkspaceMenu' \
