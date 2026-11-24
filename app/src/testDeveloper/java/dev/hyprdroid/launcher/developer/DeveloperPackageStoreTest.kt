@@ -9,6 +9,7 @@ import java.security.MessageDigest
 import java.util.Base64
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
@@ -126,6 +127,15 @@ class DeveloperPackageStoreTest {
         run(denied, "dev", "import")
         assertTrue(store.packages().isEmpty())
         assertFalse(stale.exists())
+        val verified = store.preview(raw.first, raw.second)
+        var checks = 0
+        assertThrows(CancellationException::class.java) {
+            store.install(verified) {
+                if (++checks == 2) throw CancellationException("interrupted before rename")
+            }
+        }
+        assertTrue(store.packages().isEmpty())
+        assertTrue(folder.root.resolve("packages").list().orEmpty().isEmpty())
     }
 
     @Test fun sdkFixtureImportsThroughTheTerminalCommandContract() = runBlocking {

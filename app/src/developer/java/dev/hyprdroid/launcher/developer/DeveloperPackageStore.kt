@@ -80,7 +80,8 @@ internal class DeveloperPackageStore(
         Preview(record, snapshot, proof)
     }
 
-    fun install(preview: Preview) = synchronized(lock) {
+    fun install(preview: Preview, checkActive: () -> Unit = {}) = synchronized(lock) {
+        checkActive()
         val record = preview.record
         val id = record.entry.manifest.id
         checkLimit(!isOfficialId(id), "ID зарезервирован официальным пакетом")
@@ -94,6 +95,7 @@ internal class DeveloperPackageStore(
             checkLimit(stage.resolve("content").deleteRecursively(), "Не удалось удалить временные файлы")
             preview.writeMetadata(stage.resolve("signature.json"))
             writeSynced(stage.resolve("publisher"), "${key.fingerprint}\n${key.grant}\n".encodeToByteArray())
+            checkActive()
             Files.move(stage.toPath(), destination.toPath(), ATOMIC_MOVE)
         }
         Unit

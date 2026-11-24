@@ -132,7 +132,7 @@ internal class DeveloperCommands(
                     val preview = withContext(Dispatchers.IO) { store.preview(archive, metadata) }
                     if (!confirm("Импортировать пакет?", description(preview.record, true).joinToString("\n")))
                         return@exclusiveSelection cancelled()
-                    withContext(Dispatchers.IO) { ensureActive(); store.install(preview) }
+                    withContext(Dispatchers.IO) { store.install(preview) { ensureActive() } }
                     output("Импортирован ${preview.record.entry.manifest.id}. Исполнение отключено.")
                 }
             }

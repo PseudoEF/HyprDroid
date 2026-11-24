@@ -40,7 +40,12 @@ developer = ET.parse(reports / "developer.xml")
 assert activities_with(ordinary, "android.intent.category.HOME") == ["dev.hyprdroid.launcher.MainActivity"]
 assert not activities_with(developer, "android.intent.category.HOME")
 assert activities_with(developer, "android.intent.category.LAUNCHER") == [component]
-assert component in (reports / "developer.dex").read_text()
+developer_dex = (reports / "developer.dex").read_text()
+assert component in developer_dex
+assert "dev.hyprdroid.launcher.developer.DeveloperPackageStore" in developer_dex
+assert "dev.hyprdroid.launcher.developer.DeveloperCommands" in developer_dex
+assert all(service.get(android + "name") != "dev.hyprdroid.launcher.external.ExternalLuaService"
+           for service in developer.findall("./application/service"))
 assert "dev.hyprdroid.launcher.developer." not in (reports / "ordinary.dex").read_text()
 assert component not in (reports / "ordinary.xml").read_text()
 
