@@ -7,6 +7,8 @@ import android.os.Debug
 import android.os.IBinder
 import android.os.Process
 import android.os.SharedMemory
+import android.util.Log
+import dev.hyprdroid.launcher.BuildConfig
 import dev.hyprdroid.launcher.plugins.ExternalLuaSessionGate
 import dev.hyprdroid.launcher.plugins.isPluginText
 import java.util.concurrent.Executors
@@ -98,7 +100,10 @@ class ExternalLuaService : Service() {
             monitor.scheduleAtFixedRate({
                 if (active.get()) {
                     val pss = try { Debug.getPss() } catch (_: RuntimeException) { 0L }
-                    if (pss <= 0 || pss > 96 * 1024L) terminate()
+                    if (pss <= 0 || pss > 96 * 1024L) {
+                        if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaPressure", "worker PSS guard pssKiB=$pss")
+                        terminate()
+                    }
                 }
             }, 0, 25, TimeUnit.MILLISECONDS)
             worker.execute {

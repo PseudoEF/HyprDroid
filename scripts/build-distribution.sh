@@ -29,6 +29,19 @@ if [ "${HYPRDROID_TEST_EXTERNAL_LUA:-false}" = true ]; then
   fi
 fi
 ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest -PbuildVersionCode="$CODE_B" -PbuildVersionName=0.9.0 "$@" --no-daemon --stacktrace
+if [ "${HYPRDROID_TEST_EXTERNAL_LUA:-false}" = true ]; then
+  python3 - app/build/outputs/apk/debug/app-debug.apk <<'PY_CHECK'
+import sys
+from zipfile import ZipFile
+with ZipFile(sys.argv[1]) as apk:
+    workers = [name for name in apk.namelist() if name.endswith("/libhypr_external.so")]
+    assert workers, "Expected native runtime"
+    for worker in workers:
+        binary = apk.read(worker)
+        for marker in (b"-- hypr-test-force-kernel-timeout", b"-- hypr-test-native-memory-pressure"):
+            assert marker not in binary, f"Test fixture present in signed APK: {worker}"
+PY_CHECK
+fi
 cp app/build/outputs/apk/debug/app-debug.apk "$destination/HyprDroid-0.9.0-$CODE_B.apk"
 cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk "$RUNNER_TEMP/hyprdroid-upgrade/test.apk"
 python3 scripts/verify-apk.py "$destination/HyprDroid-0.9.0-$CODE_B.apk" "$CODE_B" 0.9.0

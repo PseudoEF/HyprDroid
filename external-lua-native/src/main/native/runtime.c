@@ -1,4 +1,7 @@
 #include <assert.h>
+#ifdef HYPR_RUNTIME_TEST_FIXTURES
+#include <android/log.h>
+#endif
 #include <jni.h>
 #include <lua.h>
 #include <lauxlib.h>
@@ -293,13 +296,37 @@ static jbyteArray run(JNIEnv *env, jbyteArray input, jbyteArray state, jint even
     (*env)->GetByteArrayRegion(env, state, 0, state_len, (jbyte *)saved);
     jbyteArray result = NULL;
     if (!(*env)->ExceptionCheck(env)) {
-        // Only in this opt-in non-distributable worker. The launcher never admits this
-        // fixture as package source; instrumentation uses it to verify actual Binder death.
+#ifdef HYPR_RUNTIME_TEST_FIXTURES
         static const char watchdog_fixture[] = "-- hypr-test-force-kernel-timeout";
+        static const char pressure_fixture[] = "-- hypr-test-native-memory-pressure";
         if ((size_t)n == sizeof(watchdog_fixture) - 1 &&
             !memcmp(source, watchdog_fixture, sizeof(watchdog_fixture) - 1)) {
             for (;;) pause();
         }
+        if ((size_t)n == sizeof(pressure_fixture) - 1 &&
+            !memcmp(source, pressure_fixture, sizeof(pressure_fixture) - 1)) {
+            // Touch bounded chunks outside the Lua arena. Leave time for PSS
+            // sampling between steps. The existing kernel deadline is a fallback.
+            const size_t chunk = 8u * 1024u * 1024u;
+            void *blocks[15] = {0};
+            for (size_t i = 0; i < 15; ++i) {
+                blocks[i] = malloc(chunk);
+                if (!blocks[i]) {
+                    __android_log_print(ANDROID_LOG_INFO, "HyprLuaPressure", "native allocation failed at %zu MiB", i * 8);
+                    kill(getpid(), SIGKILL);
+                    break;
+                }
+                volatile unsigned char *memory = blocks[i];
+                for (size_t page = 0; page < chunk; page += 4096) memory[page] = 1;
+                __android_log_print(ANDROID_LOG_INFO, "HyprLuaPressure", "native touchedMiB=%zu", (i + 1) * 8);
+                struct timespec settle = { .tv_sec = 0, .tv_nsec = 35000000 };
+                nanosleep(&settle, NULL);
+            }
+            for (size_t i = 0; i < 15; ++i) free(blocks[i]);
+            timer_delete(timer);
+            return NULL;
+        }
+#endif
         Runtime r = {.source = source, .source_len = (size_t)n, .state = saved,
                      .state_len = (size_t)state_len, .event = event, .api = api, .capabilities = capabilities, .cpu_started = cpu_time()};
         r.first = malloc(ARENA);
