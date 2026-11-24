@@ -14,7 +14,7 @@ internal object BuiltInModules {
                 DroidFetchModule,
                 DroidFetchTileModule,
             ) + listOfNotNull(ExternalHelloTileModule.takeIf { BuildConfig.EXTERNAL_LUA }) +
-                if (BuildConfig.V2_FIXTURE_LUA) listOf(
+                if (BuildConfig.V2_FIXTURE_LUA || BuildConfig.V2_OFFICIAL_LUA) listOf(
                     ExternalV2TileModule("clock-tile", "Clock Tile"),
                     ExternalV2TileModule("battery-tile", "Battery Tile"),
                 ) else emptyList(),

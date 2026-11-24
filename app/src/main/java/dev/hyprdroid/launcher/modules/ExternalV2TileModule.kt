@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import dev.hyprdroid.launcher.BuildConfig
 import dev.hyprdroid.launcher.data.TileStateSlot
 import dev.hyprdroid.launcher.data.WorkspaceEngineStore
 import dev.hyprdroid.launcher.external.ExperimentalExternalLua
@@ -60,7 +61,7 @@ internal class ExternalV2TileModule(override val id: String, override val title:
     private fun ActiveTile(app: Context, window: WindowId, generation: Long, modifier: Modifier) {
         val manager = remember(app) { AndroidPackages.manager(app) }
         val store = remember(app) { WorkspaceEngineStore(app) }
-        val slot = remember(window) { TileStateSlot(id, 2, window) }
+        val slot = remember(window) { TileStateSlot(id, 2, window, if (BuildConfig.V2_OFFICIAL_LUA) "github-v1" else "") }
         val scope = rememberCoroutineScope()
         val gate = remember { TileEventGateV2() }
         var revision by remember { mutableLongStateOf(0) }
@@ -87,7 +88,7 @@ internal class ExternalV2TileModule(override val id: String, override val title:
                 val operation = currentCoroutineContext()
                 val stillAllowed = { operation.isActive && manager.helloTileGeneration.value == generation }
                 val result = whileAuthorized(manager.helloTileGeneration, generation) {
-                    val (manifest, source) = withContext(Dispatchers.IO) { manager.verifiedV2Fixture(id) }
+                    val (manifest, source) = withContext(Dispatchers.IO) { manager.verifiedV2Tile(id) }
                     val permissions = manifest.permissions
                     val previous = if ("state.local" in permissions) store.loadTileStateV2(slot, diagnose = signal == TileSignal.Resume) else emptyMap()
                     val system = withContext(Dispatchers.IO) { captureSystem(app, permissions) }

@@ -40,8 +40,10 @@ internal object AndroidPackages {
             repository = SignedPackageRepository(
                 repositoryTrust, root.resolve("github-catalog-v1.json"), GitHubPackageDownload,
                 (bundled.packages() + fixtures).map { it.manifest.id }.toSet(),
+                if (BuildConfig.V2_OFFICIAL_LUA) SignedPackageRepository.CATALOG_V2_URL else SignedPackageRepository.CATALOG_URL,
             ),
             v2Fixtures = fixtures,
+            officialV2 = BuildConfig.V2_OFFICIAL_LUA,
         ).also { instance = it }
     }
 }
@@ -51,4 +53,4 @@ internal const val V2_FIXTURE_KEY = "v2-local-fixture"
 internal val v2FixtureIds = setOf("clock-tile", "battery-tile")
 
 internal fun allowsExternalTile(id: String): Boolean =
-    BuildConfig.EXTERNAL_LUA && (id == HELLO_TILE_ID || BuildConfig.V2_FIXTURE_LUA && id in v2FixtureIds)
+    BuildConfig.EXTERNAL_LUA && (id == HELLO_TILE_ID || (BuildConfig.V2_FIXTURE_LUA || BuildConfig.V2_OFFICIAL_LUA) && id in v2FixtureIds)

@@ -20,12 +20,26 @@ fixture() {
   cat "$report/$phase.txt"
   grep -q 'OK (1 test)' "$report/$phase.txt"
 }
+official_case() {
+  adb shell am instrument -w -r -e class "dev.hyprdroid.launcher.external.OfficialV2NetworkTest#$1"     "$package.test/androidx.test.runner.AndroidJUnitRunner" > "$report/official-$1.txt"
+  cat "$report/official-$1.txt"
+  grep -q 'OK (1 test)' "$report/official-$1.txt"
+}
 cp "$RUNNER_TEMP/hyprdroid-upgrade/a.json" "$report/build-a.json"
 cp "$RUNNER_TEMP/hyprdroid-distribution/HyprDroid-0.9.0-$CODE_B.json" "$report/build-b.json"
 adb install "$RUNNER_TEMP/hyprdroid-upgrade/a.apk"
 adb install "$RUNNER_TEMP/hyprdroid-upgrade/test.apk"
 adb shell appwidget grantbind --package "$package" --user 0
-fixture seed 10095 0.9.0 b9ac974cd333b9ae59caea409424ff7e7fda0140
+baseline_code=10095
+baseline_commit=b9ac974cd333b9ae59caea409424ff7e7fda0140
+if [ "${HYPRDROID_TEST_V2_OFFICIAL:-false}" = true ]; then
+  baseline_code=10185
+  baseline_commit=caf1b17edec8be135d994460ed1d87dd167bab20
+fi
+fixture seed "$baseline_code" 0.9.0 "$baseline_commit"
+if [ "${HYPRDROID_TEST_V2_OFFICIAL:-false}" = true ]; then
+  official_case seedLegacy
+fi
 adb shell appwidget revokebind --package "$package" --user 0
 # Simulate an already opted-in installation, including Android's actual special permission.
 adb shell appops set "$package" SYSTEM_ALERT_WINDOW allow
@@ -52,6 +66,12 @@ if [ "${HYPRDROID_TEST_V2_FIXTURES:-false}" = true ]; then
   cat "$report/external-lua-v2.txt"
   grep -q 'OK (2 tests)' "$report/external-lua-v2.txt"
 fi
+if [ "${HYPRDROID_TEST_V2_OFFICIAL:-false}" = true ]; then
+  official_case migrateLegacy
+  # The replacement check above has finished. This emulator now tests pristine package storage.
+  adb shell pm clear "$package" | grep -F Success
+  official_case networkInstall
+fi
 sh scripts/ci-home.sh select > "$report/home-registration.txt"
 cat "$report/home-registration.txt"
-echo "Update v0.9.0 (10095) -> v0.9.0 ($CODE_B) succeeded; UID, firstInstallTime and DataStore preserved" | tee "$report/result.txt"
+echo "Update v0.9.0 ($baseline_code) -> v0.9.0 ($CODE_B) succeeded; UID, firstInstallTime and DataStore preserved" | tee "$report/result.txt"

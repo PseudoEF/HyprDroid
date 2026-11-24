@@ -101,12 +101,14 @@ internal object CommandPanelModule : TileModule {
                     TileCommands(port, authorizeExternal = { id ->
                         val manager = AndroidPackages.manager(context)
                         if (id == dev.hyprdroid.launcher.packages.HELLO_TILE_ID) manager.verifiedHelloTile()
-                        else manager.verifiedV2Fixture(id)
+                        else manager.verifiedV2Tile(id)
                     }) {
                         AndroidPackages.manager(context).requireDroidFetchTileSample()
                     }
                 },
-                packageCommands = PackageCommands { AndroidPackages.manager(context) },
+                packageCommands = PackageCommands(migrateState = { id ->
+                    dev.hyprdroid.launcher.data.WorkspaceEngineStore(context).migrateFixtureState(id)
+                }) { AndroidPackages.manager(context) },
                 luaPluginCommands = LuaPluginCommands(
                     runPlugin = { AndroidLuaPlugins.run(context, it) },
                     showWindow = { pluginWindow = it },

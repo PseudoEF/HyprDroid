@@ -25,6 +25,7 @@ internal class SignedPackageRepository(
     private val cache: File,
     private val download: PackageDownload,
     private val reservedIds: Set<String>,
+    private val catalogUrl: String = CATALOG_URL,
 ) : PackageCatalog, PackageArtifactSource {
     override val description = "PseudoEF/HyprDroid-Packages"
     private var cached: Snapshot? = null
@@ -44,7 +45,7 @@ internal class SignedPackageRepository(
     fun refresh(): Int {
         requireTrust()
         val previous = load()
-        val bytes = download.read(CATALOG_URL, ENVELOPE_LIMIT)
+        val bytes = download.read(catalogUrl, ENVELOPE_LIMIT)
         val next = decode(bytes)
         if (previous != null) {
             if (next.revision < previous.revision ||
@@ -168,6 +169,7 @@ internal class SignedPackageRepository(
     companion object {
         const val REPOSITORY = "PseudoEF/HyprDroid-Packages"
         const val RELEASE_ROOT = "https://github.com/$REPOSITORY/releases/download"
+        const val CATALOG_V2_URL = "$RELEASE_ROOT/catalog-v2/catalog.json"
         const val CATALOG_URL = "$RELEASE_ROOT/catalog-v1/catalog.json"
         const val DOMAIN = "HyprDroid catalog v1\n"
         private const val ENVELOPE_LIMIT = 128 * 1024

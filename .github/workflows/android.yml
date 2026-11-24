@@ -37,9 +37,11 @@ jobs:
       (github.event_name == 'workflow_dispatch' &&
         (!inputs.external_lua || github.ref == 'refs/heads/feature/safe-external-lua-runtime' ||
           github.ref == 'refs/heads/feature/lua-runtime-hardening' ||
-          github.ref == 'refs/heads/feature/plugin-api-v2'))
+          github.ref == 'refs/heads/feature/plugin-api-v2' ||
+          github.ref == 'refs/heads/feature/official-v2-packages'))
     needs: build
     permissions:
+      actions: read
       contents: write # Reserve immutable ci/debug/<versionCode> tags; never modify main.
     concurrency:
       group: hyprdroid-debug-distribution
@@ -49,6 +51,7 @@ jobs:
     env:
       HYPRDROID_DISTRIBUTION: 'true'
       HYPRDROID_BUILD_COMMIT: ${{ github.sha }}
+      HYPRDROID_TEST_V2_OFFICIAL: ${{ (inputs.external_lua && github.ref == 'refs/heads/feature/official-v2-packages') && 'true' || 'false' }}
       HYPRDROID_TEST_V2_FIXTURES: ${{ (inputs.external_lua && github.ref == 'refs/heads/feature/plugin-api-v2') && 'true' || 'false' }}
       HYPRDROID_TEST_EXTERNAL_LUA: ${{ inputs.external_lua && 'true' || 'false' }}
     steps:
@@ -78,7 +81,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: python3 scripts/reserve-version-codes.py
+      - name: Fetch the signed 10185 upgrade baseline
+        if: env.HYPRDROID_TEST_V2_OFFICIAL == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 45328873979 --name HyprDroid-debug-10185-run45328873979-attempt1 --dir .local/upgrade-10185
       - name: Check out the actual v0.9.0 baseline for in-place upgrade
+        if: env.HYPRDROID_TEST_V2_OFFICIAL != 'true'
         uses: actions/checkout@v4
         with:
           ref: b9ac974cd333b9ae59caea409424ff7e7fda0140

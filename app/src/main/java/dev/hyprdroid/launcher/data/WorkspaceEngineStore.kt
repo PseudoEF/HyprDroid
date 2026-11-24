@@ -72,6 +72,23 @@ internal class WorkspaceEngineStore(
         if (expected != updated) traceState("durable commit")
     }
 
+    /** Called only after Package Manager records an explicitly authorized fixture transition. */
+    suspend fun migrateFixtureState(packageId: String) {
+        require(stateIdentifier.matches(packageId))
+        val prefix = "$TILE_STATE_PREFIX$packageId/2/"
+        store.edit { preferences ->
+            for ((key, value) in preferences.asMap()) {
+                if (!key.name.startsWith(prefix) || value !is String) continue
+                val id = key.name.removePrefix(prefix)
+                if (!stateIdentifier.matches(id)) continue
+                TileStateV2.decode(value)
+                val target = stringPreferencesKey(TileStateSlot(packageId, 2, WindowId(id), "github-v1").preferenceKey)
+                if (preferences[target] == null) preferences[target] = value
+                preferences.remove(stringPreferencesKey(key.name))
+            }
+        }
+    }
+
     /** Core-only reset. The caller supplies the tile slot after explicit user consent. */
     suspend fun clearTileStateV2(slot: TileStateSlot) {
         require(slot.schema == 2)
@@ -150,12 +167,16 @@ private const val MAX_TILE_STATES = 64
 private val stateIdentifier = Regex("[a-zA-Z0-9_.-]{1,80}")
 
 /** Core resolves this key itself. Lua and Binder never receive it. */
-internal data class TileStateSlot(val packageId: String, val schema: Int, val windowId: WindowId) {
+internal data class TileStateSlot(val packageId: String, val schema: Int, val windowId: WindowId, val publisher: String) {
+    constructor(packageId: String, schema: Int, windowId: WindowId) : this(packageId, schema, windowId, "")
     init {
         require(stateIdentifier.matches(packageId) && stateIdentifier.matches(windowId.value) && schema > 0)
     }
 
-    val preferenceKey = "$TILE_STATE_PREFIX$packageId/$schema/${windowId.value}"
+    init { require(publisher.isEmpty() || stateIdentifier.matches(publisher)) }
+
+    val preferenceKey = "$TILE_STATE_PREFIX$packageId/$schema/" +
+        (if (publisher.isEmpty()) "" else "$publisher/") + windowId.value
 }
 
 private fun validState(value: String) = value.isPluginText(TILE_STATE_LIMIT) &&

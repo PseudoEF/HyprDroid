@@ -17,6 +17,7 @@ internal class HyprPackageManager(
     private val registry: PackageRegistry = FilePackageRegistry(root),
     private val repository: SignedPackageRepository? = null,
     private val v2Fixtures: List<CatalogPackage> = emptyList(),
+    private val officialV2: Boolean = false,
 ) {
     private val lock = Any()
     private val objects = root.resolve("objects")
@@ -104,6 +105,48 @@ internal class HyprPackageManager(
         installedBytes
     }
 
+    fun verifiedV2Tile(id: String): Pair<PackageManifest, ByteArray> = synchronized(lock) {
+        if (!officialV2) return@synchronized verifiedV2Fixture(id)
+        val local = registry.read()[id] ?: throw PackageException("Установите $id")
+        val directory = objects.resolve(local.directory)
+        if (!local.hasSignedEvidence || !directory.resolve("catalog-proof.json").isFile) {
+            throw PackageException("Для перехода выполните hypr install $id --from-test")
+        }
+        val repo = repository ?: throw PackageException("Сетевой репозиторий не настроен")
+        val entry = repo.verifyEvidence(local.manifest, readCheckedFile(directory.resolve("catalog-proof.json"), 128 * 1024))
+        requireOfficialV2(entry)
+        entry.manifest to verifyV2Bytes(directory, entry)
+    }
+
+    fun installFromTest(id: String) = synchronized(lock) {
+        if (!officialV2 || id !in v2FixtureIds) throw PackageException("Переход недоступен для $id")
+        val current = registry.read()
+        val local = current[id] ?: throw PackageException("Сначала требуется установленный тестовый пакет")
+        if (local.fixtureMigrationApproved) {
+            verifiedV2Tile(id)
+            return@synchronized
+        }
+        val directory = objects.resolve(local.directory)
+        if (!local.hasSignedEvidence || directory.resolve("catalog-proof.json").exists()) {
+            throw PackageException("Переход разрешён только с проверенной тестовой установки")
+        }
+        val entry = repository?.packages()?.singleOrNull { it.manifest.id == id }
+            ?: throw PackageException("Сначала выполните hypr repo update")
+        requireOfficialV2(entry)
+        if (local.manifest != entry.manifest) throw PackageException("Тестовый манифест не совпадает")
+        // The test and official ZIP bytes are identical. Verify the local ZIP against the official signature.
+        verifyV2Bytes(directory, entry)
+        apply(current, listOf(entry), migratedId = id)
+    }
+
+    fun finishFixtureMigration(id: String) = synchronized(lock) {
+        if (registry.read()[id]?.fixtureMigrationApproved != true) throw PackageException("Нет подтверждения перехода")
+        verifiedV2Tile(id)
+        helloGeneration.value++
+    }
+
+    private fun affectsExternalTile(id: String) = id == HELLO_TILE_ID || id in v2FixtureIds
+
     /** Fixed fixtures in the signed test APK pin the manifest, publisher, signature and digest. */
     fun verifiedV2Fixture(id: String): Pair<PackageManifest, ByteArray> = synchronized(lock) {
         val entry = v2Fixtures.singleOrNull { it.manifest.id == id && it.keyId == V2_FIXTURE_KEY }
@@ -114,14 +157,18 @@ internal class HyprPackageManager(
             "ui.tile" !in manifest.permissions || manifest.entry != "main.lua"
         ) throw PackageException("Пакет v2 не прошёл проверку установки")
         val directory = objects.resolve(local.directory)
+        manifest to verifyV2Bytes(directory, entry)
+    }
+
+    private fun verifyV2Bytes(directory: File, entry: CatalogPackage): ByteArray {
         val expected = Files.newInputStream(directory.resolve("archive.hyp").toPath(), LinkOption.NOFOLLOW_LINKS).use {
             verifier.verifiedEntrypoint(entry, it)
         }
-        val source = readCheckedFile(directory.resolve("content").resolve(manifest.entry), 16 * 1024)
+        val source = readCheckedFile(directory.resolve("content").resolve(entry.manifest.entry), 16 * 1024)
         if (source.isEmpty() || !MessageDigest.isEqual(source, expected)) {
             throw PackageException("Точка входа установленного пакета изменена")
         }
-        manifest to source
+        return source
     }
 
     private fun readCheckedFile(file: File, limit: Int): ByteArray =
@@ -133,6 +180,9 @@ internal class HyprPackageManager(
         val id = resolveName(name, entries.keys)
         val requested = entries.getValue(id)
         val installed = current[id]
+        if (officialV2 && id in v2FixtureIds && installed != null &&
+            !objects.resolve(installed.directory).resolve("catalog-proof.json").isFile
+        ) throw PackageException("Для перехода выполните hypr install $id --from-test")
         if (installed != null && installed.manifest.version >= requested.manifest.version) {
             if (id != HELLO_TILE_ID || installed.hasSignedEvidence || installed.manifest != requested.manifest || requested.downloadUrl == null) {
                 return@synchronized emptyList()
@@ -162,7 +212,7 @@ internal class HyprPackageManager(
         }
         val next = current - id
         registry.publish(next)
-        if (id == HELLO_TILE_ID || v2Fixtures.any { it.manifest.id == id }) helloGeneration.value++
+        if (affectsExternalTile(id)) helloGeneration.value++
         prune(next)
         removed.manifest
     }
@@ -221,6 +271,7 @@ internal class HyprPackageManager(
     private fun apply(
         current: Map<String, InstalledPackage>,
         plan: List<CatalogPackage>,
+        migratedId: String? = null,
     ): List<PackageManifest> {
         prune(current)
         if (plan.isEmpty()) return emptyList()
@@ -230,6 +281,11 @@ internal class HyprPackageManager(
         var published = false
         try {
             val updates = plan.map { entry ->
+                val old = current[entry.manifest.id]
+                if (officialV2 && entry.manifest.id in v2FixtureIds && old != null &&
+                    entry.manifest.id != migratedId &&
+                    !objects.resolve(old.directory).resolve("catalog-proof.json").isFile
+                ) throw PackageException("Требуется подтверждённый переход с тестового пакета")
                 val stage = Files.createTempDirectory(objects.toPath(), "pkg-").toFile()
                 staged.add(stage)
                 val source = if (entry.downloadUrl == null) artifactSource
@@ -240,13 +296,12 @@ internal class HyprPackageManager(
                 proof?.let { evidence ->
                     stage.resolve("catalog-proof.json").outputStream().use { it.write(evidence); it.fd.sync() }
                 }
-                next[manifest.id] = InstalledPackage(manifest, stage.name, retain)
+                next[manifest.id] = InstalledPackage(manifest, stage.name, retain, manifest.id == migratedId)
                 manifest
             }
             registry.publish(next)
             published = true
-            if (next[HELLO_TILE_ID] != current[HELLO_TILE_ID] ||
-                v2Fixtures.any { next[it.manifest.id] != current[it.manifest.id] }
+            if ((next.keys + current.keys).any { it != migratedId && affectsExternalTile(it) && next[it] != current[it] }
             ) helloGeneration.value++
             prune(next)
             return updates
@@ -303,4 +358,18 @@ private fun resolveName(name: String, ids: Set<String>): String {
         0 -> throw PackageException("Пакет $name не найден")
         else -> throw PackageException("Укажите полный ID: ${matches.sorted().joinToString()}")
     }
+}
+
+
+private fun requireOfficialV2(entry: CatalogPackage) {
+    val (digest, grants) = when (entry.manifest.id) {
+        "clock-tile" -> "b79f614321d29e1fc1f9f4590aba68db4c5d237edf8ea0264c8f1f23b2839962" to setOf("ui.tile", "system.time", "state.local")
+        "battery-tile" -> "2b611ffa2ce602cf46a3a89452994c4fa19fbc4efbfef5eb5b550b4f13e56258" to setOf("ui.tile", "system.battery")
+        else -> throw PackageException("Пакет v2 не допущен")
+    }
+    val manifest = entry.manifest
+    if (entry.keyId != "github-v1" || entry.downloadUrl == null || entry.sha256 != digest || manifest.apiVersion != 2 ||
+        manifest.version.toString() != "1.0.0" || manifest.runtime != "lua" || manifest.entry != "main.lua" ||
+        manifest.permissions != grants || manifest.dependencies.isNotEmpty()
+    ) throw PackageException("Артефакт v2 не входит в официальный список допуска")
 }

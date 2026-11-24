@@ -6,6 +6,7 @@ plugins {
 val distribution = providers.environmentVariable("HYPRDROID_DISTRIBUTION").orNull == "true"
 // Local builds stay ahead of v0.6 (8); distributed codes must be allocated by CI.
 val externalLuaOnMain = providers.gradleProperty("externalLuaOnMain").orNull == "true"
+val v2OfficialLua = providers.gradleProperty("v2OfficialLua").orNull == "true"
 val v2FixtureLua = providers.gradleProperty("v2FixtureLua").orNull == "true"
 val testExperimental = providers.gradleProperty("testExperimental").orNull == "true"
 val coreApplicationId = "dev.hyprdroid.launcher"
@@ -37,6 +38,7 @@ android {
         buildConfigField("boolean", "DISTRIBUTION", distribution.toString())
         buildConfigField("boolean", "EXTERNAL_LUA", "false")
         buildConfigField("boolean", "V2_FIXTURE_LUA", "false")
+        buildConfigField("boolean", "V2_OFFICIAL_LUA", "false")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true; buildConfig = true; aidl = true }
@@ -53,6 +55,8 @@ android {
             buildConfigField("boolean", "EXTERNAL_LUA", "true")
         }
     }
+    require(!v2OfficialLua || externalLuaOnMain && !v2FixtureLua && !testExperimental)
+    if (v2OfficialLua) buildTypes.getByName("debug").buildConfigField("boolean", "V2_OFFICIAL_LUA", "true")
     if (v2FixtureLua && (externalLuaOnMain || testExperimental)) {
         val fixtureVariant = if (testExperimental) "experimental" else "debug"
         buildTypes.getByName(fixtureVariant).buildConfigField("boolean", "V2_FIXTURE_LUA", "true")

@@ -7,7 +7,10 @@ import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-internal class PackageCommands(private val manager: () -> HyprPackageManager) {
+internal class PackageCommands(
+    private val migrateState: suspend (String) -> Unit = {},
+    private val manager: () -> HyprPackageManager,
+) {
     fun execute(args: List<String>): CommandResult = when (args.firstOrNull()) {
         null, "help" -> if (args.size <= 1) CommandResult.Output(USAGE) else invalid()
         "repo" -> when (args) {
@@ -39,7 +42,14 @@ internal class PackageCommands(private val manager: () -> HyprPackageManager) {
                 }.ifEmpty { "нет" }}",
             )
         }
-        "install" -> withPackageId(args, "Проверка и установка пакета…") { id ->
+        "install" -> if (args.size == 3 && args[2] == "--from-test") {
+            operation("Проверка перехода с тестового издателя…") {
+                installFromTest(args[1])
+                migrateState(args[1])
+                finishFixtureMigration(args[1])
+                listOf("Установлен официальный пакет ${args[1]}. Состояние тайлов перенесено.")
+            }
+        } else withPackageId(args, "Проверка и установка пакета…") { id ->
             val changes = install(id)
             if (changes.isEmpty()) listOf("Уже установлена актуальная или более новая версия $id.")
             else changes.map { "Установлено: ${it.label()}" }
@@ -63,7 +73,7 @@ internal class PackageCommands(private val manager: () -> HyprPackageManager) {
         action: HyprPackageManager.(String) -> List<String>,
     ): CommandResult = if (args.size == 2) operation(status) { action(args[1]) } else invalid()
 
-    private fun operation(status: String? = null, action: HyprPackageManager.() -> List<String>): CommandResult {
+    private fun operation(status: String? = null, action: suspend HyprPackageManager.() -> List<String>): CommandResult {
         val events = buildList {
             if (status != null) add(CommandEvent.Line(status))
             add(CommandEvent.Operation {
@@ -101,6 +111,7 @@ internal class PackageCommands(private val manager: () -> HyprPackageManager) {
             "hypr list --installed",
             "hypr info <module>",
             "hypr install <module>",
+            "hypr install <module> --from-test",
             "hypr remove <module>",
             "hypr update",
             "hypr tile add <module>",
