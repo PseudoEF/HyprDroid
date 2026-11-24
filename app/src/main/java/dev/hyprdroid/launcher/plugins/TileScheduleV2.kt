@@ -28,6 +28,13 @@ internal class TileScheduleV2 {
         return if (active) TileSignal.Resume else null
     }
 
+    /** A slow tick must leave an idle interval instead of immediately starting another worker. */
+    fun completed(timer: TileSignal.Timer, nowMs: Long) {
+        if (!active) return
+        val interval = timers.firstOrNull { it.id == timer.id }?.intervalMs ?: return
+        deadlines = deadlines + (timer.id to maxOf(deadlines.getValue(timer.id), nowMs + interval))
+    }
+
     fun delayUntilNext(nowMs: Long): Long? = deadlines.values.minOrNull()?.let { (it - nowMs).coerceAtLeast(1) }
 
     fun poll(nowMs: Long): List<TileSignal.Timer> {

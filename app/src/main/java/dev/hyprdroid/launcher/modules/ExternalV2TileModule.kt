@@ -125,6 +125,7 @@ internal class ExternalV2TileModule(override val id: String, override val title:
                     failed = true
                 }
             } finally {
+                if (signal is TileSignal.Timer) schedule.completed(signal, SystemClock.elapsedRealtime())
                 busy = false
             }
         }
