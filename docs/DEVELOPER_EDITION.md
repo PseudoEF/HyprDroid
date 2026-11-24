@@ -68,3 +68,12 @@ This validates the isolation APK. Local package installation and execution remai
 The owner reported 17/18 checks for standard APK 10197 and Developer version 26. Standard HyprDroid passed 8/8, load checks 4/5, and Developer Edition 5/5. Four Clock Tiles ran simultaneously with responsive UI and persistent state. Package IDs, independent data and HOME behavior were verified. No bugs were observed. The ten-minute load test was not run. These results predate local package import.
 
 The local-import update CI uses the previously signed Developer version 26 and ordinary build 10197 as upgrade fixtures.
+
+
+### Opening a tile from an empty workspace
+
+In the shell menu, **Оконный тайл** opens a neutral tile with the module picker in Clean and Classic. **Терминал** starts an empty tiling workspace with the command panel already selected. An existing layout is retained when you reopen it.
+
+Before this fix, the window menu could create and persist a tiling session in Classic while the pager continued showing the shortcut canvas. The window picker is internal to HyprDroid and does not require the Android HOME role. Developer Edition remains a regular launcher-list app.
+
+The signed update CI for this fix uses the previously released Developer version 54 as its upgrade baseline. The workspace UI test creates tiles by pressing the real menu and window controls, and checks restoration in a separate invocation after force-stopping the app.

@@ -100,11 +100,11 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
       - uses: gradle/actions/setup-gradle@v4
-      - name: Fetch the signed Developer version 26 baseline
+      - name: Fetch the signed Developer version 54 baseline
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run download 45382733735 --name hyprdroid-developer-isolation-apk --dir "$RUNNER_TEMP/developer-baseline"
+          gh run download 45396657959 --name hyprdroid-developer-isolation-apk --dir "$RUNNER_TEMP/developer-baseline"
           cd "$RUNNER_TEMP/developer-baseline"
           sha256sum -c SHA256SUMS
           mv HyprDroid-Developer-isolation.apk "$RUNNER_TEMP/developer-previous.apk"
@@ -112,7 +112,7 @@ jobs:
         run: |
           set -eu
           current=$((GITHUB_RUN_NUMBER * 2))
-          test "$current" -gt 26
+          test "$current" -gt 54
           ./gradlew :app:assembleDebug :app:assembleDeveloper :app:assembleDebugAndroidTest -PbuildVersionCode="$current"
           cp app/build/outputs/apk/developer/app-developer-unsigned.apk "$RUNNER_TEMP/developer-current-unsigned.apk"
       - name: Sign Developer APKs with the dedicated persistent certificate
