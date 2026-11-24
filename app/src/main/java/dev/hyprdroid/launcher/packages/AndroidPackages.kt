@@ -25,7 +25,9 @@ internal object AndroidPackages {
             app.assets.open("hypr-packages-v2/catalog.json")
         }.packages() else emptyList()
         val fixtureKey = if (fixtures.isNotEmpty()) mapOf(
-            V2_FIXTURE_KEY to "3867f800ab1be7fc442ee894ef3029a4e13c831bce4bf1f71338dd8cdb8e1b0f",
+            V2_FIXTURE_KEY to app.assets.open("hypr-packages-v2/publisher.hex").use {
+                readPackageBytes(it, 65).decodeToString().trim()
+            },
         ) else emptyMap()
         val keys = mapOf(SAMPLE_KEY_ID to SAMPLE_PUBLIC_KEY) +
             mapOf(repositoryTrust.keyId to repositoryTrust.publicKey) + fixtureKey
