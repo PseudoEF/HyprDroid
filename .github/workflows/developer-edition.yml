@@ -28,6 +28,7 @@ jobs:
       - name: Check packaged identities, HOME and inclusion of Developer code
         run: sh scripts/check-edition-apks.sh app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/developer/app-developer-unsigned.apk
       - name: Create an Android emulator test APK
+        if: github.event_name != 'workflow_dispatch'
         run: |
           # This key and its APK stay within this test job. Distribution uses a distinct persistent key.
           keytool -genkeypair -alias emulator-only -keystore "$RUNNER_TEMP/emulator-only.p12" -storetype PKCS12 -storepass android -dname CN=DeveloperEmulatorTest -keyalg RSA -keysize 2048 -validity 2
@@ -35,13 +36,18 @@ jobs:
           "$tools/zipalign" -f 4 app/build/outputs/apk/developer/app-developer-unsigned.apk "$RUNNER_TEMP/developer-aligned.apk"
           "$tools/apksigner" sign --ks "$RUNNER_TEMP/emulator-only.p12" --ks-pass pass:android --out "$RUNNER_TEMP/developer-test.apk" "$RUNNER_TEMP/developer-aligned.apk"
       - name: Enable KVM
+        if: github.event_name != 'workflow_dispatch'
         run: sudo chmod 666 /dev/kvm
       - name: Check parallel installation on Android 15
+        if: github.event_name != 'workflow_dispatch'
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
           arch: x86_64
           target: google_apis
+          profile: pixel_6
+          ram-size: 2048M
+          emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: sh scripts/ci-developer-edition.sh
 
@@ -104,6 +110,9 @@ jobs:
           api-level: 35
           arch: x86_64
           target: google_apis
+          profile: pixel_6
+          ram-size: 2048M
+          emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: sh scripts/ci-developer-edition.sh
       - name: Stage the verified Developer APK

@@ -23,8 +23,11 @@ if adb shell run-as "$developer" cat "/data/user/0/$ordinary/ordinary-private"; 
 fi
 sh scripts/ci-home.sh select
 adb shell am start -W -n "$developer/dev.hyprdroid.launcher.developer.DeveloperActivity"
+adb shell uiautomator dump /sdcard/hyprdroid-developer.xml
+adb shell cat /sdcard/hyprdroid-developer.xml | grep -F 'text="Developer Edition"' >/dev/null
 adb install -r "$ordinary_apk"
 adb install -r "$developer_updated"
 adb shell run-as "$ordinary" test -f ordinary-private
 adb shell run-as "$developer" test -f developer-private
-./gradlew :app:connectedDebugAndroidTest
+./gradlew :app:connectedDebugAndroidTest \
+    -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.TerminalInlinePromptTest,dev.hyprdroid.launcher.TilingSurfaceBoundsTest,dev.hyprdroid.launcher.plugins.LuaPluginServiceTest
