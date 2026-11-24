@@ -63,6 +63,31 @@ class OfficialV2NetworkTest {
     }
 
     @Test
+    fun seedOfficial(): Unit = runBlocking {
+        assertTrue(BuildConfig.V2_OFFICIAL_LUA)
+        manager.refreshRepository()
+        manager.install("clock-tile")
+        val engine = WorkspaceEngine()
+        assertTrue(engine.addFirstWindow(WorkspaceWindow(clockWindow, "clock-tile", 0, 0)))
+        store.save("99", engine)
+        val slot = TileStateSlot("clock-tile", 2, clockWindow, "github-v1")
+        store.saveTileStateV2(slot, emptyMap(), format) { true }
+    }
+
+    @Test
+    fun verifyOfficialUpgrade(): Unit = runBlocking {
+        assertTrue(BuildConfig.V2_OFFICIAL_LUA)
+        val slot = TileStateSlot("clock-tile", 2, clockWindow, "github-v1")
+        val state = store.loadTileStateV2(slot)
+        assertEquals(format, state)
+        val (manifest, bytes) = manager.verifiedV2Tile("clock-tile")
+        val snapshot = TileSystemSnapshotV2(TileClockV2("2026-11-24", "14:00:00", "2:00:00 PM"), null, null)
+        val frame = requireNotNull(ExperimentalExternalLua.runV2(app, bytes,
+            TileExecutionV2(manifest.permissions, state, snapshot)))
+        assertTrue("2:00:00 PM" in TileUiCodec.encode(frame.tree, 2))
+    }
+
+    @Test
     fun networkInstall(): Unit = runBlocking {
         assertTrue(BuildConfig.V2_OFFICIAL_LUA)
         assertTrue(app.assets.list("hypr-packages-v2").orEmpty().isEmpty())

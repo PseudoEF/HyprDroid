@@ -53,6 +53,7 @@ jobs:
       HYPRDROID_DISTRIBUTION: 'true'
       HYPRDROID_BUILD_COMMIT: ${{ github.sha }}
       HYPRDROID_TEST_V2_OFFICIAL: ${{ (inputs.external_lua && (github.ref == 'refs/heads/feature/official-v2-packages' || github.ref == 'refs/heads/feature/developer-edition')) && 'true' || 'false' }}
+      HYPRDROID_TEST_OFFICIAL_UPGRADE: ${{ (inputs.external_lua && github.ref == 'refs/heads/feature/developer-edition') && 'true' || 'false' }}
       HYPRDROID_TEST_V2_FIXTURES: ${{ (inputs.external_lua && github.ref == 'refs/heads/feature/plugin-api-v2') && 'true' || 'false' }}
       HYPRDROID_TEST_EXTERNAL_LUA: ${{ inputs.external_lua && 'true' || 'false' }}
     steps:
@@ -83,10 +84,15 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: python3 scripts/reserve-version-codes.py
       - name: Fetch the signed 10185 upgrade baseline
-        if: env.HYPRDROID_TEST_V2_OFFICIAL == 'true'
+        if: env.HYPRDROID_TEST_V2_OFFICIAL == 'true' && env.HYPRDROID_TEST_OFFICIAL_UPGRADE != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh run download 45328873979 --name HyprDroid-debug-10185-run45328873979-attempt1 --dir .local/upgrade-10185
+      - name: Fetch the signed 10191 upgrade baseline
+        if: env.HYPRDROID_TEST_OFFICIAL_UPGRADE == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 45372808949 --name HyprDroid-debug-10191-run45372808949-attempt1 --dir .local/upgrade-10191
       - name: Check out the actual v0.9.0 baseline for in-place upgrade
         if: env.HYPRDROID_TEST_V2_OFFICIAL != 'true'
         uses: actions/checkout@v4

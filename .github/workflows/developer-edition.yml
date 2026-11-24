@@ -54,6 +54,9 @@ jobs:
   signed-isolation-apk:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feature/developer-edition'
     needs: android
+    permissions:
+      contents: read
+      actions: read
     environment: developer-signing
     concurrency:
       group: hyprdroid-developer-distribution
@@ -72,13 +75,20 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
       - uses: gradle/actions/setup-gradle@v4
-      - name: Build two consecutive version codes
+      - name: Fetch the signed Developer version 14 baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 45373875821 --name hyprdroid-developer-isolation-apk --dir "$RUNNER_TEMP/developer-baseline"
+          cd "$RUNNER_TEMP/developer-baseline"
+          sha256sum -c SHA256SUMS
+          mv HyprDroid-Developer-isolation.apk "$RUNNER_TEMP/developer-previous.apk"
+      - name: Build the successor APK
         run: |
           set -eu
           current=$((GITHUB_RUN_NUMBER * 2))
-          ./gradlew :app:assembleDebug :app:assembleDeveloper :app:assembleDebugAndroidTest -PbuildVersionCode="$((current - 1))"
-          cp app/build/outputs/apk/developer/app-developer-unsigned.apk "$RUNNER_TEMP/developer-previous-unsigned.apk"
-          ./gradlew :app:assembleDeveloper -PbuildVersionCode="$current"
+          test "$current" -gt 14
+          ./gradlew :app:assembleDebug :app:assembleDeveloper :app:assembleDebugAndroidTest -PbuildVersionCode="$current"
           cp app/build/outputs/apk/developer/app-developer-unsigned.apk "$RUNNER_TEMP/developer-current-unsigned.apk"
       - name: Sign Developer APKs with the dedicated persistent certificate
         env:
@@ -93,9 +103,9 @@ jobs:
           trap 'rm -f "$key"' EXIT
           printf '%s' "$HYPRDROID_DEVELOPER_KEYSTORE_BASE64" | base64 --decode > "$key"
           tools="$ANDROID_HOME/build-tools/35.0.0"
+          "$tools/zipalign" -f 4 "$RUNNER_TEMP/developer-current-unsigned.apk" "$RUNNER_TEMP/developer-current-aligned.apk"
+          "$tools/apksigner" sign --ks "$key" --ks-key-alias hyprdroid-developer --ks-pass env:HYPRDROID_DEVELOPER_KEYSTORE_PASSWORD --out "$RUNNER_TEMP/developer-current.apk" "$RUNNER_TEMP/developer-current-aligned.apk"
           for build in previous current; do
-            "$tools/zipalign" -f 4 "$RUNNER_TEMP/developer-$build-unsigned.apk" "$RUNNER_TEMP/developer-$build-aligned.apk"
-            "$tools/apksigner" sign --ks "$key" --ks-key-alias hyprdroid-developer --ks-pass env:HYPRDROID_DEVELOPER_KEYSTORE_PASSWORD --out "$RUNNER_TEMP/developer-$build.apk" "$RUNNER_TEMP/developer-$build-aligned.apk"
             "$tools/apksigner" verify --print-certs "$RUNNER_TEMP/developer-$build.apk" > "$RUNNER_TEMP/developer-$build-certs.txt"
             grep -Fx 'Signer #1 certificate SHA-256 digest: 5c30c0c6b00e6170775331db79585f667870092fea380110ac1434ece20a7bff' "$RUNNER_TEMP/developer-$build-certs.txt"
           done

@@ -36,9 +36,17 @@ if [ "${HYPRDROID_TEST_V2_OFFICIAL:-false}" = true ]; then
   baseline_code=10185
   baseline_commit=caf1b17edec8be135d994460ed1d87dd167bab20
 fi
+if [ "${HYPRDROID_TEST_OFFICIAL_UPGRADE:-false}" = true ]; then
+  baseline_code=10191
+  baseline_commit=84f7b5aea57bacc34506aacfa84f954f25584780
+fi
 fixture seed "$baseline_code" 0.9.0 "$baseline_commit"
 if [ "${HYPRDROID_TEST_V2_OFFICIAL:-false}" = true ]; then
-  official_case seedLegacy
+  if [ "${HYPRDROID_TEST_OFFICIAL_UPGRADE:-false}" = true ]; then
+    official_case seedOfficial
+  else
+    official_case seedLegacy
+  fi
 fi
 adb shell appwidget revokebind --package "$package" --user 0
 # Simulate an already opted-in installation, including Android's actual special permission.
@@ -67,7 +75,11 @@ if [ "${HYPRDROID_TEST_V2_FIXTURES:-false}" = true ]; then
   grep -q 'OK (2 tests)' "$report/external-lua-v2.txt"
 fi
 if [ "${HYPRDROID_TEST_V2_OFFICIAL:-false}" = true ]; then
-  official_case migrateLegacy
+  if [ "${HYPRDROID_TEST_OFFICIAL_UPGRADE:-false}" = true ]; then
+    official_case verifyOfficialUpgrade
+  else
+    official_case migrateLegacy
+  fi
   # The replacement check above has finished. This emulator now tests pristine package storage.
   adb shell pm clear "$package" | grep -F Success
   official_case networkInstall
