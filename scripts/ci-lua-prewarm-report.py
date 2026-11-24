@@ -32,6 +32,7 @@ def report(trial):
     sample_line = next((line for line in log.splitlines() if "HyprLuaBenchmark:" in line), "")
     fields = dict(re.findall(r"(\w+)=([\w,]+)", sample_line))
     latencies = sorted(int(n) for n in fields.get("latenciesMs", "").split(",") if n)
+    readiness = sorted(int(n) for n in fields.get("readyWaitsMs", "").split(",") if n)
     worker_cpu = {int(pid): int(cpu) for pid, cpu in re.findall(r"worker exit pid=(\d+) cpuMs=(\d+)", log)}
     print(
         trial.name, f"frames={fields.get('initialFrames', '?')}", f"attempts={fields.get('attempts', '?')}",
@@ -47,6 +48,7 @@ def report(trial):
         f"workerPeakKiB={max((worker for _, worker in samples), default='-')}",
         f"totalPeakKiB={max((core + worker for core, worker in samples), default='-')}",
         f"finalSampleKiB={samples[-1] if samples else '-'}",
+        f"readyWaitP95Ms={percentile(readiness, 95)}",
         "inputMs[p50/p95/p99/max]=" + "/".join(str(percentile(latencies, p)) for p in (50, 95, 99, 100)),
     )
 

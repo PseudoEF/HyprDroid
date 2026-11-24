@@ -53,6 +53,7 @@ class ExternalLuaPrewarmingTest {
             store.save("1", WorkspaceEngine(), open = false)
         }
         val latencies = mutableListOf<Long>()
+        val readyWaits = mutableListOf<Long>()
         var misses = 0
         var initialFrames = 0
         var numAttempts = 0
@@ -61,7 +62,7 @@ class ExternalLuaPrewarmingTest {
         try {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 SystemClock.sleep(5_000)
-                initialFrames = ids.count { available(it) }
+                initialFrames = ids.count { id -> runCatching { toggle(id).assertExists() }.isSuccess }
                 for (round in 0..5) {
                     if (round == 2) {
                         selectWorkspace(2)
@@ -74,9 +75,11 @@ class ExternalLuaPrewarmingTest {
                     if (ids.isNotEmpty()) {
                         val id = ids[round % ids.size]
                         numAttempts++
-                        val clickAt = SystemClock.elapsedRealtime()
+                        val waitingAt = SystemClock.elapsedRealtime()
                         try {
                             compose.waitUntil(4_000) { available(id) }
+                            val clickAt = SystemClock.elapsedRealtime()
+                            readyWaits += clickAt - waitingAt
                             val node = toggle(id)
                             val previous = requireNotNull(node.fetchSemanticsNode().config.getOrNull(
                                 androidx.compose.ui.semantics.SemanticsProperties.ToggleableState))
@@ -101,7 +104,7 @@ class ExternalLuaPrewarmingTest {
         } finally {
             ExperimentalExternalLua.prewarmExperiment = false
             Log.i("HyprLuaBenchmark", "tiles=$count warm=$warm initialFrames=$initialFrames attempts=$numAttempts misses=$misses " +
-                "cpuMs=${Process.getElapsedCpuTime() - cpu} durationMs=${SystemClock.elapsedRealtime() - start} latenciesMs=${latencies.joinToString(",")}")
+                "cpuMs=${Process.getElapsedCpuTime() - cpu} durationMs=${SystemClock.elapsedRealtime() - start} latenciesMs=${latencies.joinToString(",")} readyWaitsMs=${readyWaits.joinToString(",")}")
         }
         assertEquals("Initial Clock frames", count, initialFrames)
         assertEquals("User interactions without visible change", 0, misses)
