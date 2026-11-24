@@ -46,7 +46,7 @@ internal class FilePackageRegistry(private val root: File) : PackageRegistry {
                         if (record.get("signedEvidence") != 1) throw PackageException("Неизвестная схема доказательства")
                         true
                     } else false
-                    put(manifest.id, InstalledPackage(manifest, directory, evidence, record.optBoolean("fixtureMigrationApproved", false)))
+                    put(manifest.id, InstalledPackage(manifest, directory, evidence, record.optInt("fixtureMigrationApproved", 0) == 1))
                 }
             }
         }
@@ -57,7 +57,7 @@ internal class FilePackageRegistry(private val root: File) : PackageRegistry {
         val records = packages.toSortedMap().values.map {
             JSONObject().put("manifest", it.manifest.encode()).put("directory", it.directory).apply {
                 if (it.hasSignedEvidence) put("signedEvidence", 1)
-                if (it.fixtureMigrationApproved) put("fixtureMigrationApproved", true)
+                if (it.fixtureMigrationApproved) put("fixtureMigrationApproved", 1)
             }
         }
         val bytes = JSONObject()
