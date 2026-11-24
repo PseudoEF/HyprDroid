@@ -54,21 +54,24 @@ class ExternalLuaProtocolTest {
             worker.dispatchEvent(17, 3, 1)
             worker.dispatchEvent(17, 1, 3)
             val binder = worker.asBinder()
-            // Neither a wrong descriptor nor trailing data may reach the owner
-            // as a dispatch. The valid event that follows must still win.
-            for (descriptor in listOf("invalid.test.descriptor", requireNotNull(binder.interfaceDescriptor))) {
-                val parcel = Parcel.obtain()
-                try {
-                    parcel.writeInterfaceToken(descriptor)
-                    parcel.writeLong(17)
-                    parcel.writeInt(1)
-                    parcel.writeInt(2)
-                    parcel.writeInt(123)
-                    assertEquals(true, binder.transact(IExternalLua.Stub.TRANSACTION_dispatchEvent,
-                        parcel, null, IBinder.FLAG_ONEWAY))
-                } finally {
-                    parcel.recycle()
+            val descriptor = requireNotNull(binder.interfaceDescriptor)
+            val dispatchCode = IExternalLua.Stub.TRANSACTION_dispatchEvent
+            // None of these malformed wire messages may consume the reply or close the session.
+            for (token in listOf("invalid.test.descriptor", descriptor)) {
+                sendMalformed(binder, dispatchCode, token) {
+                    writeLong(17)
+                    writeInt(1)
+                    writeInt(2)
+                    writeInt(123)
                 }
+            }
+            sendMalformed(binder, dispatchCode, descriptor) {
+                writeLong(17)
+                writeInt(1)
+            }
+            sendMalformed(binder, IExternalLua.Stub.TRANSACTION_disposeSession, descriptor) {
+                writeLong(17)
+                writeInt(123)
             }
             worker.dispatchEvent(17, 1, 1)
             worker.dispatchEvent(17, 1, 1)
@@ -91,6 +94,17 @@ class ExternalLuaProtocolTest {
                 sealedBytes(byteArrayOf()).use { state -> worker.createSession(17, 1, source, state, reply) }
             }
             assertNotNull(withTimeout(5_000) { died.await() })
+        }
+    }
+
+    private fun sendMalformed(binder: IBinder, code: Int, token: String, write: Parcel.() -> Unit) {
+        val parcel = Parcel.obtain()
+        try {
+            parcel.writeInterfaceToken(token)
+            parcel.write()
+            assertEquals(true, binder.transact(code, parcel, null, IBinder.FLAG_ONEWAY))
+        } finally {
+            parcel.recycle()
         }
     }
 

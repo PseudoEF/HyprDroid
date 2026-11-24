@@ -46,13 +46,13 @@ class ExternalLuaService : Service() {
             // The generated stub for the app's minimum SDK accepts trailing data.
             // These primitive-only messages have an exact wire size.
             when (code) {
-                TRANSACTION_dispatchEvent -> {
+                IExternalLua.Stub.TRANSACTION_dispatchEvent -> {
                     data.enforceInterface(requireNotNull(interfaceDescriptor))
                     if (data.dataAvail() != Long.SIZE_BYTES + 2 * Int.SIZE_BYTES) return false
                     dispatchEvent(data.readLong(), data.readInt(), data.readInt())
                     return true
                 }
-                TRANSACTION_disposeSession -> {
+                IExternalLua.Stub.TRANSACTION_disposeSession -> {
                     data.enforceInterface(requireNotNull(interfaceDescriptor))
                     if (data.dataAvail() != Long.SIZE_BYTES) return false
                     disposeSession(data.readLong())
