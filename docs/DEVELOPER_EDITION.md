@@ -66,3 +66,5 @@ This validates the isolation APK. Local package installation and execution remai
 ### Pixel 9 Android 17 validation of Runtime hardening
 
 The owner reported 17/18 checks for standard APK 10197 and Developer version 26. Standard HyprDroid passed 8/8, load checks 4/5, and Developer Edition 5/5. Four Clock Tiles ran simultaneously with responsive UI and persistent state. Package IDs, independent data and HOME behavior were verified. No bugs were observed. The ten-minute load test was not run. These results predate local package import.
+
+The local-import update CI uses the previously signed Developer version 26 and ordinary build 10197 as upgrade fixtures.
