@@ -45,14 +45,7 @@ class DeveloperWorkspaceTest {
             selectClassic()
             menu("Терминал")
             await("module-command-input-tile-1")
-            // A focused terminal animates the caret continuously. Drive text and
-            // submission with Android input without waiting for Compose to become idle.
-            val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-            val field = checkNotNull(device.wait(Until.findObject(By.clazz("android.widget.EditText")), 10_000))
-            field.text = "hypr dev list"
-            checkNotNull(device.wait(Until.findObject(By.text("Пуск").enabled(true)), 10_000)).click()
-            assertTrue(device.wait(Until.hasObject(By.text("Нет локальных пакетов.")), 15_000))
-            checkNotNull(device.wait(Until.findObject(By.desc("Закрыть окно")), 10_000)).click()
+            closeFocused()
             compose.waitUntil(15_000) { !exists("tiling-surface") }
             menu("Оконный тайл")
             await("module-picker-tile-1")
@@ -93,6 +86,26 @@ class DeveloperWorkspaceTest {
             val context = InstrumentationRegistry.getInstrumentation().targetContext
             val ids = runBlocking { WorkspaceEngineStore(context).load().getValue("0").windowsById().values.map { it.moduleId } }
             assertEquals(1, ids.count { it == CommandPanelModule.id })
+        }
+    }
+
+    @Test fun developerCommandRunsInTheRestoredTerminal() {
+        ActivityScenario.launch(DeveloperActivity::class.java).use {
+            await("module-command-input-tile-1")
+            // Drive the real field without Compose's idle barrier while the caret animates.
+            val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+            val field = checkNotNull(device.wait(Until.findObject(By.clazz("android.widget.EditText")), 10_000))
+            field.click()
+            device.executeShellCommand("input text hypr%sdev%slist")
+            assertTrue("Command text did not reach the field", device.wait(Until.hasObject(By.text("hypr dev list")), 10_000))
+            device.pressEnter()
+            val printed = device.wait(Until.hasObject(By.textContains("Нет локальных пакетов.")), 15_000)
+            if (!printed) {
+                val hierarchy = java.io.ByteArrayOutputStream()
+                device.dumpWindowHierarchy(hierarchy)
+                android.util.Log.e("DeveloperWorkspaceTest", hierarchy.toString(Charsets.UTF_8.name()))
+            }
+            assertTrue("Developer command output was not displayed", printed)
         }
     }
 
