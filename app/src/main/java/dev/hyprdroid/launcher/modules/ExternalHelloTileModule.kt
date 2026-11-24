@@ -46,6 +46,7 @@ internal object ExternalHelloTileModule : TileModule {
 
     @Composable
     override fun Content(state: ModuleState, modifier: Modifier) {
+        VisibleExternalLuaTile()
         val context = LocalContext.current.applicationContext
         val manager = remember(context) { AndroidPackages.manager(context) }
         val generation by manager.helloTileGeneration.collectAsState()

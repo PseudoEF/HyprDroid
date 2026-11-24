@@ -12,6 +12,8 @@ internal class WorkerAdmission(active: Int, pending: Int, private val waitMillis
     private val outstanding = AtomicInteger()
     private val limit = active + pending
 
+    fun hasDemand(): Boolean = outstanding.get() != 0
+
     suspend fun <T> execute(rejected: () -> T, operation: suspend () -> T): T {
         while (true) {
             val count = outstanding.get()

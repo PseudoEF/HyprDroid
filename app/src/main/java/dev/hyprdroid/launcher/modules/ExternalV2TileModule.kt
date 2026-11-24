@@ -48,6 +48,7 @@ internal class ExternalV2TileModule(override val id: String, override val title:
 
     @Composable
     override fun Content(state: ModuleState, modifier: Modifier) {
+        VisibleExternalLuaTile()
         val app = LocalContext.current.applicationContext
         val manager = remember(app) { AndroidPackages.manager(app) }
         val generation by manager.helloTileGeneration.collectAsState()

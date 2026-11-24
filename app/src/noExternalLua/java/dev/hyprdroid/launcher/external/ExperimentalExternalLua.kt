@@ -8,6 +8,8 @@ import dev.hyprdroid.launcher.plugins.TileFrameV2
 
 internal object ExperimentalExternalLua {
     @Suppress("UNUSED_PARAMETER")
+    fun visibleTile(context: Context): () -> Unit = {}
+    @Suppress("UNUSED_PARAMETER")
     suspend fun run(context: Context, source: ByteArray, request: TileRequest, dispatch: ((() -> Unit) -> Boolean)? = null, authorized: () -> Boolean = { true }): PluginResult =
         PluginResult.Failure("Внешний Lua отключён")
     @Suppress("UNUSED_PARAMETER")

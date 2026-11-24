@@ -4,6 +4,10 @@ on:
     branches: [feature/safe-external-lua-runtime, feature/lua-runtime-hardening, feature/plugin-api-v2]
   workflow_dispatch:
     inputs:
+      prewarm_benchmark:
+        description: Compare the single-use reserve with cold workers
+        type: boolean
+        default: false
       release_gate:
         description: Repeat Hello Tile lifecycle twenty times and capture stage timings
         type: boolean
@@ -84,6 +88,18 @@ jobs:
             adb install -r app/build/outputs/apk/experimental/app-experimental.apk &&
             adb install -r app/build/outputs/apk/androidTest/experimental/app-experimental-androidTest.apk &&
             sh scripts/ci-lua-circuit.sh
+      - name: Compare cold and prewarmed workers
+        if: always() && inputs.prewarm_benchmark && steps.build.outcome == 'success'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: >-
+            adb install app/build/outputs/apk/experimental/app-experimental.apk &&
+            adb install app/build/outputs/apk/androidTest/experimental/app-experimental-androidTest.apk &&
+            sh scripts/ci-lua-prewarm.sh
       - name: Repeat Hello Tile lifecycle on a separate emulator
         if: always() && inputs.release_gate && steps.build.outcome == 'success'
         uses: reactivecircus/android-emulator-runner@v2
@@ -114,6 +130,7 @@ jobs:
           name: hyprdroid-experimental-test-report
           path: |
             app/build/reports/androidTests/sustained/
+            app/build/reports/androidTests/prewarm/
             app/build/reports/androidTests/release-gate/
             app/build/reports/androidTests/lua-circuit.txt
             app/build/reports/androidTests/lua-pressure.txt

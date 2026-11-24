@@ -1,32 +1,45 @@
 package dev.hyprdroid.launcher.external
 
-import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
-import android.content.ServiceConnection
 import android.os.Binder
-import android.os.IBinder
 import android.os.Process
 import android.os.SharedMemory
 import android.os.SystemClock
 import android.util.Log
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
 import dev.hyprdroid.launcher.BuildConfig
 import dev.hyprdroid.launcher.plugins.PluginResult
 import dev.hyprdroid.launcher.plugins.TileRequest
+import dev.hyprdroid.launcher.plugins.TileSignal
 import dev.hyprdroid.launcher.plugins.TileExecutionV2
 import dev.hyprdroid.launcher.plugins.TileFrameV2
-import java.util.UUID
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 internal object ExperimentalExternalLua {
     private val workers = WorkerAdmission(active = 2, pending = 4, waitMillis = 5_000)
     @Volatile private var uncertainDeath = false
+
+    private val processes = Semaphore(2)
+    // Instrumentation switches the policy before starting an identically configured run.
+    @Volatile internal var prewarmExperiment = false
+    private val reserve = PrewarmedWorker(processes, workers::hasDemand,
+        healthy = { !uncertainDeath && !excessiveFailures() },
+        unconfirmedExit = ::blockAfterUnconfirmedExit,
+        unexpectedExit = { excessiveFailures(record = true) })
+
+    fun visibleTile(context: Context): () -> Unit =
+        if (BuildConfig.V2_FIXTURE_LUA && prewarmExperiment) reserve.visibleTile(context.applicationContext) else ({})
+
+    private fun blockAfterUnconfirmedExit() {
+        uncertainDeath = true
+        reserve.discard()
+        Log.w("HyprLuaTile", "Worker death unconfirmed; new bindings blocked")
+    }
 
     private val failures = ArrayDeque<Long>()
 
@@ -52,7 +65,7 @@ internal object ExperimentalExternalLua {
         }
         val state = request.state.encodeToByteArray()
         if (state.size > 512) return PluginResult.Failure("Превышен размер Lua-запроса")
-        return execute(context, source, state, event, null, dispatch, authorized,
+        return execute(context, source, state, event, null, true, dispatch, authorized,
             rejected = {
                 if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaTile", "Worker admission declined")
                 PluginResult.Failure("Внешний Lua занят")
@@ -70,7 +83,7 @@ internal object ExperimentalExternalLua {
         authorized: () -> Boolean = { true },
     ): TileFrameV2? {
         val wire = encodeRequestV2(request)
-        return execute<TileFrameV2?>(context, source, wire.context, 0, wire, dispatch, authorized,
+        return execute<TileFrameV2?>(context, source, wire.context, 0, wire, request.interaction != null || request.signal is TileSignal.Resume, dispatch, authorized,
             rejected = {
                 if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaTile", "Worker admission declined")
                 throw ExternalLuaBusy()
@@ -82,10 +95,10 @@ internal object ExperimentalExternalLua {
 
     private suspend fun <T> execute(
         context: Context, source: ByteArray, state: ByteArray, event: Int, v2: WireRequestV2?,
-        dispatch: ((() -> Unit) -> Boolean)?, authorized: () -> Boolean, rejected: () -> T, failure: (String) -> T, decode: (ByteArray) -> T,
+        prewarmAfter: Boolean, dispatch: ((() -> Unit) -> Boolean)?, authorized: () -> Boolean, rejected: () -> T, failure: (String) -> T, decode: (ByteArray) -> T,
     ): T {
         val queuedAt = if (BuildConfig.V2_FIXTURE_LUA) SystemClock.elapsedRealtime() else 0L
-        return workers.execute(rejected) admitted@{
+        val result = workers.execute(rejected) admitted@{
             val admittedAt = if (BuildConfig.V2_FIXTURE_LUA) SystemClock.elapsedRealtime() else 0L
             if (!BuildConfig.EXTERNAL_LUA || uncertainDeath || excessiveFailures() || !authorized()) {
                 return@admitted failure("Внешний Lua недоступен")
@@ -95,6 +108,10 @@ internal object ExperimentalExternalLua {
                 bind(context.applicationContext, source, state, event, v2, dispatch, authorized, failure, decode, queuedAt, admittedAt)
             }
         }
+        if (BuildConfig.V2_FIXTURE_LUA && prewarmExperiment && prewarmAfter && authorized()) {
+            reserve.prepare(context.applicationContext)
+        }
+        return result
     }
 
     private suspend fun <T> bind(
@@ -102,8 +119,53 @@ internal object ExperimentalExternalLua {
         dispatch: ((() -> Unit) -> Boolean)?, authorized: () -> Boolean, failure: (String) -> T, decode: (ByteArray) -> T,
         queuedAt: Long, admittedAt: Long,
     ): T {
-        val uuid = UUID.randomUUID()
-        val id = uuid.mostSignificantBits.takeUnless { it == 0L } ?: 1L
+        if (!authorized()) return failure("Доверие к модулю отозвано")
+        val started = SystemClock.elapsedRealtime()
+        val warm = if (BuildConfig.V2_FIXTURE_LUA && prewarmExperiment) reserve.take() else null
+        var permit = warm != null
+        var binding: IsolatedWorkerBinding? = warm
+        var assigned = false
+        var resolved = false
+        val result = try {
+            if (warm == null) {
+                if (withTimeoutOrNull(5_000) { processes.acquire(); permit = true; true } != true) {
+                    return failure("Внешний Lua занят")
+                }
+                if (uncertainDeath || !authorized()) return failure("Внешний Lua недоступен")
+                binding = IsolatedWorkerBinding(app)
+                if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaReserve", "reserve=cold")
+                if (!binding.start()) return failure("Android не запустил внешний Lua worker")
+            }
+            val frame = dispatchToWorker(
+                checkNotNull(binding), source, state, event, v2, dispatch, authorized, failure, decode,
+                queuedAt, admittedAt, 5_000 - (SystemClock.elapsedRealtime() - started),
+                onAssigned = { assigned = true },
+            )
+            resolved = true
+            frame
+        } catch (_: android.os.RemoteException) {
+            return failure("Ошибка Binder внешнего Lua")
+        } catch (_: android.system.ErrnoException) {
+            return failure("Ошибка памяти IPC внешнего Lua")
+        } catch (_: SecurityException) {
+            return failure("Android отклонил запуск внешнего Lua")
+        } finally {
+            if (binding?.disconnected?.isCompleted == true && !resolved) excessiveFailures(record = true)
+            if (binding?.close(assigned) == false) blockAfterUnconfirmedExit()
+            if (permit) processes.release()
+            if (BuildConfig.V2_FIXTURE_LUA && binding != null) {
+                Log.i("HyprLuaGate", "operation=${binding.id} phase=released sinceQueueMs=${SystemClock.elapsedRealtime() - queuedAt}")
+            }
+        }
+        return if (uncertainDeath) failure("Остановка Lua worker не подтверждена") else result
+    }
+
+    private suspend fun <T> dispatchToWorker(
+        binding: IsolatedWorkerBinding, source: ByteArray, state: ByteArray, event: Int, v2: WireRequestV2?,
+        dispatch: ((() -> Unit) -> Boolean)?, authorized: () -> Boolean, failure: (String) -> T, decode: (ByteArray) -> T,
+        queuedAt: Long, admittedAt: Long, remaining: Long, onAssigned: () -> Unit,
+    ): T {
+        val id = binding.id
         val bindingAt = if (BuildConfig.V2_FIXTURE_LUA) SystemClock.elapsedRealtime() else 0L
         fun trace(phase: String) {
             if (BuildConfig.V2_FIXTURE_LUA) {
@@ -111,26 +173,12 @@ internal object ExperimentalExternalLua {
             }
         }
         trace("binding")
-        val connected = CompletableDeferred<IExternalLua?>()
         val outcome = CompletableDeferred<T>()
-        val died = CompletableDeferred<Unit>()
-        val closing = AtomicBoolean(false)
         val replyClaimed = AtomicBoolean(false)
-        val failureRecorded = AtomicBoolean(false)
-        fun recordUnexpectedDeath() {
-            if (!closing.get() && failureRecorded.compareAndSet(false, true)) excessiveFailures(record = true)
-        }
-        Log.d("HyprLuaTile", "Worker binding requested")
-        val death = IBinder.DeathRecipient {
-            Log.d("HyprLuaTile", "Worker Binder died; disposalRequested=${closing.get()}")
-            recordUnexpectedDeath()
-            died.complete(Unit)
-            outcome.complete(failure("Изолированный Lua worker завершился"))
-        }
         val receiver = object : IExternalLuaReply.Stub() {
             private fun valid(session: Long, number: Int) =
                 Binder.getCallingUid() >= 0 && Binder.getCallingUid() != Process.myUid() &&
-                    session == id && number == 1 && !outcome.isCompleted &&
+                    session == id && number == 1 && authorized() && !binding.disconnected.isCompleted && !outcome.isCompleted &&
                     replyClaimed.compareAndSet(false, true)
 
             override fun render(session: Long, number: Int, frame: SharedMemory?) {
@@ -157,97 +205,36 @@ internal object ExperimentalExternalLua {
                 }))
             }
         }
-        val endpoint = AtomicReference<IExternalLua?>()
-        val connection = object : ServiceConnection {
-            override fun onServiceConnected(name: ComponentName, service: IBinder) {
-                if (closing.get()) return
-                try {
-                    service.linkToDeath(death, 0)
-                    val port = IExternalLua.Stub.asInterface(service)
-                    endpoint.set(port)
-                    trace("connected")
-                    connected.complete(port)
-                } catch (_: android.os.RemoteException) {
-                    recordUnexpectedDeath()
-                    died.complete(Unit)
-                    connected.complete(null)
-                }
+        return withTimeoutOrNull(remaining) {
+            val port = binding.connected.await() ?: return@withTimeoutOrNull failure("Lua worker недоступен")
+            trace("connected")
+            if (!authorized() || uncertainDeath || binding.disconnected.isCompleted) {
+                return@withTimeoutOrNull failure("Доверие к модулю отозвано или worker завершился")
             }
-            override fun onServiceDisconnected(name: ComponentName) {
-                recordUnexpectedDeath()
-                outcome.complete(failure("Связь с Lua worker потеряна"))
-            }
-            override fun onBindingDied(name: ComponentName) {
-                connected.complete(null)
-                onServiceDisconnected(name)
-            }
-            override fun onNullBinding(name: ComponentName) {
-                connected.complete(null)
-            }
-        }
-        val result = try {
-            if (!authorized()) return failure("Доверие к модулю отозвано")
-            val bound = app.bindIsolatedService(
-                Intent(app, ExternalLuaService::class.java), Context.BIND_AUTO_CREATE,
-                "ext_${uuid.toString().replace('-', '_')}", app.mainExecutor, connection,
-            )
-            if (!bound) return failure("Android не запустил внешний Lua worker")
-            withTimeoutOrNull(5_000) {
-                val port = connected.await() ?: return@withTimeoutOrNull failure("Lua worker недоступен")
-                if (!authorized()) return@withTimeoutOrNull failure("Доверие к модулю отозвано")
-                sealedBytes(source).use { entry ->
-                    sealedBytes(state).use { saved ->
+            sealedBytes(source).use { entry ->
+                sealedBytes(state).use { saved ->
+                    val send = {
+                        onAssigned()
                         if (v2 == null) port.createSession(id, 1, entry, saved, receiver)
                         else port.createSessionV2(id, TILE_WIRE_V2, v2.capabilities, v2.event, entry, saved, receiver)
+                        trace("dispatch")
+                        port.dispatchEvent(id, 1, event)
+                    }
+                    if (!authorized() || (if (dispatch == null) { send(); false } else !dispatch(send))) {
+                        return@withTimeoutOrNull failure("Доверие к модулю отозвано")
                     }
                 }
-                if (!authorized()) return@withTimeoutOrNull failure("Доверие к модулю отозвано")
-                val send = {
-                    trace("dispatch")
-                    port.dispatchEvent(id, 1, event)
-                }
-                if (dispatch == null) send()
-                else if (!dispatch(send)) return@withTimeoutOrNull failure("Доверие к модулю отозвано")
-                outcome.await()
-            } ?: run {
-                if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaTile", "Worker response timed out")
-                failure("Внешний Lua не ответил вовремя")
             }
-        } catch (_: android.os.RemoteException) {
-            failure("Ошибка Binder внешнего Lua")
-        } catch (_: android.system.ErrnoException) {
-            failure("Ошибка памяти IPC внешнего Lua")
-        } catch (_: SecurityException) {
-            failure("Android отклонил запуск внешнего Lua")
-        } finally {
-            closing.set(true)
-            Log.d("HyprLuaTile", "Worker binding closing")
-            val port = endpoint.get()
-            withContext(NonCancellable) {
-                try {
-                    port?.disposeSession(id)
-                } catch (_: android.os.RemoteException) {
-                    // Binder death is confirmed separately.
-                }
-                try {
-                    app.unbindService(connection)
-                } catch (_: IllegalArgumentException) {
-                    // The system may have rejected the bind before registering it.
-                }
-                // No Lua can start before the callback publishes a Binder. Revoking a
-                // pending bind must not block all future verified sessions.
-                if (port != null && withTimeoutOrNull(2_000) { died.await(); true } != true) {
-                    uncertainDeath = true
-                    Log.w("HyprLuaTile", "Worker death unconfirmed; new bindings blocked")
-                }
-                try {
-                    port?.asBinder()?.unlinkToDeath(death, 0)
-                } catch (_: NoSuchElementException) {
-                    // The kernel already removed the notification.
+            select {
+                outcome.onAwait { it }
+                binding.disconnected.onAwait {
+                    excessiveFailures(record = true)
+                    failure("Изолированный Lua worker завершился")
                 }
             }
+        } ?: run {
+            if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaTile", "Worker response timed out")
+            failure("Внешний Lua не ответил вовремя")
         }
-        trace("released")
-        return if (uncertainDeath) failure("Остановка Lua worker не подтверждена") else result
     }
 }

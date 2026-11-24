@@ -174,5 +174,10 @@ class ExternalLuaService : Service() {
         super.onDestroy()
     }
 
-    private fun terminate() = Process.killProcess(Process.myPid())
+    private fun terminate() {
+        if (BuildConfig.V2_FIXTURE_LUA) {
+            Log.i("HyprLuaReserve", "worker exit pid=${Process.myPid()} cpuMs=${Process.getElapsedCpuTime()}")
+        }
+        Process.killProcess(Process.myPid())
+    }
 }
