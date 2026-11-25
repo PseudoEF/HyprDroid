@@ -16,6 +16,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import dev.hyprdroid.launcher.external.TileInputTrace
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -78,8 +83,9 @@ internal class ExternalV2TileModule(override val id: String, override val title:
             onDispose { Log.d("HyprLuaTile", "v2 tile deactivated") }
         }
 
-        suspend fun run(interaction: TileInteraction? = null, signal: TileSignal? = null): Boolean {
+        suspend fun run(interaction: TileInteraction? = null, signal: TileSignal? = null, trace: String? = null): Boolean {
             if (busy) {
+                TileInputTrace.stage(trace, "refused-busy")
                 if (interaction != null) inputProblem = "Тайл обновляется. Попробуйте ещё раз."
                 return false
             }
@@ -104,6 +110,7 @@ internal class ExternalV2TileModule(override val id: String, override val title:
                     ),
                         dispatch = { manager.externalAdmission.dispatch(generation, it) },
                         authorized = stillAllowed,
+                        inputTrace = trace,
                     ) ?: error("Lua v2 did not return a valid frame")
                     Triple(updated, previous, "state.local" in permissions)
                 } ?: return false
@@ -111,11 +118,13 @@ internal class ExternalV2TileModule(override val id: String, override val title:
                 return manager.externalAdmission.commit(generation) {
                     if (persist) store.saveTileStateV2(slot, previous, result.state, stillAllowed)
                     if (!stillAllowed()) return@commit
+                    TileInputTrace.stage(trace, "state-committed")
                     val committedAt = if (BuildConfig.V2_FIXTURE_LUA) SystemClock.elapsedRealtime() else 0L
                     schedule.configure(result.timers, SystemClock.elapsedRealtime())
                     revision = gate.publish(result.tree)
                     frame = result
                     failed = false
+                    TileInputTrace.stage(trace, "published")
                     if (BuildConfig.V2_FIXTURE_LUA) {
                         Log.i("HyprLuaGate", "v2 kind=$operationKind commitMs=${committedAt - commitStarted} publishMs=${SystemClock.elapsedRealtime() - committedAt}")
                     }
@@ -129,11 +138,17 @@ internal class ExternalV2TileModule(override val id: String, override val title:
                 // frame and its schedule so the next tick can recover.
                 manager.externalAdmission.commit(generation) {
                     if (interaction != null) inputProblem = "Очередь Lua занята. Попробуйте ещё раз."
+                    TileInputTrace.stage(trace, "refused-admission")
                 }
                 return false
             } catch (_: Exception) {
                 Log.w("HyprLuaTile", "v2 rejected: $operationKind")
                 manager.externalAdmission.commit(generation) {
+                    if (interaction != null) {
+                        inputProblem = "Lua не подтвердил действие. Проверьте состояние тайла."
+                        TileInputTrace.stage(trace, "refused-runtime")
+                        return@commit
+                    }
                     revision = gate.publish(null)
                     frame = null
                     failed = true
@@ -169,18 +184,34 @@ internal class ExternalV2TileModule(override val id: String, override val title:
             }
         } else {
             val displayedRevision = revision
-            Column(modifier.clipToBounds().padding(6.dp)) {
+            val observeHit = if (BuildConfig.V2_FIXTURE_LUA) Modifier.pointerInput(window) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    TileInputTrace.stage(TileInputTrace.current, "tile-hit tile=${window.value}")
+                }
+            } else Modifier
+            Column(modifier.clipToBounds().then(observeHit).padding(6.dp)) {
                 inputProblem?.let { Text(it, color = Mocha.Text, maxLines = 2) }
                 // Keep the callback available when a background tick wins the race with a tap.
                 // The guard below supplies feedback without accepting a second operation.
                 val body = Modifier.fillMaxWidth().weight(1f, fill = false)
                     .verticalScroll(rememberScrollState())
                 RenderTileTree(current.tree, body, enabled = true) { event ->
+                    val trace = if (BuildConfig.V2_FIXTURE_LUA) TileInputTrace.current else null
+                    TileInputTrace.stage(trace, "handler tile=${window.value}")
                     when {
-                        busy -> inputProblem = "Тайл обновляется. Попробуйте ещё раз."
-                        gate.accept(displayedRevision, ++sequence, event, SystemClock.elapsedRealtime()) ->
-                            scope.launch(start = CoroutineStart.UNDISPATCHED) { run(interaction = event) }
-                        else -> inputProblem = "Событие устарело или повторено. Попробуйте ещё раз."
+                        busy -> {
+                            inputProblem = "Тайл обновляется. Попробуйте ещё раз."
+                            TileInputTrace.stage(trace, "refused-busy")
+                        }
+                        gate.accept(displayedRevision, ++sequence, event, SystemClock.elapsedRealtime()) -> {
+                            TileInputTrace.stage(trace, "frame-accepted")
+                            scope.launch(start = CoroutineStart.UNDISPATCHED) { run(interaction = event, trace = trace) }
+                        }
+                        else -> {
+                            inputProblem = "Событие устарело или повторено. Попробуйте ещё раз."
+                            TileInputTrace.stage(trace, "refused-frame")
+                        }
                     }
                 }
             }

@@ -51,6 +51,7 @@ class ExternalLuaPressureUiTest {
         val latencies = mutableListOf<Long>()
         val readyWaits = mutableListOf<Long>()
         var refusals = 0
+        var missing = 0
         var initialFrames = 0
         var numAttempts = 0
         val start = SystemClock.elapsedRealtime()
@@ -73,20 +74,27 @@ class ExternalLuaPressureUiTest {
                             ids.all { id -> runCatching { toggle(id).assertExists() }.isSuccess }
                         }
                     }
-                    if (ids.isNotEmpty()) {
-                        val id = ids[round % ids.size]
-                        numAttempts++
-                        val waitingAt = SystemClock.elapsedRealtime()
-                        compose.waitUntil(5_000) { available(id) }
-                        val node = toggle(id)
-                        val displayedBeforeScroll = node.isDisplayed()
-                        node.performScrollTo().assertIsDisplayed()
-                        Log.i("HyprLuaGate", "pressure input attempt=$numAttempts displayedBeforeScroll=$displayedBeforeScroll")
-                        val previous = requireNotNull(node.fetchSemanticsNode().config.getOrNull(
-                            androidx.compose.ui.semantics.SemanticsProperties.ToggleableState))
-                        val clickAt = SystemClock.elapsedRealtime()
-                        readyWaits += clickAt - waitingAt
-                        node.performClick()
+                    val id = ids[round]
+                    numAttempts++
+                    val trace = "press-${numAttempts}"
+                    val waitingAt = SystemClock.elapsedRealtime()
+                    compose.waitUntil(5_000) { available(id) }
+                    val node = toggle(id)
+                    val displayedBeforeScroll = node.isDisplayed()
+                    node.performScrollTo().assertIsDisplayed()
+                    val target = node.fetchSemanticsNode()
+                    val previous = requireNotNull(target.config.getOrNull(
+                        androidx.compose.ui.semantics.SemanticsProperties.ToggleableState))
+                    val center = target.boundsInRoot.center
+                    val root = compose.onRoot()
+                    val rootOrigin = root.fetchSemanticsNode().positionInRoot
+                    TileInputTrace.stage(trace, "injected tile=${id.value} displayedBeforeScroll=$displayedBeforeScroll bounds=${target.boundsInRoot}")
+                    val clickAt = SystemClock.elapsedRealtime()
+                    readyWaits += clickAt - waitingAt
+                    TileInputTrace.current = trace
+                    try {
+                        // Target the center of the clipped visible bounds in root coordinates.
+                        root.performTouchInput { click(center - rootOrigin) }
                         var changed = false
                         compose.waitUntil(7_000) {
                             changed = runCatching { toggle(id).fetchSemanticsNode().config.getOrNull(
@@ -94,7 +102,19 @@ class ExternalLuaPressureUiTest {
                             }.getOrDefault(false)
                             changed || refusalVisible(id)
                         }
-                        if (changed) latencies += SystemClock.elapsedRealtime() - clickAt else refusals++
+                        val elapsed = SystemClock.elapsedRealtime() - clickAt
+                        if (changed) {
+                            latencies += elapsed
+                            TileInputTrace.stage(trace, "observed-result elapsedMs=$elapsed")
+                        } else {
+                            refusals++
+                            TileInputTrace.stage(trace, "observed-refusal elapsedMs=$elapsed")
+                        }
+                    } catch (_: ComposeTimeoutException) {
+                        missing++
+                        TileInputTrace.stage(trace, "unacknowledged")
+                    } finally {
+                        TileInputTrace.current = null
                     }
                     SystemClock.sleep(2_000)
                 }
@@ -103,11 +123,13 @@ class ExternalLuaPressureUiTest {
                 SystemClock.sleep(4_000)
             }
         } finally {
-            Log.i("HyprLuaGate", "tiles=$count initialFrames=$initialFrames attempts=$numAttempts refusals=$refusals " +
+            Log.i("HyprLuaGate", "tiles=$count initialFrames=$initialFrames attempts=$numAttempts refusals=$refusals missing=$missing " +
                 "cpuMs=${Process.getElapsedCpuTime() - cpu} durationMs=${SystemClock.elapsedRealtime() - start} latenciesMs=${latencies.joinToString(",")} readyWaitsMs=${readyWaits.joinToString(",")}")
         }
         assertEquals("Initial Clock frames", count, initialFrames)
-        assertEquals("Every click updates state or reports a reason", numAttempts, latencies.size + refusals)
+        assertEquals("Exactly six touches were injected", 6, numAttempts)
+        assertEquals("Every click updates state or reports a reason", 0, missing)
+        assertEquals("Every click is counted", numAttempts, latencies.size + refusals)
         org.junit.Assert.assertTrue("At least one user event completed", latencies.isNotEmpty())
     }
 
@@ -119,7 +141,8 @@ class ExternalLuaPressureUiTest {
         compose.onNode(isToggleable() and hasAnyAncestor(hasTestTag("tiling-window-${id.value}")))
 
     private fun refusalVisible(id: WindowId): Boolean =
-        compose.onAllNodes(hasText("Попробуйте ещё раз.", substring = true) and
+        compose.onAllNodes((hasText("Попробуйте ещё раз.", substring = true) or
+            hasText("Lua не подтвердил действие.", substring = true)) and
             hasAnyAncestor(hasTestTag("tiling-window-${id.value}")))
             .fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
 

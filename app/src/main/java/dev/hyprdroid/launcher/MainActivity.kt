@@ -60,6 +60,18 @@ open class MainActivity : ComponentActivity() {
         super.onStop()
     }
 
+    override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (BuildConfig.V2_FIXTURE_LUA && event.actionMasked in
+            listOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL)
+        ) {
+            dev.hyprdroid.launcher.external.TileInputTrace.stage(
+                dev.hyprdroid.launcher.external.TileInputTrace.current,
+                "activity-${event.actionMasked} x=${event.x.toInt()} y=${event.y.toInt()}",
+            )
+        }
+        return super.dispatchTouchEvent(event)
+    }
+
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); route.value = intent.getStringExtra("hyprdroid.route") }
     @Deprecated("Android widget host configuration uses the platform result contract")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

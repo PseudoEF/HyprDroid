@@ -70,6 +70,7 @@ internal object ExperimentalExternalLua {
         request: TileExecutionV2,
         dispatch: ((() -> Unit) -> Boolean)? = null,
         authorized: () -> Boolean = { true },
+        inputTrace: String? = null,
     ): TileFrameV2? {
         val wire = encodeRequestV2(request)
         return execute<TileFrameV2?>(context, source, wire.context, 0, wire, dispatch, authorized,
@@ -78,6 +79,7 @@ internal object ExperimentalExternalLua {
                 request.signal is TileSignal.Timer -> WorkerAdmission.Priority.TIMER
                 else -> WorkerAdmission.Priority.NORMAL
             },
+            inputTrace = inputTrace,
             rejected = {
                 if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaTile", "Worker admission declined interaction=${request.interaction != null} signal=${request.signal?.javaClass?.simpleName}")
                 throw ExternalLuaBusy()
@@ -89,17 +91,19 @@ internal object ExperimentalExternalLua {
 
     private suspend fun <T> execute(
         context: Context, source: ByteArray, state: ByteArray, event: Int, v2: WireRequestV2?,
-        dispatch: ((() -> Unit) -> Boolean)?, authorized: () -> Boolean, priority: WorkerAdmission.Priority, rejected: () -> T, failure: (String) -> T, decode: (ByteArray) -> T,
+        dispatch: ((() -> Unit) -> Boolean)?, authorized: () -> Boolean, priority: WorkerAdmission.Priority, inputTrace: String? = null, rejected: () -> T, failure: (String) -> T, decode: (ByteArray) -> T,
     ): T {
         val queuedAt = if (BuildConfig.V2_FIXTURE_LUA) SystemClock.elapsedRealtime() else 0L
+        TileInputTrace.stage(inputTrace, "queue-submitted")
         return workers.execute(rejected, priority) admitted@{
+            TileInputTrace.stage(inputTrace, "queue-admitted")
             val admittedAt = if (BuildConfig.V2_FIXTURE_LUA) SystemClock.elapsedRealtime() else 0L
             if (!BuildConfig.EXTERNAL_LUA || uncertainDeath || excessiveFailures() || !authorized()) {
                 return@admitted failure("Внешний Lua недоступен")
             }
             if (source.size !in 1..TILE_SOURCE_LIMIT) return@admitted failure("Превышен размер Lua-запроса")
             withContext(Dispatchers.IO) {
-                bind(context.applicationContext, source, state, event, v2, dispatch, authorized, failure, decode, queuedAt, admittedAt)
+                bind(context.applicationContext, source, state, event, v2, dispatch, authorized, failure, decode, queuedAt, admittedAt, inputTrace)
             }
         }
     }
@@ -107,7 +111,7 @@ internal object ExperimentalExternalLua {
     private suspend fun <T> bind(
         app: Context, source: ByteArray, state: ByteArray, event: Int, v2: WireRequestV2?,
         dispatch: ((() -> Unit) -> Boolean)?, authorized: () -> Boolean, failure: (String) -> T, decode: (ByteArray) -> T,
-        queuedAt: Long, admittedAt: Long,
+        queuedAt: Long, admittedAt: Long, inputTrace: String?,
     ): T {
         val uuid = UUID.randomUUID()
         val id = uuid.mostSignificantBits.takeUnless { it == 0L } ?: 1L
@@ -118,6 +122,7 @@ internal object ExperimentalExternalLua {
             }
         }
         trace("binding")
+        TileInputTrace.stage(inputTrace, "worker-bound-request worker=$id")
         val connected = CompletableDeferred<IExternalLua?>()
         val outcome = CompletableDeferred<T>()
         val died = CompletableDeferred<Unit>()
@@ -149,6 +154,7 @@ internal object ExperimentalExternalLua {
                     return
                 }
                 trace("reply")
+                TileInputTrace.stage(inputTrace, "binder-reply worker=$id")
                 val result = try {
                     requireNotNull(frame).use { decode(checkedBytes(it, TILE_FRAME_LIMIT)) }
                 } catch (_: Exception) {
@@ -214,6 +220,7 @@ internal object ExperimentalExternalLua {
                 if (!authorized()) return@withTimeoutOrNull failure("Доверие к модулю отозвано")
                 val send = {
                     trace("dispatch")
+                    TileInputTrace.stage(inputTrace, "binder-dispatch worker=$id")
                     port.dispatchEvent(id, 1, event)
                 }
                 if (dispatch == null) send()
