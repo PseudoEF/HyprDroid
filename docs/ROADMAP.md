@@ -10,7 +10,8 @@
 - [x] Отдельная Android-конфигурация для проверки изоляции.
 - [x] Измерена десятиминутная нагрузка на два тайла и проверены управляемые отказы worker. [Отчёт Android 15](DEVELOPER_RUNTIME_HARDENING.md).
 - [x] Зафиксированы проверки Pixel 9 (20/20) и две серии lifecycle Hello Tile (20/20 каждая). [Отчёт выпуска](DEVELOPER_RUNTIME_HARDENING.md#runtime-release-gate).
-- [ ] Установить причину исходного lifecycle-сбоя, устранить тайм-аут холодного запуска worker и проверить Android LMK.
+- [x] По результатам эксперимента сохранён холодный запуск одноразовых Lua worker. [Результаты](https://github.com/PseudoEF/HyprDroid/blob/fed0f12/docs/EXTERNAL_LUA_PREWARM.md).
+- [ ] Подтвердить устойчивость под нагрузкой и закрыть оставшиеся риски Runtime, включая Android LMK. [Стабилизация](DEVELOPER_RUNTIME_HARDENING.md#final-stabilization-with-cold-workers).
 - [x] Добавлены локальный импорт через SAF, хранилище публичных ключей и отзыв доверия в Developer Edition. [Граница выпуска](DEVELOPER_EDITION.md).
 - [ ] Проверить обязательные ограничения Runtime перед допуском пользовательских пакетов.
 
