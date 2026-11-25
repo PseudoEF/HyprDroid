@@ -131,7 +131,11 @@ class ExternalLuaService : Service() {
             worker.execute {
                 try {
                     val startedAt = if (BuildConfig.V2_FIXTURE_LUA) SystemClock.elapsedRealtime() else 0L
-                    val frame = if (current.eventV2 != null) {
+                    val frame = if (BuildConfig.V2_FIXTURE_LUA &&
+                        current.source.decodeToString() == "-- instrumentation: malformed v1 reply"
+                    ) {
+                        byteArrayOf(0)
+                    } else if (current.eventV2 != null) {
                         NativeLua.runV2(current.source, current.state, current.eventV2, current.capabilities)
                     } else NativeLua.run(current.source, current.state, event)
                     if (BuildConfig.V2_FIXTURE_LUA) {

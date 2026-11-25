@@ -66,11 +66,12 @@ adb shell appops get "$package" SYSTEM_ALERT_WINDOW > "$report/overlay-permissio
 adb shell dumpsys package "$package" > "$report/package-after.txt"
 if [ "${HYPRDROID_TEST_EXTERNAL_LUA:-false}" = true ]; then
   worker=dev.hyprdroid.launcher.external.ExternalLuaAndroidTest
+  protocol=dev.hyprdroid.launcher.external.ExternalLuaProtocolTest
   tests="$worker#enabledAppUsesPrivateWorkerAndItsOwnPackageStorage,$worker#arenaAndInstructionLimitsFailWithoutCrashingCore,$worker#twoSimultaneousRequestsCarryIndependentStateAndRejectUnknownEvent,$worker#rejectsInvalidSourceAndPrivilegedLibraries"
-  adb shell am instrument -w -r -e class "$tests,dev.hyprdroid.launcher.external.ExternalLuaProtocolTest" \
+  adb shell am instrument -w -r -e class "$tests,$protocol#foreignIdentifiersAndReplayedEventsCannotConsumeTheOwningReply,$protocol#oversizedSharedMemoryIsRejectedBeforeMappingAndWorkerExits,$protocol#invalidSharedMemoryLengthClosesTheSessionWithoutAReply,$protocol#closedAndRegularFileDescriptorsCannotSupplySessionMemory" \
     "$package.test/androidx.test.runner.AndroidJUnitRunner" > "$report/external-lua.txt"
   cat "$report/external-lua.txt"
-  grep -q 'OK (7 tests)' "$report/external-lua.txt"
+  grep -q 'OK (8 tests)' "$report/external-lua.txt"
 fi
 if [ "${HYPRDROID_TEST_V2_FIXTURES:-false}" = true ]; then
   adb shell am instrument -w -r -e class dev.hyprdroid.launcher.external.ExternalV2WorkerTest     "$package.test/androidx.test.runner.AndroidJUnitRunner" > "$report/external-lua-v2.txt"

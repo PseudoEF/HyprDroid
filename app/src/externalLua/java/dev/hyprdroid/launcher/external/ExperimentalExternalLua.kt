@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicReference
 import dev.hyprdroid.launcher.BuildConfig
 import dev.hyprdroid.launcher.plugins.PluginResult
 import dev.hyprdroid.launcher.plugins.TileRequest
+import dev.hyprdroid.launcher.plugins.TileSignal
 import dev.hyprdroid.launcher.plugins.TileExecutionV2
 import dev.hyprdroid.launcher.plugins.TileFrameV2
 import java.util.UUID
@@ -53,8 +54,9 @@ internal object ExperimentalExternalLua {
         val state = request.state.encodeToByteArray()
         if (state.size > 512) return PluginResult.Failure("Превышен размер Lua-запроса")
         return execute(context, source, state, event, null, dispatch, authorized,
+            priority = if (request.event == null) WorkerAdmission.Priority.NORMAL else WorkerAdmission.Priority.USER,
             rejected = {
-                if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaTile", "Worker admission declined")
+                if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaTile", "Worker admission declined priority=${if (request.event == null) "normal" else "user"}")
                 PluginResult.Failure("Внешний Lua занят")
             },
             failure = { PluginResult.Failure(it) },
@@ -71,8 +73,13 @@ internal object ExperimentalExternalLua {
     ): TileFrameV2? {
         val wire = encodeRequestV2(request)
         return execute<TileFrameV2?>(context, source, wire.context, 0, wire, dispatch, authorized,
+            priority = when {
+                request.interaction != null -> WorkerAdmission.Priority.USER
+                request.signal is TileSignal.Timer -> WorkerAdmission.Priority.TIMER
+                else -> WorkerAdmission.Priority.NORMAL
+            },
             rejected = {
-                if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaTile", "Worker admission declined")
+                if (BuildConfig.V2_FIXTURE_LUA) Log.i("HyprLuaTile", "Worker admission declined interaction=${request.interaction != null} signal=${request.signal?.javaClass?.simpleName}")
                 throw ExternalLuaBusy()
             }, failure = { null },
         ) {
@@ -82,10 +89,10 @@ internal object ExperimentalExternalLua {
 
     private suspend fun <T> execute(
         context: Context, source: ByteArray, state: ByteArray, event: Int, v2: WireRequestV2?,
-        dispatch: ((() -> Unit) -> Boolean)?, authorized: () -> Boolean, rejected: () -> T, failure: (String) -> T, decode: (ByteArray) -> T,
+        dispatch: ((() -> Unit) -> Boolean)?, authorized: () -> Boolean, priority: WorkerAdmission.Priority, rejected: () -> T, failure: (String) -> T, decode: (ByteArray) -> T,
     ): T {
         val queuedAt = if (BuildConfig.V2_FIXTURE_LUA) SystemClock.elapsedRealtime() else 0L
-        return workers.execute(rejected) admitted@{
+        return workers.execute(rejected, priority) admitted@{
             val admittedAt = if (BuildConfig.V2_FIXTURE_LUA) SystemClock.elapsedRealtime() else 0L
             if (!BuildConfig.EXTERNAL_LUA || uncertainDeath || excessiveFailures() || !authorized()) {
                 return@admitted failure("Внешний Lua недоступен")
@@ -130,7 +137,7 @@ internal object ExperimentalExternalLua {
         val receiver = object : IExternalLuaReply.Stub() {
             private fun valid(session: Long, number: Int) =
                 Binder.getCallingUid() >= 0 && Binder.getCallingUid() != Process.myUid() &&
-                    session == id && number == 1 && !outcome.isCompleted &&
+                    session == id && number == 1 && authorized() && !closing.get() && !outcome.isCompleted &&
                     replyClaimed.compareAndSet(false, true)
 
             override fun render(session: Long, number: Int, frame: SharedMemory?) {

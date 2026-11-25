@@ -6,12 +6,18 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
 import android.os.Parcel
+import android.os.ParcelFileDescriptor
+import android.os.Build
 import android.os.RemoteException
 import android.os.SharedMemory
 import android.system.OsConstants
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import dev.hyprdroid.launcher.BuildConfig
+import dev.hyprdroid.launcher.plugins.PluginResult
+import dev.hyprdroid.launcher.plugins.TileRequest
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
@@ -128,6 +134,72 @@ class ExternalLuaProtocolTest {
                 assertEquals(0, replies.get())
             }
         }
+    }
+
+    @Test
+    fun closedAndRegularFileDescriptorsCannotSupplySessionMemory() = runBlocking {
+        org.junit.Assume.assumeTrue(Build.VERSION.SDK_INT >= 33)
+        withWorker { worker, died ->
+            val outcome = CompletableDeferred<String>()
+            val reply = object : IExternalLuaReply.Stub() {
+                override fun render(id: Long, request: Int, frame: SharedMemory) {
+                    outcome.complete(frame.use { decodeFrame(checkedBytes(it, 16_385)).tile?.state.orEmpty() })
+                }
+                override fun error(id: Long, request: Int, code: Int) {
+                    outcome.completeExceptionally(AssertionError("Healthy retry rejected"))
+                }
+            }
+            val file = java.io.File.createTempFile("not-shared-memory", ".txt", app.cacheDir)
+            try {
+                file.writeText("ordinary file")
+                ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
+                    assertThrows(IllegalArgumentException::class.java) {
+                        SharedMemory.fromFileDescriptor(descriptor).close()
+                    }
+                }
+            } finally {
+                file.delete()
+            }
+            val closed = SharedMemory.create(null, 8).also { it.close() }
+            val script = instrumentation.context.assets.open("external-hello-1.0.0.lua").use { it.readBytes() }
+            sealedBytes("7".encodeToByteArray()).use { state ->
+                assertThrows(IllegalStateException::class.java) {
+                    worker.createSession(17, 1, closed, state, reply)
+                }
+                sealedBytes(script).use { source -> worker.createSession(17, 1, source, state, reply) }
+            }
+            worker.dispatchEvent(17, 1, 1)
+            assertEquals("8", withTimeout(5_000) { outcome.await() })
+            worker.disposeSession(17)
+            withTimeout(5_000) { died.await() }
+        }
+    }
+
+    @Test
+    fun malformedWorkerFrameIsRejectedAndSubsequentOperationSucceeds() = runBlocking {
+        org.junit.Assume.assumeTrue(BuildConfig.V2_FIXTURE_LUA)
+        val request = TileRequest(null, "7")
+        val bad = ExperimentalExternalLua.run(app, "-- instrumentation: malformed v1 reply".encodeToByteArray(), request)
+        assertEquals(PluginResult.Failure("Некорректный кадр внешнего Lua"), bad)
+        val script = instrumentation.context.assets.open("external-hello-1.0.0.lua").use { it.readBytes() }
+        val good = ExperimentalExternalLua.run(app, script, request) as PluginResult.Success
+        assertEquals("7", good.tile?.state)
+    }
+
+    @Test
+    fun callbackCannotCompleteAnOperationAfterAuthorizationIsRevoked() = runBlocking {
+        org.junit.Assume.assumeTrue(BuildConfig.V2_FIXTURE_LUA)
+        val authorized = AtomicBoolean(true)
+        val script = instrumentation.context.assets.open("external-hello-1.0.0.lua").use { it.readBytes() }
+        val request = TileRequest("increment", "7")
+        val result = ExperimentalExternalLua.run(app, script, request, dispatch = { send ->
+            authorized.set(false)
+            send()
+            true
+        }, authorized = authorized::get)
+        assertEquals(PluginResult.Failure("Внешний Lua не ответил вовремя"), result)
+        val good = ExperimentalExternalLua.run(app, script, request) as PluginResult.Success
+        assertEquals("8", good.tile?.state)
     }
 
     private fun sendMalformed(binder: IBinder, code: Int, token: String, write: Parcel.() -> Unit) {

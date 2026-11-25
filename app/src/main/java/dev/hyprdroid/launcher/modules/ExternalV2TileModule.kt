@@ -33,6 +33,7 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -69,6 +70,7 @@ internal class ExternalV2TileModule(override val id: String, override val title:
         var sequence by remember { mutableLongStateOf(0) }
         var frame by remember { mutableStateOf<TileFrameV2?>(null) }
         var failed by remember { mutableStateOf(false) }
+        var inputProblem by remember { mutableStateOf<String?>(null) }
         var busy by remember { mutableStateOf(false) }
         val schedule = remember { TileScheduleV2() }
         DisposableEffect(Unit) {
@@ -76,8 +78,12 @@ internal class ExternalV2TileModule(override val id: String, override val title:
             onDispose { Log.d("HyprLuaTile", "v2 tile deactivated") }
         }
 
-        suspend fun run(interaction: TileInteraction? = null, signal: TileSignal? = null) {
-            if (busy) return
+        suspend fun run(interaction: TileInteraction? = null, signal: TileSignal? = null): Boolean {
+            if (busy) {
+                if (interaction != null) inputProblem = "Тайл обновляется. Попробуйте ещё раз."
+                return false
+            }
+            if (interaction != null) inputProblem = null
             busy = true
             val operationKind = when {
                 interaction != null -> "interaction"
@@ -100,9 +106,9 @@ internal class ExternalV2TileModule(override val id: String, override val title:
                         authorized = stillAllowed,
                     ) ?: error("Lua v2 did not return a valid frame")
                     Triple(updated, previous, "state.local" in permissions)
-                } ?: return
+                } ?: return false
                 val commitStarted = if (BuildConfig.V2_FIXTURE_LUA) SystemClock.elapsedRealtime() else 0L
-                manager.externalAdmission.commit(generation) {
+                return manager.externalAdmission.commit(generation) {
                     if (persist) store.saveTileStateV2(slot, previous, result.state, stillAllowed)
                     if (!stillAllowed()) return@commit
                     val committedAt = if (BuildConfig.V2_FIXTURE_LUA) SystemClock.elapsedRealtime() else 0L
@@ -121,7 +127,10 @@ internal class ExternalV2TileModule(override val id: String, override val title:
             } catch (_: ExternalLuaBusy) {
                 // A saturated queue can drop a timer tick. Keep the last validated
                 // frame and its schedule so the next tick can recover.
-                manager.externalAdmission.commit(generation) { if (frame == null) failed = true }
+                manager.externalAdmission.commit(generation) {
+                    if (interaction != null) inputProblem = "Очередь Lua занята. Попробуйте ещё раз."
+                }
+                return false
             } catch (_: Exception) {
                 Log.w("HyprLuaTile", "v2 rejected: $operationKind")
                 manager.externalAdmission.commit(generation) {
@@ -129,6 +138,7 @@ internal class ExternalV2TileModule(override val id: String, override val title:
                     frame = null
                     failed = true
                 }
+                return false
             } finally {
                 if (signal is TileSignal.Timer) schedule.completed(signal, SystemClock.elapsedRealtime())
                 busy = false
@@ -137,7 +147,11 @@ internal class ExternalV2TileModule(override val id: String, override val title:
 
         LaunchedEffect(Unit) {
             schedule.setActive(true, SystemClock.elapsedRealtime())
-            run(signal = TileSignal.Resume)
+            for (pause in listOf(0L, 300L, 750L, 1_500L)) {
+                delay(pause)
+                if (run(signal = TileSignal.Resume) || failed) return@LaunchedEffect
+            }
+            manager.externalAdmission.commit(generation) { if (frame == null) failed = true }
         }
         LaunchedEffect(frame?.timers) {
             if (frame?.timers.isNullOrEmpty()) return@LaunchedEffect
@@ -151,16 +165,20 @@ internal class ExternalV2TileModule(override val id: String, override val title:
         if (current == null) {
             Column(modifier.padding(6.dp)) {
                 Text(if (failed) "Lua v2 недоступен" else "Загрузка…", color = Mocha.Text)
-                if (failed) TextButton(onClick = { scope.launch { run() } }) { Text("Повторить") }
+                if (failed) TextButton(onClick = { scope.launch { if (!run()) failed = true } }) { Text("Повторить") }
             }
         } else {
             val displayedRevision = revision
             Column(modifier.clipToBounds().verticalScroll(rememberScrollState()).padding(6.dp)) {
                 RenderTileTree(current.tree, Modifier.fillMaxWidth(), !busy) { event ->
-                    if (!busy && gate.accept(displayedRevision, ++sequence, event, SystemClock.elapsedRealtime())) {
-                        scope.launch { run(interaction = event) }
+                    when {
+                        busy -> inputProblem = "Тайл обновляется. Попробуйте ещё раз."
+                        gate.accept(displayedRevision, ++sequence, event, SystemClock.elapsedRealtime()) ->
+                            scope.launch(start = CoroutineStart.UNDISPATCHED) { run(interaction = event) }
+                        else -> inputProblem = "Событие устарело или повторено. Попробуйте ещё раз."
                     }
                 }
+                inputProblem?.let { Text(it, color = Mocha.Text) }
             }
         }
     }
