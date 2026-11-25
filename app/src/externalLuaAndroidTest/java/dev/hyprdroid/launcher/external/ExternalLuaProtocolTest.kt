@@ -153,8 +153,15 @@ class ExternalLuaProtocolTest {
             try {
                 file.writeText("ordinary file")
                 ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
+                    val ownedFd = descriptor.fd
                     assertThrows(IllegalArgumentException::class.java) {
-                        SharedMemory.fromFileDescriptor(descriptor).close()
+                        try {
+                            SharedMemory.fromFileDescriptor(descriptor).close()
+                        } catch (rejected: IllegalArgumentException) {
+                            // The Android 15 constructor detaches before validating the backing FD.
+                            ParcelFileDescriptor.adoptFd(ownedFd).close()
+                            throw rejected
+                        }
                     }
                 }
             } finally {

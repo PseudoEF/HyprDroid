@@ -143,6 +143,9 @@ internal object ExperimentalExternalLua {
             override fun render(session: Long, number: Int, frame: SharedMemory?) {
                 if (!valid(session, number)) {
                     frame?.close()
+                    if (BuildConfig.V2_FIXTURE_LUA && session == id && number == 1 && !authorized()) {
+                        Log.i("HyprLuaGate", "Discarded revoked worker frame")
+                    }
                     return
                 }
                 trace("reply")

@@ -76,10 +76,14 @@ jobs:
             ./gradlew :app:connectedExperimentalAndroidTest -PtestExperimental=true -Pv2FixtureLua=true '-Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.external.ExternalLuaAndroidTest,dev.hyprdroid.launcher.external.ExternalTileLifecycleTest#countsSurviveBackgroundWorkspaceChangeAndActivityRecreation,dev.hyprdroid.launcher.external.ExternalLuaProtocolTest,dev.hyprdroid.launcher.external.ExternalV2WorkerTest' &&
             adb install -r app/build/outputs/apk/experimental/app-experimental.apk &&
             adb install -r app/build/outputs/apk/androidTest/experimental/app-experimental-androidTest.apk &&
+            adb logcat -d -s HyprLuaGate > app/build/reports/androidTests/ipc.txt &&
+            grep -F 'Discarded revoked worker frame' app/build/reports/androidTests/ipc.txt &&
             adb logcat -d -s HyprLuaPressure > app/build/reports/androidTests/lua-pressure.txt &&
             grep -F 'native touchedMiB=' app/build/reports/androidTests/lua-pressure.txt &&
             (grep -E 'worker PSS guard|native allocation failed' app/build/reports/androidTests/lua-pressure.txt || echo 'Worker died under native pressure. No PSS guard or allocation failure was logged.') &&
             sh scripts/ci-v2-persistence.sh dev.hyprdroid.launcher.experimental &&
+            adb logcat -d -s HyprLuaGate > app/build/reports/androidTests/ipc.txt &&
+            grep -F 'Discarded revoked worker frame' app/build/reports/androidTests/ipc.txt &&
             adb logcat -d -s HyprLuaPressure >> app/build/reports/androidTests/lua-pressure.txt &&
             grep -F 'worker caught managed OutOfMemoryError' app/build/reports/androidTests/lua-pressure.txt &&
             ./gradlew :app:connectedExperimentalAndroidTest -PtestExperimental=true -Pv2FixtureLua=true -Pandroid.testInstrumentationRunnerArguments.class=dev.hyprdroid.launcher.external.ExternalLuaLoadTest &&
@@ -133,6 +137,7 @@ jobs:
             app/build/reports/androidTests/release-gate/
             app/build/reports/androidTests/pressure-ui/
             app/build/reports/androidTests/lua-circuit.txt
+            app/build/reports/androidTests/ipc.txt
             app/build/reports/androidTests/lua-pressure.txt
             app/build/reports/androidTests/lua-load.txt
             app/build/reports/androidTests/connected/
