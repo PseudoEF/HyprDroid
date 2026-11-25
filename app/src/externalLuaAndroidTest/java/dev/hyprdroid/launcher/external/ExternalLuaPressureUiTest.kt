@@ -61,7 +61,7 @@ class ExternalLuaPressureUiTest {
                     initialFrames = ids.count { id -> runCatching { toggle(id).assertExists() }.isSuccess }
                     initialFrames == count
                 }
-                Log.i("HyprLuaGate", "pressure firstFrames=$initialFrames elapsedMs=${SystemClock.elapsedRealtime() - start}")
+                Log.i("HyprLuaGate", "pressure firstFrames=$initialFrames elapsedMs=${SystemClock.elapsedRealtime() - start} corePssKiB=${android.os.Debug.getPss()}")
                 for (round in 0..5) {
                     if (round == 2) {
                         selectWorkspace(2)
@@ -95,7 +95,7 @@ class ExternalLuaPressureUiTest {
                     }
                     SystemClock.sleep(2_000)
                 }
-                // Capture steady idle after disposal and the reserve TTL.
+                // Observe the background state after worker disposal.
                 scenario.moveToState(Lifecycle.State.CREATED)
                 SystemClock.sleep(4_000)
             }
