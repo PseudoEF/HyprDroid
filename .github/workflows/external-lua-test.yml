@@ -8,6 +8,10 @@ on:
         description: Repeat Hello Tile lifecycle twenty times and capture stage timings
         type: boolean
         default: false
+      pressure_ui:
+        description: Check eight cold Clock tiles, input and visible refusal
+        type: boolean
+        default: false
       sustained:
         description: Run the ten-minute Clock Tile scenario
         type: boolean
@@ -108,6 +112,18 @@ jobs:
             adb install app/build/outputs/apk/experimental/app-experimental.apk &&
             adb install app/build/outputs/apk/androidTest/experimental/app-experimental-androidTest.apk &&
             sh scripts/ci-lua-sustained.sh
+      - name: Check eight Clock tiles and bounded input admission
+        if: always() && inputs.pressure_ui && steps.build.outcome == 'success'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: >-
+            adb install app/build/outputs/apk/experimental/app-experimental.apk &&
+            adb install app/build/outputs/apk/androidTest/experimental/app-experimental-androidTest.apk &&
+            sh scripts/ci-lua-pressure-ui.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -115,6 +131,7 @@ jobs:
           path: |
             app/build/reports/androidTests/sustained/
             app/build/reports/androidTests/release-gate/
+            app/build/reports/androidTests/pressure-ui/
             app/build/reports/androidTests/lua-circuit.txt
             app/build/reports/androidTests/lua-pressure.txt
             app/build/reports/androidTests/lua-load.txt
