@@ -3,12 +3,21 @@ on:
   push:
     branches: [feature/developer-edition]
   workflow_dispatch:
+    inputs:
+      saf_reliability:
+        description: Run five disposable Android 15 SAF tests without distribution signing
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   android:
+    strategy:
+      fail-fast: false
+      matrix:
+        trial: ${{ fromJSON(inputs.saf_reliability && '[1,2,3,4,5]' || '[1]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -39,7 +48,7 @@ jobs:
       - name: Check packaged identities, HOME and inclusion of Developer code
         run: sh scripts/check-edition-apks.sh app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/developer/app-developer-unsigned.apk
       - name: Create an Android emulator test APK
-        if: github.event_name != 'workflow_dispatch'
+        if: github.event_name != 'workflow_dispatch' || inputs.saf_reliability
         run: |
           # This key and its APK stay within this test job. Distribution uses a distinct persistent key.
           keytool -genkeypair -alias hyprdroid-developer -keystore "$RUNNER_TEMP/emulator-only.p12" -storetype PKCS12 -storepass android -dname CN=DeveloperEmulatorTest -keyalg RSA -keysize 2048 -validity 2
@@ -47,16 +56,16 @@ jobs:
           "$tools/zipalign" -f 4 app/build/outputs/apk/developer/app-developer-unsigned.apk "$RUNNER_TEMP/developer-aligned.apk"
           "$tools/apksigner" sign --ks "$RUNNER_TEMP/emulator-only.p12" --ks-pass pass:android --out "$RUNNER_TEMP/developer-test.apk" "$RUNNER_TEMP/developer-aligned.apk"
       - name: Build the Developer instrumentation APK with the emulator-only key
-        if: github.event_name != 'workflow_dispatch'
+        if: github.event_name != 'workflow_dispatch' || inputs.saf_reliability
         env:
           HYPRDROID_DEVELOPER_KEYSTORE_FILE: ${{ runner.temp }}/emulator-only.p12
           HYPRDROID_DEVELOPER_KEYSTORE_PASSWORD: android
         run: ./gradlew :app:assembleDeveloperAndroidTest -PtestDeveloper=true
       - name: Enable KVM
-        if: github.event_name != 'workflow_dispatch'
+        if: github.event_name != 'workflow_dispatch' || inputs.saf_reliability
         run: sudo chmod 666 /dev/kvm
       - name: Check parallel installation on Android 15
-        if: github.event_name != 'workflow_dispatch'
+        if: github.event_name != 'workflow_dispatch' || inputs.saf_reliability
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -66,18 +75,18 @@ jobs:
           ram-size: 2048M
           emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: sh scripts/ci-developer-regression.sh
+          script: ${{ inputs.saf_reliability && 'sh scripts/ci-developer-saf.sh' || 'sh scripts/ci-developer-regression.sh' }}
       - uses: actions/upload-artifact@v4
-        if: always() && github.event_name != 'workflow_dispatch'
+        if: always() && (github.event_name != 'workflow_dispatch' || inputs.saf_reliability)
         with:
-          name: hyprdroid-developer-import-test-report
+          name: hyprdroid-developer-import-test-report-${{ matrix.trial }}
           path: |
             app/build/reports/developer-import/
             app/build/reports/developer-workspace/
           if-no-files-found: warn
 
   signed-isolation-apk:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feature/developer-edition'
+    if: github.event_name == 'workflow_dispatch' && !inputs.saf_reliability && github.ref == 'refs/heads/feature/developer-edition'
     needs: android
     permissions:
       contents: read
