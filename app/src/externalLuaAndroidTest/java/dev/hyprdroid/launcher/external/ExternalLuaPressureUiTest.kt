@@ -79,6 +79,9 @@ class ExternalLuaPressureUiTest {
                         val waitingAt = SystemClock.elapsedRealtime()
                         compose.waitUntil(5_000) { available(id) }
                         val node = toggle(id)
+                        val displayedBeforeScroll = node.isDisplayed()
+                        node.performScrollTo().assertIsDisplayed()
+                        Log.i("HyprLuaGate", "pressure input attempt=$numAttempts displayedBeforeScroll=$displayedBeforeScroll")
                         val previous = requireNotNull(node.fetchSemanticsNode().config.getOrNull(
                             androidx.compose.ui.semantics.SemanticsProperties.ToggleableState))
                         val clickAt = SystemClock.elapsedRealtime()

@@ -169,11 +169,13 @@ internal class ExternalV2TileModule(override val id: String, override val title:
             }
         } else {
             val displayedRevision = revision
-            Column(modifier.clipToBounds().verticalScroll(rememberScrollState()).padding(6.dp)) {
+            Column(modifier.clipToBounds().padding(6.dp)) {
                 inputProblem?.let { Text(it, color = Mocha.Text, maxLines = 2) }
                 // Keep the callback available when a background tick wins the race with a tap.
                 // The guard below supplies feedback without accepting a second operation.
-                RenderTileTree(current.tree, Modifier.fillMaxWidth(), enabled = true) { event ->
+                val body = Modifier.fillMaxWidth().weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState())
+                RenderTileTree(current.tree, body, enabled = true) { event ->
                     when {
                         busy -> inputProblem = "Тайл обновляется. Попробуйте ещё раз."
                         gate.accept(displayedRevision, ++sequence, event, SystemClock.elapsedRealtime()) ->
