@@ -22,6 +22,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import dev.hyprdroid.launcher.external.TileInputTrace
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -162,7 +163,7 @@ internal class ExternalV2TileModule(override val id: String, override val title:
 
         LaunchedEffect(Unit) {
             schedule.setActive(true, SystemClock.elapsedRealtime())
-            for (pause in listOf(0L, 300L, 750L, 1_500L)) {
+            for (pause in listOf(0L, 300L, 750L, 1_500L, 2_500L)) {
                 delay(pause)
                 if (run(signal = TileSignal.Resume) || failed) return@LaunchedEffect
             }
@@ -191,7 +192,10 @@ internal class ExternalV2TileModule(override val id: String, override val title:
                 }
             } else Modifier
             Column(modifier.clipToBounds().then(observeHit).padding(6.dp)) {
-                inputProblem?.let { Text(it, color = Mocha.Text, maxLines = 2) }
+                inputProblem?.let {
+                    Text(it, modifier = Modifier.testTag("tile-input-refusal-${window.value}"),
+                        color = Mocha.Text, maxLines = 2)
+                }
                 // Keep the callback available when a background tick wins the race with a tap.
                 // The guard below supplies feedback without accepting a second operation.
                 val body = Modifier.fillMaxWidth().weight(1f, fill = false)

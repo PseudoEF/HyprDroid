@@ -1,6 +1,9 @@
 package dev.hyprdroid.launcher.external
 
 import android.os.Process
+import android.view.InputDevice
+import android.view.MotionEvent
+import androidx.compose.ui.geometry.Offset
 import android.os.SystemClock
 import android.util.Log
 import androidx.compose.ui.test.*
@@ -85,16 +88,31 @@ class ExternalLuaPressureUiTest {
                     val target = node.fetchSemanticsNode()
                     val previous = requireNotNull(target.config.getOrNull(
                         androidx.compose.ui.semantics.SemanticsProperties.ToggleableState))
-                    val center = target.boundsInRoot.center
-                    val root = compose.onRoot()
-                    val rootOrigin = root.fetchSemanticsNode().positionInRoot
+                    val center = target.boundsInWindow.center
+                    var windowOrigin = Offset.Zero
+                    scenario.onActivity { activity ->
+                        val decor = activity.window.decorView
+                        val screen = IntArray(2).also(decor::getLocationOnScreen)
+                        val window = IntArray(2).also(decor::getLocationInWindow)
+                        windowOrigin = Offset((screen[0] - window[0]).toFloat(), (screen[1] - window[1]).toFloat())
+                    }
                     TileInputTrace.stage(trace, "injected tile=${id.value} displayedBeforeScroll=$displayedBeforeScroll bounds=${target.boundsInRoot}")
                     val clickAt = SystemClock.elapsedRealtime()
                     readyWaits += clickAt - waitingAt
                     TileInputTrace.current = trace
                     try {
-                        // Target the center of the clipped visible bounds in root coordinates.
-                        root.performTouchInput { click(center - rootOrigin) }
+                        // Inject through Android's input dispatcher, at the center of the visible bounds.
+                        val down = SystemClock.uptimeMillis()
+                        for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+                            val point = center + windowOrigin
+                            val event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, point.x, point.y, 0)
+                            try {
+                                event.source = InputDevice.SOURCE_TOUCHSCREEN
+                                check(instrumentation.uiAutomation.injectInputEvent(event, true))
+                            } finally {
+                                event.recycle()
+                            }
+                        }
                         var changed = false
                         compose.waitUntil(7_000) {
                             changed = runCatching { toggle(id).fetchSemanticsNode().config.getOrNull(
@@ -141,10 +159,7 @@ class ExternalLuaPressureUiTest {
         compose.onNode(isToggleable() and hasAnyAncestor(hasTestTag("tiling-window-${id.value}")))
 
     private fun refusalVisible(id: WindowId): Boolean =
-        compose.onAllNodes((hasText("Попробуйте ещё раз.", substring = true) or
-            hasText("Lua не подтвердил действие.", substring = true)) and
-            hasAnyAncestor(hasTestTag("tiling-window-${id.value}")))
-            .fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+        compose.onNodeWithTag("tile-input-refusal-${id.value}", useUnmergedTree = true).isDisplayed()
 
     private fun available(id: WindowId) = runCatching { toggle(id).assertIsEnabled() }.isSuccess
 }
