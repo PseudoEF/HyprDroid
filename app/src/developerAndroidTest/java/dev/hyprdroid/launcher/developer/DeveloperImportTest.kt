@@ -2,6 +2,7 @@ package dev.hyprdroid.launcher.developer
 
 import android.os.SystemClock
 import android.util.Log
+import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
@@ -11,8 +12,6 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.uiautomator.By
-import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.UiDevice
 import dev.hyprdroid.launcher.modules.CommandPanelModule
 import dev.hyprdroid.launcher.modules.CommandPanelState
@@ -29,6 +28,7 @@ class DeveloperImportTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val device = UiDevice.getInstance(instrumentation)
     private val fingerprint = requireNotNull(InstrumentationRegistry.getArguments().getString("developerFingerprint"))
+    private var previousPickerWindow: Int? = null
     private val panel = CommandPanelState(WindowId("developer-ci"))
 
     @Test fun signedFixtureSurvivesAProcessRestartAndCanBeRevoked() {
@@ -124,38 +124,37 @@ class DeveloperImportTest {
         var downloadsRequested = false
         var pickerSeen = false
         while (SystemClock.elapsedRealtime() < deadline) {
-            val foreground = device.currentPackageName
-            if (foreground?.endsWith(".documentsui") == true) {
-                if (!pickerSeen) Log.i("HyprDeveloperSaf", "picker foreground file=$name")
+            val root = instrumentation.uiAutomation.rootInActiveWindow
+            val foreground = root?.packageName?.toString()
+            if (root != null && foreground?.endsWith(".documentsui") == true &&
+                root.windowId != previousPickerWindow
+            ) {
+                if (!pickerSeen) Log.i("HyprDeveloperSaf", "picker foreground window=${root.windowId} file=$name")
                 pickerSeen = true
-                try {
-                    // A provider may finish loading at any point, including while navigation is offered.
-                    val file = device.findObject(By.pkg(foreground).text(name))
-                    if (file != null) {
-                        file.click()
-                        Log.i("HyprDeveloperSaf", "selected file=$name elapsedMs=${SystemClock.elapsedRealtime() - started}")
-                        return
+                // Look only in the new active picker. The outgoing picker can still
+                // display the next filename before Android starts its next window.
+                val file = root.exactText(name)
+                if (file != null && clickInActiveWindow(file)) {
+                    previousPickerWindow = root.windowId
+                    Log.i("HyprDeveloperSaf", "selected file=$name window=${root.windowId} elapsedMs=${SystemClock.elapsedRealtime() - started}")
+                    return
+                }
+                val roots = root.findAccessibilityNodeInfosByViewId("$foreground:id/roots_list")
+                    .firstOrNull { it.isVisibleToUser }
+                if (!downloadsRequested && roots != null) {
+                    val downloads = roots.exactText("Downloads")
+                    if (downloads != null && clickInActiveWindow(downloads)) {
+                        downloadsRequested = true
+                        Log.i("HyprDeveloperSaf", "selected Downloads file=$name")
                     }
-                    val roots = device.findObject(By.res(foreground, "roots_list"))
-                    if (!downloadsRequested && roots != null) {
-                        val downloads = roots.findObject(By.text("Downloads"))
-                        if (downloads != null) {
-                            downloads.click()
-                            downloadsRequested = true
-                            Log.i("HyprDeveloperSaf", "selected Downloads file=$name")
-                        }
-                    } else if (!rootsRequested && !downloadsRequested) {
-                        val toolbar = device.findObject(By.res(foreground, "toolbar"))
-                        val alreadyInDownloads = toolbar?.findObject(By.text("Downloads")) != null
-                        val showRoots = if (alreadyInDownloads) null else device.findObject(By.pkg(foreground).desc("Show roots"))
-                        if (showRoots != null) {
-                            showRoots.click()
-                            rootsRequested = true
-                            Log.i("HyprDeveloperSaf", "opened roots file=$name")
-                        }
+                } else if (!rootsRequested && !downloadsRequested) {
+                    val toolbar = root.findAccessibilityNodeInfosByViewId("$foreground:id/toolbar").firstOrNull()
+                    val alreadyInDownloads = toolbar?.exactText("Downloads") != null
+                    val showRoots = if (alreadyInDownloads) null else root.findDescription("Show roots")
+                    if (showRoots != null && clickInActiveWindow(showRoots)) {
+                        rootsRequested = true
+                        Log.i("HyprDeveloperSaf", "opened roots file=$name")
                     }
-                } catch (_: StaleObjectException) {
-                    // Re-evaluate the current window after the provider replaces its rows.
                 }
             }
             SystemClock.sleep(100)
@@ -164,5 +163,29 @@ class DeveloperImportTest {
         runCatching { device.dumpWindowHierarchy(snapshot) }
         fail("DocumentsUI selection timed out for $name (foreground=${device.currentPackageName}, " +
             "pickerSeen=$pickerSeen, rootsRequested=$rootsRequested, downloadsRequested=$downloadsRequested)")
+    }
+
+    private fun AccessibilityNodeInfo.exactText(text: String): AccessibilityNodeInfo? =
+        findAccessibilityNodeInfosByText(text).firstOrNull { it.isVisibleToUser && it.text?.toString() == text }
+
+    private fun AccessibilityNodeInfo.findDescription(description: String): AccessibilityNodeInfo? {
+        if (isVisibleToUser && contentDescription?.toString() == description) return this
+        for (index in 0 until childCount) {
+            getChild(index)?.findDescription(description)?.let { return it }
+        }
+        return null
+    }
+
+    private fun clickInActiveWindow(node: AccessibilityNodeInfo): Boolean {
+        val expectedWindow = node.windowId
+        var target: AccessibilityNodeInfo? = node
+        while (target != null && target.windowId == expectedWindow) {
+            if (target.isVisibleToUser && target.isEnabled && target.isClickable) {
+                return instrumentation.uiAutomation.rootInActiveWindow?.windowId == expectedWindow &&
+                    target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            }
+            target = target.parent
+        }
+        return false
     }
 }
