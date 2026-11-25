@@ -154,3 +154,25 @@ The original Hello incident has insufficient historical traces for an exact attr
 - In that latest eight-tile run, measured queue p95/max was 3349/4199 ms, service connection 1688/2238 ms, dispatch-to-reply 663/700 ms, Lua 255/310 ms and reply-to-release 237/331 ms. The three confirmed input changes took 2930, 3517 and 804 ms. Core PSS at first availability was 95304 KiB, and Core used 9075 ms of CPU time over the measured 40177 ms. These figures include instrumentation and are not a matched long-run memory or latency comparison. No hard whole-process memory quota follows from PSS.
 
 **NO-GO for the next local-execution stage.** An input can still go unacknowledged at eight tiles. The typed AIDL tests passed, including a revoked frame observed on the Core Binder callback, but they do not establish the receiver-side outcome of an arbitrary foreign descriptor. Genuine Android LMK is still unconfirmed. Keep local execution disabled and withhold signed stabilization APKs until the gate passes.
+
+## Targeted input reliability
+
+The exact failure in CI 45572317663 cannot be attributed retrospectively because that run did not log hit targets or handler entry. In the [instrumented reproduction](https://github.com/PseudoEF/HyprDroid/actions/runs/45580624506), the fourth action reached the expected Clock switch. In one trial it passed the frame guard, entered the worker queue, committed and appeared after 915 ms. In another it arrived while a timer owned that tile's execution slot. The handler set the busy refusal before queue admission. The test nevertheless timed out, as it did for the other traced busy refusals. All 14 injected actions in those three trials reached the intended handler. The first trial also retained a separate workspace-restoration timeout after its second action.
+
+The old refusal matcher assumed its text would be a descendant in the merged semantics tree. The clickable tile can merge that text into its own semantics. The current driver selects the tile's status element in the unmerged tree and requires it to be displayed. Test touches are injected through Android into the measured visible bounds after scrolling. Fixture-only diagnostics correlate injection, Activity touch, Compose hit, callback, frame gate, admission, Binder send/reply, durable state and frame publication or refusal. A user event with an uncertain Runtime result displays an explicit status and is never replayed by Core. Initial frame recovery retains a bounded schedule of admission retries to handle the observed separate restore failure.
+
+The typed IPC boundary uses `in SharedMemory`. The closed handle is rejected when AIDL marshals it. A regular-file descriptor cannot be turned into a SharedMemory argument using the public Android framework constructor. The fixture closes the detached descriptor upon rejection and then runs a valid transaction on the same worker. These checks cover the public typed path and subsequent operation, while receiver-side behavior for arbitrary raw transactions has not been established. LMK remains unconfirmed.
+
+### Targeted results
+
+[Android 15 CI 45583425172](https://github.com/PseudoEF/HyprDroid/actions/runs/45583425172/artifacts/15008816325) passed the native/Binder suite and three independent eight-tile trials with reset app data between them.
+
+| Trial | Confirmed success | Visible busy refusal | Missing or did not reach the handler | Successful input range | Refusal range |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | 3 | 3 | 0 | 1142–3681 ms | 104–483 ms |
+| 2 | 5 | 1 | 0 | 452–680 ms | 175 ms |
+| 3 | 5 | 1 | 0 | 283–588 ms | 135 ms |
+
+All 18 input IDs had an Android down event and a callback from the expected tile. Thirteen ran and published a confirmed change. Five lost the race with a timer and displayed the busy status before worker admission. There were zero unexplained losses. The fourth event in trial 3 is a concrete example of the now-visible refusal. There is no automatic retry of that event. Local Debug and Developer unit tests passed (234 and 240), as did the local Debug, Developer and Debug instrumentation builds. The final Android CI also built the fixture application and instrumentation APK.
+
+**NO-GO for enabling local execution.** The targeted input gate passes. The latest [Developer isolation run](https://github.com/PseudoEF/HyprDroid/actions/runs/45583419693) failed separately with `DocumentsUI roots unavailable` while choosing the public key, and that failure is retained. The AIDL check remains limited to what the typed API can marshal. No cold worker architecture, signature policy, or local execution flag was changed.
